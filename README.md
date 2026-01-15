@@ -65,6 +65,7 @@
         SW4 --> BL1["4.4.1 State Machine Implementation"]
         SW4 --> BL2["4.4.2 Decision Policies"]
         SW4 --> BL3["4.4.3 Fail Safety & Recovery"]
+```
 ```mermaid
 
     flowchart TB
