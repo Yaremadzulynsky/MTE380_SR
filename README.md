@@ -1,3 +1,4 @@
+```mermaid
 flowchart TB
     A[Autonomous Vehicle]
 
@@ -40,3 +41,5 @@ flowchart TB
     ME --> WP[2.4 Waterproofing]
       WP --> WP1[2.4.1 Design]
       WP --> WP2[2.4.2 Testing]
+
+```
