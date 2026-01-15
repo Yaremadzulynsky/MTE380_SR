@@ -1,13 +1,68 @@
 ```mermaid
-    gantt
-        title A Gantt Diagram
-        dateFormat  YYYY-MM-DD
-        section Section
-        A task           :a1, 2014-01-01, 30d
-        Another task     :after a1  , 20d
-        section Another
-        Task in sec      :2014-01-12  , 12d
-        another task      : 24d
+gantt
+    title MTE 380 Search & Rescue Robot – 3 Month Plan (Numbered WBS)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+
+    section 1.0 Project Management & Systems
+    1.1 Requirements & Constraints              :done,    1_1, 2026-01-15, 2026-01-22
+    1.2 System Architecture                     :active,  1_2, 2026-01-20, 2026-01-30
+    1.3 Interface Definitions                   :         1_3, 2026-01-25, 2026-02-05
+    1.4 System State Machine                    :         1_4, 2026-01-28, 2026-02-10
+    1.5 Integration Planning                    :         1_5, 2026-02-03, 2026-02-18
+    1.6 Scheduling & Milestones                 :         1_6, 2026-01-15, 2026-02-12
+
+    section 2.0 Mechanical
+    2.1 Chassis Design                          :done,    2_1, 2026-01-15, 2026-01-27
+    2.2 Drive System                            :active,  2_2, 2026-01-20, 2026-02-02
+    2.3 Gripper & Capture Mechanism             :         2_3, 2026-01-25, 2026-02-07
+    2.4 Mechanical Assembly                     :         2_4, 2026-02-01, 2026-02-14
+    2.5 Mechanical Testing                      :         2_5, 2026-02-10, 2026-03-05
+
+    section 3.0 Electrical
+    3.1 Power System                            :         3_1, 2026-01-20, 2026-02-01
+    3.2 Motor Drivers                           :         3_2, 2026-01-25, 2026-02-10
+    3.3 Sensors                                 :         3_3, 2026-02-01, 2026-02-12
+    3.4 Wiring & Integration                    :         3_4, 2026-02-05, 2026-02-18
+    3.5 Electrical Testing                      :         3_5, 2026-02-12, 2026-03-08
+
+    section 4.0 Software
+    4.1 Systems & Behavior Software             :         4_1, 2026-01-25, 2026-03-08
+    4.1.1 State Machine                         :         4_1_1, 2026-02-10, 2026-03-01
+    4.1.2 Navigation Logic                       :         4_1_2, 2026-02-15, 2026-03-05
+    4.1.3 High-Level Decisions                  :         4_1_3, 2026-02-20, 2026-03-08
+    4.1.4 Error Handling / Recovery             :         4_1_4, 2026-02-25, 2026-03-12
+
+    4.2 Computer Vision (Perception)            :         4_2, 2026-02-01, 2026-03-05
+    4.2.1 Detect Lego Figure                    :         4_2_1, 2026-02-05, 2026-02-18
+    4.2.2 Detect Path / Colors                  :         4_2_2, 2026-02-10, 2026-02-22
+    4.2.3 Detect Danger Zone                    :         4_2_3, 2026-02-15, 2026-02-28
+    4.2.4 Provide Coordinates / Features        :         4_2_4, 2026-02-18, 2026-03-05
+
+    4.3 Controls & Motion                       :         4_3, 2026-02-01, 2026-03-10
+    4.3.1 Line Following Controller             :         4_3_1, 2026-02-08, 2026-02-21
+    4.3.2 Drive Commands (Velocity / Turn)      :         4_3_2, 2026-02-01, 2026-02-12
+    4.3.3 Gripper Control                       :         4_3_3, 2026-02-10, 2026-02-22
+    4.3.4 Movement Primitives (Forward/Turn)    :         4_3_4, 2026-02-12, 2026-02-25
+
+    4.4 Software Testing                        :         4_4, 2026-02-15, 2026-04-10
+    4.4.1 Unit Tests                            :         4_4_1, 2026-02-15, 2026-03-10
+    4.4.2 Integration Tests                     :         4_4_2, 2026-03-01, 2026-04-10
+
+    section 5.0 Testing & Validation
+    5.1 Unit Testing                            :         5_1, 2026-03-10, 2026-03-20
+    5.2 Subsystem Integration                   :         5_2, 2026-03-12, 2026-03-25
+    5.3 Full System Testing                     :         5_3, 2026-03-20, 2026-04-08
+    5.4 Game-Day Rehearsals                     :crit,    5_4, 2026-04-05, 2026-04-12
+
+    section 6.0 Documentation & Reporting
+    6.1 Design Rationale                        :         6_1, 2026-02-10, 2026-03-10
+    6.2 System Architecture Description         :         6_2, 2026-02-15, 2026-03-12
+    6.3 Mechanical Design Section               :         6_3, 2026-03-01, 2026-03-20
+    6.4 Electrical Design Section               :         6_4, 2026-03-01, 2026-03-20
+    6.5 Software Design Section                 :         6_5, 2026-03-10, 2026-03-25
+    6.6 Testing & Results                       :         6_6, 2026-03-20, 2026-04-12
+    6.7 Lessons Learned                         :         6_7, 2026-04-05, 2026-04-12
 
 ```
 
@@ -43,29 +98,39 @@
         EE --> EE5["3.5 Electrical Testing"]
 
 ```
-
 ```mermaid
-    flowchart TB
-        SW["4.0 Software"]
+flowchart TB
+    SW["4.0 Software"]
+
+    %% HIGH LEVEL
+    SW --> SYS["4.1 Systems & Behavior Software"]
+    SW --> CV["4.2 Computer Vision (Perception)"]
+    SW --> CTRL["4.3 Controls & Motion"]
+    SW --> TEST["4.4 Software Testing"]
+
+    %% SYSTEMS LAYER (Decision-making)
+    SYS --> SYS1["4.1.1 State Machine"]
+    SYS --> SYS2["4.1.2 Navigation Logic"]
+    SYS --> SYS3["4.1.3 High-Level Decisions"]
+    SYS --> SYS4["4.1.4 Error Handling / Recovery"]
+
+    %% CV LAYER (Perception only)
+    CV --> CV1["4.2.1 Detect Lego Figure"]
+    CV --> CV2["4.2.2 Detect Path / Colors"]
+    CV --> CV3["4.2.3 Detect Danger Zone"]
+    CV --> CV4["4.2.4 Provide Coordinates / Features"]
     
-        SW --> SW1["4.1 Systems Software"]
-        SW --> SW2["4.2 Computer Vision"]
-        SW --> SW3["4.3 Controls & Navigation"]
-        SW --> SW4["4.4 Behavior Logic"]
-        SW --> SW5["4.5 Software Testing"]
-    
-        SW2 --> CV1["4.2.1 Lego Figure Detection"]
-        SW2 --> CV2["4.2.2 Path / Color Detection"]
-        SW2 --> CV3["4.2.3 Danger Zone Detection"]
-    
-        SW3 --> CT1["4.3.1 Line Following"]
-        SW3 --> CT2["4.3.2 Drop Zone Selection"]
-        SW3 --> CT3["4.3.3 Return-to-Start Logic"]
-    
-        SW4 --> BL1["4.4.1 State Machine Implementation"]
-        SW4 --> BL2["4.4.2 Decision Policies"]
-        SW4 --> BL3["4.4.3 Fail Safety & Recovery"]
+    %% CONTROLS LAYER (Low-level actuation)
+    CTRL --> CTRL1["4.3.1 Line Following Controller"]
+    CTRL --> CTRL2["4.3.2 Drive Commands (Velocity / Turn)"]
+    CTRL --> CTRL3["4.3.3 Gripper Control"]
+    CTRL --> CTRL4["4.3.4 Movement Primitives (Forward/Turn)"]
+
+    %% TESTING
+    TEST --> TEST1["4.4.1 Unit Tests"]
+    TEST --> TEST2["4.4.2 Integration Tests"]
 ```
+
 ```mermaid
 
     flowchart TB
