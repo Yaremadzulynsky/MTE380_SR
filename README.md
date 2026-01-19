@@ -158,11 +158,11 @@ flowchart TB
 
 
 
-# GROUP CONTRACT (1-PAGE HARD VERSION)
+# GROUP CONTRACT 
 
-**Project:** ___________________________  
-**Course:** ___________________________  
-**Term:** ___________________________  
+**Project:** Search & Rescue
+**Course:** MTE380  
+**Term:** 3B  
 
 ---
 
@@ -177,8 +177,7 @@ This contract defines mandatory expectations for participation, professionalism,
 - >5 minutes late without notice:
   - Must explain absence,
   - Accept responsibility for missed work,
-  - Complete one additional minor task.
-- More than **two (2) unexcused absences** may result in dismissal from the group and instructor notification.
+- More than **two (3) unexcused absences** may result in dismissal from the group and instructor notification.
 
 **Initials:** _______
 
@@ -205,13 +204,25 @@ This contract defines mandatory expectations for participation, professionalism,
 ---
 
 ## 5. Leadership & Decision-Making
-- The group recognizes a **Project Lead** responsible for coordination, timelines, and integration.
-- Decisions follow this order:
-  1. Consensus,
-  2. Majority vote,
-  3. Project Lead decision if time-critical.
-- The Project Lead is **not responsible for compensating for underperforming members**.
 
+- The group designates **two Integration Leads**:
+  - **Hardware Integration Lead (Shiv)**  – responsible for coordinating all hardware work, ensuring subsystem compatibility, verifying interfaces, organizing handoff points, and overseeing physical integration.
+  - **Software Integration Lead (Yarema)** – responsible for coordinating all software work, managing code structure, merge schedules, API/interface consistency, and ensuring the final software stack integrates cleanly with hardware and other components.
+
+- Together, these two Integration Leads function as the **Project Management Team**, responsible for:
+  - Scheduling and coordinating timelines,
+  - Running meetings and setting agendas,
+  - Tracking responsibilities and deliverables,
+  - Identifying blockers early and redistributing work if needed,
+  - Ensuring hardware–software compatibility at all stages of the project.
+
+- Decision-making follows this hierarchy:
+  1. **Consensus** among group members (preferred),
+  2. **Majority vote** if consensus cannot be reached,
+  3. **Integration Leads jointly decide** if the issue is time-critical or impacts system-level compatibility,
+     - If Hardware vs. Software decisions conflict, the Integration Leads must discuss and produce a unified system-level decision.
+
+- The Integration Leads **are not responsible for compensating for underperforming members**. Their role is to coordinate—not to carry extra workload due to missed deadlines or incomplete work.
 **Initials:** _______
 
 ---
@@ -230,9 +241,6 @@ This contract defines mandatory expectations for participation, professionalism,
 ---
 
 ## 7. Contribution & Accountability
-- Each member must contribute:
-  - At least one technical component,
-  - At least one collaborative component.
 - Weekly progress updates are mandatory.
 - **Three consecutive weeks of inadequate contribution** may result in:
   - Task reassignment,
@@ -254,8 +262,39 @@ This contract defines mandatory expectations for participation, professionalism,
 **Initials:** _______
 
 ---
+## 9. Documentation & Report Writing Responsibilities
 
-## 9. Agreement
+- All members are responsible for writing **their assigned sections** of the report at a professional standard appropriate for an engineering course.
+
+- Each section must include:
+  - Clear, concise technical writing  
+  - Figures/tables with proper captions  
+  - References where appropriate  
+  - Consistent formatting following group standards  
+
+- **Copy-pasting raw notes, unedited text, or last-minute drafts is unacceptable** and will be treated as a missed deadline.
+
+- The report will follow a clear structure defined by the Integration Leads.  
+  All section headings, figure styles, notation, and file naming **must follow the group’s unified template**.
+
+- The group designates a **Documentation Lead** responsible for:
+  - Unifying tone and formatting  
+  - Ensuring sections do not contradict each other  
+  - Checking that the document matches the system architecture and actual implementation  
+  - Making the final assembled version “submission-ready”  
+
+- The Documentation Lead **does not rewrite poor-quality work**.  
+  Any section returned for revision must be fixed within 24 hours by the original author.
+
+- Repeat submission of incomplete or low-effort sections will trigger:
+  1. A formal warning  
+  2. Documentation of the incident  
+  3. Instructor escalation if unresolved  
+
+**Initials:** _______
+
+
+## 10. Agreement
 By signing below, each member agrees to abide by this contract and accepts its enforcement.
 
 **Date:** ______________________
