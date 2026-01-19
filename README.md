@@ -277,7 +277,7 @@ This contract defines mandatory expectations for participation, professionalism,
 - The report will follow a clear structure defined by the Integration Leads.  
   All section headings, figure styles, notation, and file naming **must follow the group’s unified template**.
 
-- The group designates a **Documentation Lead** responsible for:
+- The group designates a **Documentation Lead (Seb)** responsible for:
   - Unifying tone and formatting  
   - Ensuring sections do not contradict each other  
   - Checking that the document matches the system architecture and actual implementation  
