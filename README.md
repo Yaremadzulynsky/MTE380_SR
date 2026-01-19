@@ -70,15 +70,21 @@ This contract defines mandatory expectations for participation, professionalism,
 ---
 
 ## 6. Deadlines & Work Quality
-- Missed deadlines without prior notice:
-  - Must be completed within 24 hours,
-  - Trigger one additional assigned task.
-- Repeated offenses:
-  - Second: formal warning,
-  - Third: instructor notification and grading adjustment.
-- All work must be complete, functional, and integration-ready. Low-effort work counts as a missed deadline.
+
+Deadlines exist to protect integration timelines and prevent last-minute failures.
+
+- If a member anticipates missing a deadline, they must notify the Integration Leads **before** the deadline and provide a valid reason. No penalty applies if the reason is accepted.
+- If a member misses a deadline **without prior notice or without a reason accepted by the Integration Leads**, the following consequences apply:
+  - The task must be completed within 24 hours, AND
+  - The member will be assigned **an additional documentation/report task** that is considered undesirable or tedious (e.g., formatting, figures, citations, appendix cleanup, data tables, testing logs, etc.).
+- Repeat offenses escalate as follows:
+  - **Second occurrence:** Formal warning and loss of priority in task selection.
+  - **Third occurrence:** Instructor notification and potential peer-evaluation penalties.
+- All work must be complete, functional, and integration-ready at the time of submission.  
+  Submitting low-effort, incomplete, or non-functional work is treated as a missed deadline.
 
 **Initials:** _______
+
 
 ---
 
