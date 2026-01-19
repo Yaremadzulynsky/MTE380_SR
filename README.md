@@ -223,6 +223,7 @@ This contract defines mandatory expectations for participation, professionalism,
      - If Hardware vs. Software decisions conflict, the Integration Leads must discuss and produce a unified system-level decision.
 
 - The Integration Leads **are not responsible for compensating for underperforming members**. Their role is to coordinate—not to carry extra workload due to missed deadlines or incomplete work.
+
 **Initials:** _______
 
 ---
