@@ -1,0 +1,154 @@
+services:
+  control-communication:
+    build:
+      context: ./control_communication
+    container_name: control-communication
+    ports:
+      - "5001:5000"
+    environment:
+      PORT: 5000
+      HARDWARE_MODE: "mock"
+      PID_P_DEFAULT: "0"
+      PID_I_DEFAULT: "0"
+      PID_D_DEFAULT: "0"
+      LOG_PATH: "/var/log/control-communication/control-communication.log"
+    volumes:
+      - metrics-pipe:/var/run/metrics
+      - service-logs:/var/log
+
+  control-screen:
+    build:
+      context: ./control_screen
+    container_name: control-screen
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      CONTROL_COMM_BASE_URL: "http://control-communication:5000"
+      CONTROL_COMM_P_PATH: "/pid/proportional"
+      CONTROL_COMM_I_PATH: "/pid/integral"
+      CONTROL_COMM_D_PATH: "/pid/derivative"
+      CONTROL_COMM_CONTROL_PATH: "/control"
+      PID_P_MIN: "-1000"
+      PID_P_MAX: "1000"
+      PID_I_MIN: "-1000"
+      PID_I_MAX: "1000"
+      PID_D_MIN: "-1000"
+      PID_D_MAX: "1000"
+      LOG_PATH: "/var/log/control-screen/control-screen.log"
+    volumes:
+      - metrics-pipe:/var/run/metrics
+      - service-logs:/var/log
+    depends_on:
+      - control-communication
+
+  metrics-aggregator:
+    build:
+      context: ./metrics_aggregator
+    container_name: metrics-aggregator
+    ports:
+      - "7001:7000"
+    environment:
+      PORT: 7000
+      METRICS_PIPE_PATH: "/var/run/metrics/metrics.prom"
+      METRICS_MAX_LINES: "2000"
+      LOG_PATH: "/var/log/metrics-aggregator/metrics-aggregator.log"
+    volumes:
+      - metrics-pipe:/var/run/metrics
+      - service-logs:/var/log
+
+  state-machine:
+    build:
+      context: ./state_machine
+    container_name: state-machine
+    ports:
+      - "8000:8000"
+    environment:
+      LOG_PATH: "/var/log/state-machine/state-machine.log"
+      METRICS_PIPE_PATH: "/var/run/metrics/metrics.prom"
+      CONTROL_COMM_BASE_URL: "http://control-communication:5000"
+      CONTROL_COMM_STATE_PATH: "/state"
+      TICK_INTERVAL: "0.2"
+      FAILED_PICKUP_LIMIT: "3"
+      PORT: "8000"
+    volumes:
+      - metrics-pipe:/var/run/metrics
+      - service-logs:/var/log
+    depends_on:
+      - control-communication
+
+  computer-vision:
+    build:
+      context: ./computer_vision
+    container_name: computer-vision
+    ports:
+      - "8100:8100"
+    environment:
+      PORT: "8100"
+      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_INPUT_PATH: "/inputs"
+      LOG_PATH: "/var/log/computer-vision/computer-vision.log"
+    volumes:
+      - service-logs:/var/log
+    depends_on:
+      - state-machine
+
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./metrics_aquisition/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    volumes:
+      - ./metrics_aquisition/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - service-logs:/var/log:ro
+    depends_on:
+      - loki
+      - metrics-aggregator
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: insights-screen
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_LOG_MODE: "file"
+      GF_LOG_FILE: "/var/log/insights-screen/insights-screen.log"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - service-logs:/var/log
+      - ./insights_screen/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./insights_screen/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./insights_screen/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  metrics-pipe:
+  service-logs:

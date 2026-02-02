@@ -1,0 +1,13 @@
+{
+  "name": "control-screen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Control tuning screen for PID parameters",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

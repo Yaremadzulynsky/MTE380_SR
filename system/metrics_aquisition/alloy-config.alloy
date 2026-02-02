@@ -1,0 +1,35 @@
+loki.source.file "services" {
+  targets = [
+    {
+      __path__ = "/var/log/control-communication/control-communication.log",
+      job = "control-communication",
+    },
+    {
+      __path__ = "/var/log/control-screen/control-screen.log",
+      job = "control-screen",
+    },
+    {
+      __path__ = "/var/log/metrics-aggregator/metrics-aggregator.log",
+      job = "metrics-aggregator",
+    },
+    {
+      __path__ = "/var/log/insights-screen/insights-screen.log",
+      job = "insights-screen",
+    },
+    {
+      __path__ = "/var/log/computer-vision/computer-vision.log",
+      job = "computer-vision",
+    },
+    {
+      __path__ = "/var/log/state-machine/state-machine.log",
+      job = "state-machine",
+    },
+  ]
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

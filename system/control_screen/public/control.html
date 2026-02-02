@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drive Control</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape shape-a"></div>
+    <div class="bg-shape shape-b"></div>
+    <div class="bg-shape shape-c"></div>
+
+    <main class="shell">
+      <header class="hero" data-animate>
+        <div>
+          <p class="kicker">Control Screen</p>
+          <h1>Drive Control Console</h1>
+          <p class="sub">
+            Command direction and speed with the live joystick. Move off center to
+            send an XY vector and speed.
+          </p>
+        </div>
+        <div class="status-card">
+          <div class="status-label">Bridge Status</div>
+          <div id="connectionStatus" class="status-value">Checking...</div>
+          <div id="lastSync" class="status-meta">Last sync: --</div>
+        </div>
+      </header>
+
+      <nav class="control-nav" data-animate>
+        <a class="nav-link" href="/pid">PID Tuning</a>
+        <a class="nav-link active" href="/control">Drive Control</a>
+      </nav>
+
+      <section class="panel control-panel" data-animate>
+        <h2>Joystick</h2>
+        <div class="control-grid">
+          <div class="joystick-shell">
+            <div class="joystick" id="joystick">
+              <div class="joystick-ring"></div>
+              <div class="joystick-handle" id="joystickHandle"></div>
+            </div>
+            <p class="joystick-hint">Drag or touch to steer. Release to stop.</p>
+          </div>
+          <div class="telemetry">
+            <div class="telemetry-card">
+              <span class="telemetry-label">Vector X</span>
+              <span class="telemetry-value" id="vectorX">0.00</span>
+            </div>
+            <div class="telemetry-card">
+              <span class="telemetry-label">Vector Y</span>
+              <span class="telemetry-value" id="vectorY">0.00</span>
+            </div>
+            <div class="telemetry-card">
+              <span class="telemetry-label">Speed</span>
+              <span class="telemetry-value" id="speed">0.00</span>
+            </div>
+            <div class="feedback" id="controlFeedback" role="status" aria-live="polite">
+              Waiting for input.
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="control.js" defer></script>
+  </body>
+</html>

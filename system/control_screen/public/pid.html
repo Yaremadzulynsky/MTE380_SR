@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PID Tuning</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape shape-a"></div>
+    <div class="bg-shape shape-b"></div>
+    <div class="bg-shape shape-c"></div>
+
+    <main class="shell">
+      <header class="hero" data-animate>
+        <div>
+          <p class="kicker">Control Screen</p>
+          <h1>PID Tuning Console</h1>
+          <p class="sub">
+            Tune proportional, integral, and derivative gains without leaving the
+            command center.
+          </p>
+        </div>
+        <div class="status-card">
+          <div class="status-label">Bridge Status</div>
+          <div id="connectionStatus" class="status-value">Checking...</div>
+          <div id="lastSync" class="status-meta">Last sync: --</div>
+        </div>
+      </header>
+
+      <nav class="control-nav" data-animate>
+        <a class="nav-link active" href="/pid">PID Tuning</a>
+        <a class="nav-link" href="/control">Drive Control</a>
+      </nav>
+
+      <section class="panel current-values" data-animate>
+        <h2>Current Gains</h2>
+        <div class="grid">
+          <div class="metric">
+            <span class="metric-label">Proportional (P)</span>
+            <span class="metric-value" id="currentP">--</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Integral (I)</span>
+            <span class="metric-value" id="currentI">--</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Derivative (D)</span>
+            <span class="metric-value" id="currentD">--</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel tune-panel" data-animate>
+        <h2>Update Gains</h2>
+        <form id="pidForm" novalidate>
+          <div class="field-grid">
+            <label class="field" for="inputP">
+              <span class="field-label">P gain</span>
+              <input
+                id="inputP"
+                name="p"
+                type="number"
+                step="0.001"
+                placeholder="0.0"
+                autocomplete="off"
+                inputmode="decimal"
+                required
+              />
+              <span class="hint" id="hintP">Range: --</span>
+            </label>
+            <label class="field" for="inputI">
+              <span class="field-label">I gain</span>
+              <input
+                id="inputI"
+                name="i"
+                type="number"
+                step="0.001"
+                placeholder="0.0"
+                autocomplete="off"
+                inputmode="decimal"
+                required
+              />
+              <span class="hint" id="hintI">Range: --</span>
+            </label>
+            <label class="field" for="inputD">
+              <span class="field-label">D gain</span>
+              <input
+                id="inputD"
+                name="d"
+                type="number"
+                step="0.001"
+                placeholder="0.0"
+                autocomplete="off"
+                inputmode="decimal"
+                required
+              />
+              <span class="hint" id="hintD">Range: --</span>
+            </label>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="ghost" id="refreshBtn">
+              Refresh
+            </button>
+            <button type="submit" id="applyBtn">Apply update</button>
+          </div>
+
+          <div class="feedback" id="feedback" role="status" aria-live="polite">
+            Ready.
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

@@ -7,9 +7,11 @@ Opens an IPC pipe to receive logs and metrics data from other system components 
 
 # Technologies
 - Grafana Alloy
+- Prometheus?
 
 # Ingress
 Tailing docker logs from docker containers
+IPC pipe from prometheus metrics.
 
 # Egress
-to grafana dashboard evaluation.
+to alloy and prometheus for evaluation.

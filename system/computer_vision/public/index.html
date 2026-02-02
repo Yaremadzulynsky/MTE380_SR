@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mock Computer Vision</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="halo halo-a"></div>
+    <div class="halo halo-b"></div>
+
+    <main class="frame">
+      <header class="hero">
+        <div>
+          <p class="kicker">Mock Vision</p>
+          <h1>Computer Vision Simulator</h1>
+          <p class="sub">
+            Tune detections and vectors to drive the state machine without the
+            real vision pipeline.
+          </p>
+        </div>
+        <div class="status-card">
+          <span class="status-label">State Machine</span>
+          <span id="stateMachineStatus" class="status-value">Idle</span>
+          <span class="status-meta" id="lastSent">Last send: --</span>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Vector Inputs</h2>
+          <div class="actions">
+            <button id="sendBtn">Send to State Machine</button>
+            <label class="toggle">
+              <input id="autoSend" type="checkbox" />
+              <span>Auto send</span>
+            </label>
+            <label class="inline-input">
+              <span>Interval (ms)</span>
+              <input id="intervalInput" type="number" min="100" step="50" value="500" />
+            </label>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="vector-card" data-vector="target">
+            <header>
+              <h3>Target (Lego)</h3>
+              <label class="toggle">
+                <input type="checkbox" data-field="detected" />
+                <span>Detected</span>
+              </label>
+            </header>
+            <div class="axis">
+              <label>
+                X
+                <input type="range" min="-1" max="1" step="0.01" data-field="x" />
+                <input type="number" step="0.01" data-field="xNumber" />
+              </label>
+              <label>
+                Y
+                <input type="range" min="-1" max="1" step="0.01" data-field="y" />
+                <input type="number" step="0.01" data-field="yNumber" />
+              </label>
+              <div class="magnitude">
+                <span>Distance</span>
+                <strong data-field="magnitude">0.00</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="vector-card" data-vector="safe_zone">
+            <header>
+              <h3>Safe Zone</h3>
+              <label class="toggle">
+                <input type="checkbox" data-field="detected" />
+                <span>Detected</span>
+              </label>
+            </header>
+            <div class="axis">
+              <label>
+                X
+                <input type="range" min="-1" max="1" step="0.01" data-field="x" />
+                <input type="number" step="0.01" data-field="xNumber" />
+              </label>
+              <label>
+                Y
+                <input type="range" min="-1" max="1" step="0.01" data-field="y" />
+                <input type="number" step="0.01" data-field="yNumber" />
+              </label>
+              <div class="magnitude">
+                <span>Distance</span>
+                <strong data-field="magnitude">0.00</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="vector-card" data-vector="danger_zone">
+            <header>
+              <h3>Danger Zone</h3>
+              <label class="toggle">
+                <input type="checkbox" data-field="detected" />
+                <span>Detected</span>
+              </label>
+            </header>
+            <div class="axis">
+              <label>
+                X
+                <input type="range" min="-1" max="1" step="0.01" data-field="x" />
+                <input type="number" step="0.01" data-field="xNumber" />
+              </label>
+              <label>
+                Y
+                <input type="range" min="-1" max="1" step="0.01" data-field="y" />
+                <input type="number" step="0.01" data-field="yNumber" />
+              </label>
+              <div class="magnitude">
+                <span>Distance</span>
+                <strong data-field="magnitude">0.00</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="vector-card" data-vector="line">
+            <header>
+              <h3>Line Vector</h3>
+              <label class="toggle">
+                <input type="checkbox" data-field="detected" />
+                <span>Detected</span>
+              </label>
+            </header>
+            <div class="axis">
+              <label>
+                X
+                <input type="range" min="-1" max="1" step="0.01" data-field="x" />
+                <input type="number" step="0.01" data-field="xNumber" />
+              </label>
+              <label>
+                Y
+                <input type="range" min="-1" max="1" step="0.01" data-field="y" />
+                <input type="number" step="0.01" data-field="yNumber" />
+              </label>
+              <div class="magnitude">
+                <span>Distance</span>
+                <strong data-field="magnitude">0.00</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Flags</h2>
+        <div class="flags">
+          <label class="toggle"><input type="checkbox" data-flag="retrieving" /><span>Retrieving</span></label>
+          <label class="toggle"><input type="checkbox" data-flag="placing" /><span>Placing</span></label>
+          <label class="toggle"><input type="checkbox" data-flag="pick_up_success" /><span>Pickup success</span></label>
+          <label class="toggle"><input type="checkbox" data-flag="place_success" /><span>Place success</span></label>
+          <label class="toggle"><input type="checkbox" data-flag="failed_pickup" /><span>Failed pickup</span></label>
+          <label class="toggle"><input type="checkbox" data-flag="at_home" /><span>At home</span></label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Payload Preview</h2>
+        <pre id="payloadPreview">{}</pre>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
