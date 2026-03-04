@@ -110,14 +110,9 @@ class ControlCommClient:
         speed: float,
     ) -> dict[str, Any]:
         payload = {"x": x, "y": y, "speed": speed}
-        
-        real_length = (x**2 + y**2) ** 0.5
-        if real_length <= 1e-9:
-            payload_real = {"x": 0.0, "y": 0.0}
-        else:
-            payload_real = {"x": x / real_length, "y": -(y / real_length)}
-        
-        
+
+        payload_real = {"x": x, "y": -y}
+
         # print(f"Posting to control communication: {payload_real}")
         # post to the actual thing just as a test
         self._post("http://192.168.0.101:5001/vector", payload_real)

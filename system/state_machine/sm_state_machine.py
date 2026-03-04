@@ -158,10 +158,9 @@ class StateMachine:
         x = clamp(x, -1.0, 1.0)
         y = clamp(y, -1.0, 1.0)
         speed = clamp(speed, 0.0, MAX_CONTROL_SPEED)
-        magnitude = (x * x + y * y) ** 0.5
-        if magnitude <= 1e-6 or speed <= 1e-6:
+        if ((x * x + y * y) ** 0.5) <= 1e-6 or speed <= 1e-6:
             return dict(STOP_COMMAND)
-        return {"x": x / magnitude, "y": y / magnitude, "speed": speed}
+        return {"x": x, "y": y, "speed": speed}
 
     def _relinquish_to_pid_command(self) -> Command:
         return {"x": 0.0, "y": self.pid_relinquish_y, "speed": self.pid_relinquish_speed}

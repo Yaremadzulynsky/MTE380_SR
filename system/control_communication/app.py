@@ -111,6 +111,15 @@ def int8_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]
     return as_int, None
 
 
+def int8_to_centered_u8(value: int) -> int:
+    # Map signed range [-128..127] to unsigned [0..255] with zero at 128.
+    return value + 128
+
+
+def clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
 def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
     fmt_raw = payload.get("format", "normalized")
     fmt = str(fmt_raw).strip().lower()
@@ -146,6 +155,13 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
     if errors:
         return None, {"message": "Invalid vector payload.", "errors": errors}
 
+    x_norm = clamp(x_i8 / 127.0, -1.0, 1.0)
+    y_norm = clamp(y_i8 / 127.0, -1.0, 1.0)
+    left_norm = clamp(y_norm + x_norm, -1.0, 1.0)
+    right_norm = clamp(y_norm - x_norm, -1.0, 1.0)
+    left_i8 = int(round(left_norm * 127.0))
+    right_i8 = int(round(right_norm * 127.0))
+
     encoded = {
         "format": fmt,
         "x_input": x_val,
@@ -153,7 +169,9 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
         "speed": speed_val,
         "x_int8": x_i8,
         "y_int8": y_i8,
-        "bytes": [x_i8 & 0xFF, y_i8 & 0xFF],
+        "left_int8": left_i8,
+        "right_int8": right_i8,
+        "bytes": [int8_to_centered_u8(left_i8), int8_to_centered_u8(right_i8)],
     }
     return encoded, None
 
@@ -183,6 +201,8 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                     "speed": speed_value,
                     "x_int8": encoded["x_int8"],
                     "y_int8": encoded["y_int8"],
+                    "left_int8": encoded["left_int8"],
+                    "right_int8": encoded["right_int8"],
                     "bytes": encoded["bytes"],
                     "error": repr(exc),
                 },
@@ -211,6 +231,8 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
         "speed": speed_value,
         "x_int8": encoded["x_int8"],
         "y_int8": encoded["y_int8"],
+        "left_int8": encoded["left_int8"],
+        "right_int8": encoded["right_int8"],
         "bytes": encoded["bytes"],
     }
 
@@ -224,6 +246,8 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "speed": speed_value,
             "x_int8": encoded["x_int8"],
             "y_int8": encoded["y_int8"],
+            "left_int8": encoded["left_int8"],
+            "right_int8": encoded["right_int8"],
             "bytes": encoded["bytes"],
         },
     )
@@ -234,12 +258,16 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "sent": {
                 "x_int8": encoded["x_int8"],
                 "y_int8": encoded["y_int8"],
+                "left_int8": encoded["left_int8"],
+                "right_int8": encoded["right_int8"],
                 "bytes": encoded["bytes"],
             },
             "command": {
                 "x": encoded["x_input"],
                 "y": encoded["y_input"],
                 "speed": speed_value,
+                "left": encoded["left_int8"] / 127.0,
+                "right": encoded["right_int8"] / 127.0,
                 "updated_at": ts,
                 "format": encoded["format"],
                 "bytes": encoded["bytes"],
@@ -283,6 +311,8 @@ def get_control():
             "x": 0.0,
             "y": 0.0,
             "speed": 0.0,
+            "left": 0.0,
+            "right": 0.0,
             "updated_at": None,
             "format": "normalized",
             "bytes": [0, 0],
@@ -292,6 +322,8 @@ def get_control():
             "x": last_sent["x_input"],
             "y": last_sent["y_input"],
             "speed": last_sent.get("speed", 0.0),
+            "left": last_sent.get("left_int8", 0) / 127.0,
+            "right": last_sent.get("right_int8", 0) / 127.0,
             "updated_at": last_sent.get("updated_at"),
             "format": last_sent.get("format", "normalized"),
             "bytes": list(last_sent.get("bytes", [0, 0])),
