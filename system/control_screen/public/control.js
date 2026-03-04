@@ -101,7 +101,8 @@ function updateFromPointer(event) {
   const clampedY = Math.sin(angle) * clampedDistance;
 
   moveHandle(clampedX, clampedY);
-  updateVector(clampedX / state.radius, clampedY / state.radius);
+  // Screen Y increases downward; command-space forward should be +Y.
+  updateVector(clampedX / state.radius, -(clampedY / state.radius));
   sendControlCommand(false);
 }
 
