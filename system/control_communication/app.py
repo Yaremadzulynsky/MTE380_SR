@@ -111,9 +111,9 @@ def int8_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]
     return as_int, None
 
 
-def int8_to_centered_u8(value: int) -> int:
-    # Map signed range [-128..127] to unsigned [0..255] with zero at 128.
-    return value + 128
+def int8_to_twos_complement_u8(value: int) -> int:
+    # Keep signed int8 semantics on-wire; neutral (0) stays 0.
+    return value & 0xFF
 
 
 def clamp(value: float, lo: float, hi: float) -> float:
@@ -171,7 +171,7 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
         "y_int8": y_i8,
         "left_int8": left_i8,
         "right_int8": right_i8,
-        "bytes": [int8_to_centered_u8(left_i8), int8_to_centered_u8(right_i8)],
+        "bytes": [int8_to_twos_complement_u8(left_i8), int8_to_twos_complement_u8(right_i8)],
     }
     return encoded, None
 
