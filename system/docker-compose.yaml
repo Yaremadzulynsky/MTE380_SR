@@ -3,14 +3,14 @@ services:
     build:
       context: ./control_communication
     container_name: control-communication
-    ports:
-      - "5001:5000"
+    network_mode: host
     environment:
-      PORT: 5000
+      PORT: 5001
       HARDWARE_MODE: "mock"
       PID_P_DEFAULT: "0"
       PID_I_DEFAULT: "0"
       PID_D_DEFAULT: "0"
+      PID_SETTINGS_PATH: "/var/log/control-communication/pid-settings.json"
       LOG_PATH: "/var/log/control-communication/control-communication.log"
     volumes:
       - metrics-pipe:/var/run/metrics
@@ -20,15 +20,16 @@ services:
     build:
       context: ./control_screen
     container_name: control-screen
-    ports:
-      - "3000:3000"
+    network_mode: host
     environment:
       PORT: 3000
-      CONTROL_COMM_BASE_URL: "http://control-communication:5000"
+      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
       CONTROL_COMM_P_PATH: "/pid/proportional"
       CONTROL_COMM_I_PATH: "/pid/integral"
       CONTROL_COMM_D_PATH: "/pid/derivative"
       CONTROL_COMM_CONTROL_PATH: "/control"
+      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_LINE_FOLLOW_PID_PATH: "/line-follow-pid"
       PID_P_MIN: "-1000"
       PID_P_MAX: "1000"
       PID_I_MIN: "-1000"
@@ -46,10 +47,11 @@ services:
     build:
       context: ./metrics_aggregator
     container_name: metrics-aggregator
-    ports:
-      - "7001:7000"
+    # ports:
+      # - "7001:7000"
+    network_mode: host
     environment:
-      PORT: 7000
+      PORT: 7001
       METRICS_PIPE_PATH: "/var/run/metrics/metrics.prom"
       METRICS_MAX_LINES: "2000"
       LOG_PATH: "/var/log/metrics-aggregator/metrics-aggregator.log"
@@ -61,18 +63,18 @@ services:
     build:
       context: ./state_machine
     container_name: state-machine
-    ports:
-      - "8000:8000"
+    # ports:
+      # - "8000:8000"
+    network_mode: host
     environment:
       LOG_PATH: "/var/log/state-machine/state-machine.log"
-      METRICS_PIPE_PATH: "/var/run/metrics/metrics.prom"
-      CONTROL_COMM_BASE_URL: "http://control-communication:5000"
+      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
       CONTROL_COMM_STATE_PATH: "/state"
-      TICK_INTERVAL: "0.2"
+      LINE_PID_SETTINGS_PATH: "/var/log/state-machine/line-follow-pid.json"
+      TICK_INTERVAL: "0.01"
       FAILED_PICKUP_LIMIT: "3"
       PORT: "8000"
     volumes:
-      - metrics-pipe:/var/run/metrics
       - service-logs:/var/log
     depends_on:
       - control-communication
@@ -81,8 +83,9 @@ services:
     build:
       context: ./computer_vision
     container_name: computer-vision
-    ports:
-      - "8100:8100"
+    # ports:
+    #   - "8100:8100"
+    network_mode: host
     environment:
       PORT: "8100"
       STATE_MACHINE_BASE_URL: "http://state-machine:8000"
@@ -90,14 +93,34 @@ services:
       LOG_PATH: "/var/log/computer-vision/computer-vision.log"
     volumes:
       - service-logs:/var/log
+    # depends_on:
+      # - state-machine
+
+  robot-mock:
+    build:
+      context: ./robot_mock
+    container_name: robot-mock
+    # ports:
+    #   - "8200:8200"
+    network_mode: host
+    environment:
+      PORT: "8200"
+      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+      CONTROL_COMM_CONTROL_PATH: "/control"
+      CONTROL_COMM_STATE_PATH: "/state"
+      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_INPUT_PATH: "/inputs"
+      SYSTEM_POLL_INTERVAL_S: "0.1"
     depends_on:
-      - state-machine
+      - control-communication
+      # - state-machine
 
   prometheus:
     image: prom/prometheus:v2.49.1
     container_name: prometheus
-    ports:
-      - "9090:9090"
+    # ports:
+    #   - "9090:9090"
+    network_mode: host
     volumes:
       - ./metrics_aquisition/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -106,14 +129,16 @@ services:
     image: grafana/loki:2.9.4
     container_name: loki
     command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "3100:3100"
+    # ports:
+    #   - "3100:3100"
+    network_mode: host
     volumes:
       - loki-data:/loki
 
   alloy:
     image: grafana/alloy:latest
     container_name: alloy
+    network_mode: host
     command:
       - run
       - /etc/alloy/config.alloy
@@ -128,8 +153,9 @@ services:
   grafana:
     image: grafana/grafana:10.4.2
     container_name: insights-screen
-    ports:
-      - "3001:3000"
+    # ports:
+    #   - "3001:3000"
+    network_mode: host
     environment:
       GF_SECURITY_ADMIN_USER: "admin"
       GF_SECURITY_ADMIN_PASSWORD: "admin"

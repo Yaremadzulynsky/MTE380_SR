@@ -24,6 +24,7 @@
           <span class="status-label">State Machine</span>
           <span id="stateMachineStatus" class="status-value">Idle</span>
           <span class="status-meta" id="lastSent">Last send: --</span>
+          <span class="status-meta" id="lastTrace">Trace: --</span>
         </div>
       </header>
 
@@ -36,9 +37,13 @@
               <input id="autoSend" type="checkbox" />
               <span>Auto send</span>
             </label>
+            <label class="toggle">
+              <input id="traceToggle" type="checkbox" />
+              <span>Diagnostic trace</span>
+            </label>
             <label class="inline-input">
               <span>Interval (ms)</span>
-              <input id="intervalInput" type="number" min="100" step="50" value="500" />
+              <input id="intervalInput" type="number" min="100" step="50" value="100" />
             </label>
           </div>
         </div>

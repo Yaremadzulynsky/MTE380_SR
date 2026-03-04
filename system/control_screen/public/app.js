@@ -1,5 +1,10 @@
 const state = {
-  ranges: null
+  ranges: null,
+  linePidRanges: null,
+  fsmStates: [],
+  lineLiveTimer: null,
+  suppressLineLive: false,
+  settingState: false
 };
 
 const elements = {
@@ -14,23 +19,160 @@ const elements = {
   hintP: document.getElementById('hintP'),
   hintI: document.getElementById('hintI'),
   hintD: document.getElementById('hintD'),
+  lineFeedback: document.getElementById('lineFeedback'),
+  lfKp: document.getElementById('lfKp'),
+  lfKpRange: document.getElementById('lfKpRange'),
+  lfKi: document.getElementById('lfKi'),
+  lfKiRange: document.getElementById('lfKiRange'),
+  lfKd: document.getElementById('lfKd'),
+  lfKdRange: document.getElementById('lfKdRange'),
+  lfIMax: document.getElementById('lfIMax'),
+  lfIMaxRange: document.getElementById('lfIMaxRange'),
+  lfOutMax: document.getElementById('lfOutMax'),
+  lfOutMaxRange: document.getElementById('lfOutMaxRange'),
+  lfBaseSpeed: document.getElementById('lfBaseSpeed'),
+  lfBaseSpeedRange: document.getElementById('lfBaseSpeedRange'),
+  lfMinSpeed: document.getElementById('lfMinSpeed'),
+  lfMinSpeedRange: document.getElementById('lfMinSpeedRange'),
+  lfMaxSpeed: document.getElementById('lfMaxSpeed'),
+  lfMaxSpeedRange: document.getElementById('lfMaxSpeedRange'),
+  lfFollowMaxSpeed: document.getElementById('lfFollowMaxSpeed'),
+  lfFollowMaxSpeedRange: document.getElementById('lfFollowMaxSpeedRange'),
+  lfTurnSlowdown: document.getElementById('lfTurnSlowdown'),
+  lfTurnSlowdownRange: document.getElementById('lfTurnSlowdownRange'),
+  lfErrorSlowdown: document.getElementById('lfErrorSlowdown'),
+  lfErrorSlowdownRange: document.getElementById('lfErrorSlowdownRange'),
+  lfDeadband: document.getElementById('lfDeadband'),
+  lfDeadbandRange: document.getElementById('lfDeadbandRange'),
+  hintLfKp: document.getElementById('hintLfKp'),
+  hintLfKi: document.getElementById('hintLfKi'),
+  hintLfKd: document.getElementById('hintLfKd'),
+  hintLfIMax: document.getElementById('hintLfIMax'),
+  hintLfOutMax: document.getElementById('hintLfOutMax'),
+  hintLfBaseSpeed: document.getElementById('hintLfBaseSpeed'),
+  hintLfMinSpeed: document.getElementById('hintLfMinSpeed'),
+  hintLfMaxSpeed: document.getElementById('hintLfMaxSpeed'),
+  hintLfFollowMaxSpeed: document.getElementById('hintLfFollowMaxSpeed'),
+  hintLfTurnSlowdown: document.getElementById('hintLfTurnSlowdown'),
+  hintLfErrorSlowdown: document.getElementById('hintLfErrorSlowdown'),
+  hintLfDeadband: document.getElementById('hintLfDeadband'),
+  fsmStateSelect: document.getElementById('fsmStateSelect'),
+  refreshStatesBtn: document.getElementById('refreshStatesBtn'),
+  applyStateBtn: document.getElementById('applyStateBtn'),
+  fsmFeedback: document.getElementById('fsmFeedback'),
   feedback: document.getElementById('feedback'),
   pidForm: document.getElementById('pidForm'),
   refreshBtn: document.getElementById('refreshBtn'),
   applyBtn: document.getElementById('applyBtn')
 };
 
+const lineFields = [
+  ['kp', 'lfKp', 'lfKpRange', 'hintLfKp'],
+  ['ki', 'lfKi', 'lfKiRange', 'hintLfKi'],
+  ['kd', 'lfKd', 'lfKdRange', 'hintLfKd'],
+  ['i_max', 'lfIMax', 'lfIMaxRange', 'hintLfIMax'],
+  ['out_max', 'lfOutMax', 'lfOutMaxRange', 'hintLfOutMax'],
+  ['base_speed', 'lfBaseSpeed', 'lfBaseSpeedRange', 'hintLfBaseSpeed'],
+  ['min_speed', 'lfMinSpeed', 'lfMinSpeedRange', 'hintLfMinSpeed'],
+  ['max_speed', 'lfMaxSpeed', 'lfMaxSpeedRange', 'hintLfMaxSpeed'],
+  ['follow_max_speed', 'lfFollowMaxSpeed', 'lfFollowMaxSpeedRange', 'hintLfFollowMaxSpeed'],
+  ['turn_slowdown', 'lfTurnSlowdown', 'lfTurnSlowdownRange', 'hintLfTurnSlowdown'],
+  ['error_slowdown', 'lfErrorSlowdown', 'lfErrorSlowdownRange', 'hintLfErrorSlowdown'],
+  ['deadband', 'lfDeadband', 'lfDeadbandRange', 'hintLfDeadband']
+];
+
 initialize();
 
 async function initialize() {
   bindEvents();
   await loadConfig();
-  await refreshValues();
+  await Promise.all([refreshValues(), refreshStateOptions()]);
 }
 
 function bindEvents() {
   elements.pidForm.addEventListener('submit', handleSubmit);
   elements.refreshBtn.addEventListener('click', refreshValues);
+  elements.refreshStatesBtn?.addEventListener('click', refreshStateOptions);
+  elements.applyStateBtn?.addEventListener('click', handleSetState);
+  for (const [, inputKey, rangeKey] of lineFields) {
+    const input = elements[inputKey];
+    const range = elements[rangeKey];
+    if (!input) continue;
+    input.addEventListener('input', scheduleLineLiveUpdate);
+    input.addEventListener('change', scheduleLineLiveUpdate);
+    if (range) {
+      range.addEventListener('input', () => {
+        input.value = range.value;
+        scheduleLineLiveUpdate();
+      });
+      input.addEventListener('input', () => {
+        if (!Number.isFinite(Number(input.value))) return;
+        range.value = input.value;
+      });
+      input.addEventListener('change', () => {
+        if (!Number.isFinite(Number(input.value))) return;
+        range.value = input.value;
+      });
+    }
+  }
+}
+
+async function refreshStateOptions() {
+  if (!elements.fsmStateSelect) return;
+  setFsmFeedback('Loading state options...', 'info');
+  setStateLoading(true);
+  const result = await requestJson('/api/state-machine/states');
+  if (!result.ok || !result.data || !Array.isArray(result.data.states)) {
+    const message = result.data?.message || 'Unable to load state options.';
+    setFsmFeedback(message, 'error');
+    setStateLoading(false);
+    return;
+  }
+
+  const current = typeof result.data.current_state === 'string'
+    ? result.data.current_state
+    : '';
+  state.fsmStates = result.data.states;
+  elements.fsmStateSelect.innerHTML = '';
+  for (const value of state.fsmStates) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = value;
+    if (current && value === current) {
+      option.selected = true;
+    }
+    elements.fsmStateSelect.appendChild(option);
+  }
+  setFsmFeedback(current ? `Loaded. Current state: ${current}.` : 'State options refreshed.', 'success');
+  setStateLoading(false);
+}
+
+async function handleSetState() {
+  const nextState = elements.fsmStateSelect?.value;
+  if (!nextState) {
+    setFsmFeedback('Select a target state first.', 'error');
+    return;
+  }
+
+  setStateLoading(true);
+  setFsmFeedback(`Setting state to ${nextState}...`, 'info');
+  const result = await requestJson('/api/state-machine/set-state', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: nextState })
+  });
+
+  if (!result.ok) {
+    const message = result.data?.message || 'Failed to set state.';
+    setFsmFeedback(message, 'error');
+    setStateLoading(false);
+    return;
+  }
+
+  const applied = result.data?.state || nextState;
+  setFsmFeedback(`State forced to ${applied}. Inputs and transient flags reset.`, 'success');
+  await refreshStateOptions();
+  setStateLoading(false);
 }
 
 async function loadConfig() {
@@ -41,6 +183,7 @@ async function loadConfig() {
   }
 
   state.ranges = result.data.ranges || null;
+  state.linePidRanges = result.data.linePidRanges || null;
   updateRangeHints();
 }
 
@@ -53,6 +196,38 @@ function updateRangeHints() {
   elements.hintP.textContent = formatRangeHint(ranges.p);
   elements.hintI.textContent = formatRangeHint(ranges.i);
   elements.hintD.textContent = formatRangeHint(ranges.d);
+
+  const lineRanges = state.linePidRanges || {};
+  for (const [key, inputKey, rangeKey, hintKey] of lineFields) {
+    const input = elements[inputKey];
+    const range = elements[rangeKey];
+    const bounds = lineRanges[key];
+    applyLineFieldBounds(input, range, bounds);
+    if (elements[hintKey]) {
+      elements[hintKey].textContent = formatRangeHint(bounds);
+    }
+  }
+}
+
+function lineStepForRange(range) {
+  if (!range) return 0.001;
+  const span = Number(range.max) - Number(range.min);
+  if (!Number.isFinite(span) || span <= 0) return 0.001;
+  if (span <= 1) return 0.001;
+  if (span <= 5) return 0.005;
+  if (span <= 20) return 0.01;
+  return 0.1;
+}
+
+function applyLineFieldBounds(numberInput, rangeInput, range) {
+  if (!numberInput || !rangeInput || !range) return;
+  const step = lineStepForRange(range);
+  numberInput.min = String(range.min);
+  numberInput.max = String(range.max);
+  numberInput.step = String(step);
+  rangeInput.min = String(range.min);
+  rangeInput.max = String(range.max);
+  rangeInput.step = String(step);
 }
 
 function formatRangeHint(range) {
@@ -68,9 +243,10 @@ async function refreshValues() {
   clearInputErrors();
   setFeedback('Refreshing PID values...', 'info');
 
-  const [statusResult, pidResult] = await Promise.all([
+  const [statusResult, pidResult, lineResult] = await Promise.all([
     requestJson('/api/status'),
-    requestJson('/api/pid')
+    requestJson('/api/pid'),
+    requestJson('/api/line-follow-pid')
   ]);
 
   const statusPayload =
@@ -90,6 +266,12 @@ async function refreshValues() {
   updateCurrentValues(values);
   fillInputs(values);
   setFeedback('Values synced.', 'success');
+  if (lineResult.ok && lineResult.data && lineResult.data.values) {
+    fillLineInputs(lineResult.data.values);
+    setLineFeedback('Live tuning ready.', 'success');
+  } else {
+    setLineFeedback('Unable to load line-follow settings.', 'error');
+  }
   setLoading(false);
 }
 
@@ -200,6 +382,98 @@ function clearInputErrors() {
   elements.inputD.classList.remove('input-error');
 }
 
+function fillLineInputs(values) {
+  state.suppressLineLive = true;
+  for (const [key, inputKey, rangeKey] of lineFields) {
+    const input = elements[inputKey];
+    const range = elements[rangeKey];
+    if (!input) continue;
+    if (values[key] !== undefined && Number.isFinite(Number(values[key]))) {
+      input.value = Number(values[key]);
+      if (range) {
+        range.value = String(Number(values[key]));
+      }
+    }
+    input.classList.remove('input-error');
+  }
+  state.suppressLineLive = false;
+}
+
+function scheduleLineLiveUpdate() {
+  if (state.suppressLineLive) return;
+  if (state.lineLiveTimer) {
+    clearTimeout(state.lineLiveTimer);
+  }
+  state.lineLiveTimer = setTimeout(sendLineLiveUpdate, 180);
+}
+
+async function sendLineLiveUpdate() {
+  state.lineLiveTimer = null;
+  const payload = {};
+  const errors = {};
+  const lineRanges = state.linePidRanges || {};
+
+  for (const [key, inputKey] of lineFields) {
+    const input = elements[inputKey];
+    if (!input) continue;
+    input.classList.remove('input-error');
+    const raw = input.value;
+    if (raw === '') {
+      continue;
+    }
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric)) {
+      errors[key] = 'Value must be a number.';
+      input.classList.add('input-error');
+      continue;
+    }
+    const range = lineRanges[key];
+    if (range && (numeric < range.min || numeric > range.max)) {
+      errors[key] = `Must be between ${range.min} and ${range.max}.`;
+      input.classList.add('input-error');
+      continue;
+    }
+    payload[key] = numeric;
+  }
+
+  if (Object.keys(errors).length > 0) {
+    setLineFeedback('Line-follow values out of range.', 'error');
+    return;
+  }
+
+  if (payload.min_speed !== undefined && payload.max_speed !== undefined && payload.min_speed > payload.max_speed) {
+    setLineFeedback('min_speed must be <= max_speed.', 'error');
+    const minInput = elements.lfMinSpeed;
+    const maxInput = elements.lfMaxSpeed;
+    minInput?.classList.add('input-error');
+    maxInput?.classList.add('input-error');
+    return;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    setLineFeedback('Live tuning idle.', 'info');
+    return;
+  }
+
+  setLineFeedback('Updating line-follow settings...', 'info');
+  const result = await requestJson('/api/line-follow-pid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!result.ok) {
+    const message = result.data?.message || 'Line-follow update failed.';
+    setLineFeedback(message, 'error');
+    return;
+  }
+
+  if (result.data?.values) {
+    fillLineInputs(result.data.values);
+  }
+  setLineFeedback('Line-follow settings updated live.', 'success');
+}
+
 async function refreshBridgeStatus(fallbackOnline) {
   const statusResult = await requestJson('/api/status');
   const statusPayload =
@@ -250,9 +524,44 @@ function setFeedback(message, tone) {
   }
 }
 
+function setLineFeedback(message, tone) {
+  if (!elements.lineFeedback) return;
+  elements.lineFeedback.textContent = message;
+  elements.lineFeedback.classList.remove('success', 'error');
+  if (tone === 'success') {
+    elements.lineFeedback.classList.add('success');
+  } else if (tone === 'error') {
+    elements.lineFeedback.classList.add('error');
+  }
+}
+
 function setLoading(isLoading) {
   elements.refreshBtn.disabled = isLoading;
   elements.applyBtn.disabled = isLoading;
+}
+
+function setStateLoading(isLoading) {
+  state.settingState = isLoading;
+  if (elements.refreshStatesBtn) {
+    elements.refreshStatesBtn.disabled = isLoading;
+  }
+  if (elements.applyStateBtn) {
+    elements.applyStateBtn.disabled = isLoading;
+  }
+  if (elements.fsmStateSelect) {
+    elements.fsmStateSelect.disabled = isLoading;
+  }
+}
+
+function setFsmFeedback(message, tone) {
+  if (!elements.fsmFeedback) return;
+  elements.fsmFeedback.textContent = message;
+  elements.fsmFeedback.classList.remove('success', 'error');
+  if (tone === 'success') {
+    elements.fsmFeedback.classList.add('success');
+  } else if (tone === 'error') {
+    elements.fsmFeedback.classList.add('error');
+  }
 }
 
 function formatNumber(value) {

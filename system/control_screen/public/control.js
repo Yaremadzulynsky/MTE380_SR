@@ -6,7 +6,8 @@ const state = {
   vector: { x: 0, y: 0, speed: 0 },
   lastSentAt: 0,
   sendIntervalMs: 120,
-  deadzone: 0.08
+  deadzone: 0.08,
+  usingPointerEvents: typeof window !== 'undefined' && 'PointerEvent' in window
 };
 
 const elements = {
@@ -30,10 +31,23 @@ function initialize() {
 }
 
 function bindEvents() {
-  elements.joystick.addEventListener('pointerdown', handlePointerDown);
-  elements.joystick.addEventListener('pointermove', handlePointerMove);
-  elements.joystick.addEventListener('pointerup', handlePointerUp);
-  elements.joystick.addEventListener('pointercancel', handlePointerUp);
+  if (state.usingPointerEvents) {
+    elements.joystick.addEventListener('pointerdown', handlePointerDown);
+    elements.joystick.addEventListener('pointermove', handlePointerMove);
+    elements.joystick.addEventListener('pointerup', handlePointerUp);
+    elements.joystick.addEventListener('pointercancel', handlePointerUp);
+    return;
+  }
+
+  // Fallback for browsers where Pointer Events are unavailable/disabled.
+  elements.joystick.addEventListener('mousedown', handleMouseDown);
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('mouseup', handleMouseUp);
+
+  elements.joystick.addEventListener('touchstart', handleTouchStart, { passive: false });
+  window.addEventListener('touchmove', handleTouchMove, { passive: false });
+  window.addEventListener('touchend', handleTouchEnd);
+  window.addEventListener('touchcancel', handleTouchEnd);
 }
 
 function updateGeometry() {
@@ -46,6 +60,8 @@ function updateGeometry() {
 }
 
 function handlePointerDown(event) {
+  event.preventDefault?.();
+  updateGeometry();
   state.active = true;
   state.pointerId = event.pointerId;
   elements.joystick.setPointerCapture(event.pointerId);
@@ -57,6 +73,7 @@ function handlePointerMove(event) {
     return;
   }
 
+  event.preventDefault?.();
   updateFromPointer(event);
 }
 
@@ -65,6 +82,7 @@ function handlePointerUp(event) {
     return;
   }
 
+  event.preventDefault?.();
   state.active = false;
   elements.joystick.releasePointerCapture(event.pointerId);
   state.pointerId = null;
@@ -73,8 +91,9 @@ function handlePointerUp(event) {
 }
 
 function updateFromPointer(event) {
-  const dx = event.clientX - state.center.x;
-  const dy = event.clientY - state.center.y;
+  const { x, y } = getClientPoint(event);
+  const dx = x - state.center.x;
+  const dy = y - state.center.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
   const clampedDistance = Math.min(distance, state.radius);
   const angle = Math.atan2(dy, dx);
@@ -84,6 +103,86 @@ function updateFromPointer(event) {
   moveHandle(clampedX, clampedY);
   updateVector(clampedX / state.radius, clampedY / state.radius);
   sendControlCommand(false);
+}
+
+function handleMouseDown(event) {
+  event.preventDefault?.();
+  updateGeometry();
+  state.active = true;
+  state.pointerId = 'mouse';
+  updateFromPointer(event);
+}
+
+function handleMouseMove(event) {
+  if (!state.active || state.pointerId !== 'mouse') {
+    return;
+  }
+  event.preventDefault?.();
+  updateFromPointer(event);
+}
+
+function handleMouseUp(event) {
+  if (state.pointerId !== 'mouse') {
+    return;
+  }
+  event.preventDefault?.();
+  state.active = false;
+  state.pointerId = null;
+  updateVector(0, 0);
+  sendControlCommand(true);
+}
+
+function handleTouchStart(event) {
+  if (!event.touches || event.touches.length === 0) {
+    return;
+  }
+  event.preventDefault?.();
+  updateGeometry();
+  state.active = true;
+  state.pointerId = event.touches[0].identifier ?? 'touch';
+  updateFromPointer(event.touches[0]);
+}
+
+function handleTouchMove(event) {
+  if (!state.active || !event.touches || event.touches.length === 0) {
+    return;
+  }
+  event.preventDefault?.();
+  const touch = findTouch(event.touches, state.pointerId) || event.touches[0];
+  updateFromPointer(touch);
+}
+
+function handleTouchEnd(event) {
+  if (!state.active) {
+    return;
+  }
+  // If our tracked touch is gone, stop.
+  const touches = event.touches || [];
+  if (findTouch(touches, state.pointerId)) {
+    return;
+  }
+  state.active = false;
+  state.pointerId = null;
+  updateVector(0, 0);
+  sendControlCommand(true);
+}
+
+function findTouch(touchList, identifier) {
+  if (!touchList) {
+    return null;
+  }
+  for (const t of touchList) {
+    if ((t.identifier ?? 'touch') === identifier) {
+      return t;
+    }
+  }
+  return null;
+}
+
+function getClientPoint(eventLike) {
+  const x = typeof eventLike.clientX === 'number' ? eventLike.clientX : 0;
+  const y = typeof eventLike.clientY === 'number' ? eventLike.clientY : 0;
+  return { x, y };
 }
 
 function moveHandle(x, y) {

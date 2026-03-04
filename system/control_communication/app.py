@@ -91,12 +91,89 @@ def parse_float(value: str) -> Optional[float]:
     return parsed
 
 
+def parse_timestamp_ms(value) -> Optional[int]:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed or parsed in (float("inf"), float("-inf")):
+        return None
+    return int(parsed)
+
+
+def extract_trace(payload: dict) -> Optional[dict]:
+    if not payload:
+        return None
+    trace = payload.get("trace")
+    trace_id = None
+    sent_at = None
+    if isinstance(trace, dict):
+        trace_id = trace.get("id") or trace.get("trace_id")
+        sent_at = trace.get("sent_at_ms") or trace.get("sent_at")
+    else:
+        trace_id = payload.get("trace_id")
+        sent_at = payload.get("trace_sent_at_ms")
+
+    if not trace_id:
+        return None
+
+    trace_payload = {"id": str(trace_id)}
+    sent_at_ms = parse_timestamp_ms(sent_at)
+    if sent_at_ms is not None:
+        trace_payload["sent_at_ms"] = sent_at_ms
+    return trace_payload
+
+
+def trace_log_fields(trace: Optional[dict]) -> dict:
+    if not trace or not trace.get("id"):
+        return {}
+    fields = {"trace_id": trace["id"]}
+    sent_at_ms = trace.get("sent_at_ms")
+    if sent_at_ms is not None:
+        fields["trace_sent_at_ms"] = sent_at_ms
+        fields["trace_latency_ms"] = int(datetime.utcnow().timestamp() * 1000) - int(sent_at_ms)
+    return fields
+
+
 def load_initial_values() -> dict[str, float]:
     return {
         "p": parse_float(os.getenv("PID_P_DEFAULT", "0")) or 0.0,
         "i": parse_float(os.getenv("PID_I_DEFAULT", "0")) or 0.0,
         "d": parse_float(os.getenv("PID_D_DEFAULT", "0")) or 0.0,
     }
+
+
+def get_pid_settings_path() -> str:
+    return (os.getenv("PID_SETTINGS_PATH") or "/var/log/control-communication/pid-settings.json").strip()
+
+
+def load_persisted_settings(path: str) -> dict:
+    if not path:
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if isinstance(data, dict):
+            return data
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        log_event("pid_settings_load_failed", {"path": path, "error": str(exc)})
+        return {}
+    return {}
+
+
+def resolve_initial_pid_values(persisted_settings: dict) -> dict[str, float]:
+    values = load_initial_values()
+    persisted_pid = persisted_settings.get("pid")
+    if not isinstance(persisted_pid, dict):
+        return values
+
+    for axis in ("p", "i", "d"):
+        parsed = parse_float(persisted_pid.get(axis))
+        if parsed is not None:
+            values[axis] = parsed
+    return values
 
 
 def create_spi_client():
@@ -110,20 +187,20 @@ def create_spi_client():
         return None
 
 
-def create_stores() -> tuple[PidStore, ControlStore, str]:
+def create_stores(initial_values: dict[str, float]) -> tuple[PidStore, ControlStore, str]:
     mode = os.getenv("HARDWARE_MODE", "mock").lower()
     if mode in {"mock", "sim", "simulation"}:
-        return MockPidStore(load_initial_values()), MockControlStore(), "mock"
+        return MockPidStore(initial_values), MockControlStore(), "mock"
 
     spi_client = create_spi_client()
     if spi_client:
         return (
-            SpiPidStore(spi_client, load_initial_values()),
+            SpiPidStore(spi_client, initial_values),
             SpiControlStore(spi_client),
             "spi",
         )
 
-    return MockPidStore(load_initial_values()), MockControlStore(), "mock"
+    return MockPidStore(initial_values), MockControlStore(), "mock"
 
 
 def create_insights_logger():
@@ -156,7 +233,9 @@ def log_service_line(message: str):
 
 
 INSIGHTS_LOGGER = create_insights_logger()
-PID_STORE, CONTROL_STORE, PID_MODE = create_stores()
+PID_SETTINGS_PATH = get_pid_settings_path()
+PERSISTED_SETTINGS = load_persisted_settings(PID_SETTINGS_PATH)
+PID_STORE, CONTROL_STORE, PID_MODE = create_stores(resolve_initial_pid_values(PERSISTED_SETTINGS))
 
 app = Flask(__name__)
 
@@ -179,6 +258,93 @@ SYSTEM_STATE = {
     "state": "unknown",
     "updated_at": None,
 }
+
+LAST_CONTROL_COMMAND = {
+    "x": 0.0,
+    "y": 0.0,
+    "speed": 0.0,
+    "updated_at": None,
+}
+
+LINE_FOLLOW_DEFAULTS = {
+    "kp": "0.2",
+    "ki": "0.04",
+    "kd": "4.92",
+    "i_max": "20",
+    "out_max": "20",
+    "base_speed": "1",
+    "min_speed": "0.18",
+    "max_speed": "1",
+    "follow_max_speed": "1",
+    "turn_slowdown": "5",
+    "error_slowdown": "0.14",
+    "deadband": "0.01",
+}
+
+LINE_FOLLOW_BOUNDS = {
+    "kp": (0.0, 20.0),
+    "ki": (0.0, 20.0),
+    "kd": (0.0, 20.0),
+    "i_max": (0.0, 20.0),
+    "out_max": (0.0, 20.0),
+    "base_speed": (0.0, 5.0),
+    "min_speed": (0.0, 5.0),
+    "max_speed": (0.0, 5.0),
+    "follow_max_speed": (0.0, 5.0),
+    "turn_slowdown": (0.0, 5.0),
+    "error_slowdown": (0.0, 5.0),
+    "deadband": (0.0, 1.0),
+}
+
+def load_line_follow_settings(persisted_settings: dict) -> dict[str, float]:
+    values = {
+        key: (parse_float(os.getenv(f"LINE_PID_{key.upper()}", default)) or parse_float(default) or 0.0)
+        for key, default in LINE_FOLLOW_DEFAULTS.items()
+    }
+
+    persisted_line_follow = persisted_settings.get("line_follow_pid")
+    if isinstance(persisted_line_follow, dict):
+        for key, raw_value in persisted_line_follow.items():
+            if key not in LINE_FOLLOW_BOUNDS:
+                continue
+            parsed = parse_float(raw_value)
+            if parsed is None:
+                continue
+            low, high = LINE_FOLLOW_BOUNDS[key]
+            if low <= parsed <= high:
+                values[key] = parsed
+
+    if values["min_speed"] > values["max_speed"]:
+        values["min_speed"], values["max_speed"] = values["max_speed"], values["min_speed"]
+    return values
+
+
+LINE_FOLLOW_SETTINGS = load_line_follow_settings(PERSISTED_SETTINGS)
+
+
+def persist_settings() -> bool:
+    if not PID_SETTINGS_PATH:
+        return False
+
+    payload = {
+        "pid": {axis: PID_STORE.get(axis) for axis in ("p", "i", "d")},
+        "line_follow_pid": dict(LINE_FOLLOW_SETTINGS),
+        "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+    try:
+        directory = os.path.dirname(PID_SETTINGS_PATH)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temp_path = f"{PID_SETTINGS_PATH}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temp_path, PID_SETTINGS_PATH)
+        return True
+    except OSError as exc:
+        log_event("pid_settings_persist_failed", {"path": PID_SETTINGS_PATH, "error": str(exc)})
+        return False
 
 
 def initialize_metrics():
@@ -242,6 +408,7 @@ def handle_set_pid(key: str):
         return jsonify({"message": "Value must be a finite number."}), 400
 
     updated = PID_STORE.set(key, value)
+    persist_settings()
     PID_SET_TOTAL.labels(axis=key).inc()
     PID_GAIN.labels(axis=key).set(updated)
     log_event("pid_set", {"key": key, "value": updated})
@@ -270,8 +437,8 @@ def parse_control_payload():
         errors["x"] = "X must be between -1 and 1."
     if y is not None and not (-1.0 <= y <= 1.0):
         errors["y"] = "Y must be between -1 and 1."
-    if speed is not None and not (0.0 <= speed <= 1.0):
-        errors["speed"] = "Speed must be between 0 and 1."
+    if speed is not None and not (0.0 <= speed <= 5.0):
+        errors["speed"] = "Speed must be between 0 and 5."
 
     if errors:
         return None, errors
@@ -287,12 +454,25 @@ def send_control():
         return jsonify({"message": "Invalid control payload.", "errors": errors}), 400
 
     command = CONTROL_STORE.send(payload["x"], payload["y"], payload["speed"])
+    LAST_CONTROL_COMMAND.update(
+        {
+            "x": command["x"],
+            "y": command["y"],
+            "speed": command["speed"],
+            "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        }
+    )
     CONTROL_COMMAND_TOTAL.inc()
     CONTROL_VECTOR.labels(axis="x").set(command["x"])
     CONTROL_VECTOR.labels(axis="y").set(command["y"])
     CONTROL_SPEED.set(command["speed"])
     log_event("control_command", command)
     return jsonify({"command": command})
+
+
+@app.get("/control")
+def get_control():
+    return jsonify({"command": dict(LAST_CONTROL_COMMAND)})
 
 
 @app.get("/state")
@@ -308,13 +488,70 @@ def set_state():
     state = payload.get("state")
     if not isinstance(state, str) or not state:
         return jsonify({"message": "Missing 'state' in payload."}), 400
+    trace = extract_trace(payload)
 
     SYSTEM_STATE["state"] = state
     SYSTEM_STATE["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     SYSTEM_STATE_GAUGE.clear()
     SYSTEM_STATE_GAUGE.labels(state=state).set(1)
-    log_event("state_update", SYSTEM_STATE)
+    log_payload = dict(SYSTEM_STATE)
+    log_payload.update(trace_log_fields(trace))
+    log_event("state_update", log_payload)
+    if trace:
+        log_event(
+            "diagnostic_trace_received",
+            {
+                "state": state,
+                **trace_log_fields(trace),
+            },
+        )
     return jsonify(SYSTEM_STATE)
+
+
+@app.get("/line-follow-pid")
+def get_line_follow_pid():
+    return jsonify({"values": dict(LINE_FOLLOW_SETTINGS), "bounds": LINE_FOLLOW_BOUNDS})
+
+
+@app.post("/line-follow-pid")
+def set_line_follow_pid():
+    if not request.is_json:
+        return jsonify({"message": "Expected JSON payload."}), 400
+
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"message": "Payload must be an object."}), 400
+
+    updates = {}
+    errors = {}
+    for key, value in payload.items():
+        if key not in LINE_FOLLOW_BOUNDS:
+            errors[key] = "Unknown setting."
+            continue
+        parsed = parse_float(value)
+        if parsed is None:
+            errors[key] = "Value must be a finite number."
+            continue
+        low, high = LINE_FOLLOW_BOUNDS[key]
+        if not (low <= parsed <= high):
+            errors[key] = f"Value must be between {low} and {high}."
+            continue
+        updates[key] = parsed
+
+    # Keep speed ordering sane if updated independently.
+    preview = dict(LINE_FOLLOW_SETTINGS)
+    preview.update(updates)
+    if preview["min_speed"] > preview["max_speed"]:
+        errors["min_speed"] = "min_speed must be <= max_speed."
+        errors["max_speed"] = "max_speed must be >= min_speed."
+
+    if errors:
+        return jsonify({"message": "Invalid line-follow PID payload.", "errors": errors}), 400
+
+    LINE_FOLLOW_SETTINGS.update(updates)
+    persist_settings()
+    log_event("line_follow_pid_update", {"updated": updates})
+    return jsonify({"values": dict(LINE_FOLLOW_SETTINGS), "updated": updates})
 
 
 @app.get("/pid/proportional")
@@ -349,6 +586,7 @@ def set_derivative():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
+    persist_settings()
     initialize_metrics()
     log_service_line(f"Control communication running on 0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port)

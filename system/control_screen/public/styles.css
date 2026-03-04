@@ -194,6 +194,13 @@ p {
   gap: 8px;
 }
 
+.slider-control {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 10px;
+  align-items: center;
+}
+
 .field-label {
   font-weight: 600;
 }
@@ -208,7 +215,24 @@ input[type='number'] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+select {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e4d7c5;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fffdf8;
+  color: var(--ink);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
 input[type='number']:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px rgba(31, 156, 139, 0.2);
+}
+
+select:focus {
   outline: none;
   border-color: var(--accent-2);
   box-shadow: 0 0 0 3px rgba(31, 156, 139, 0.2);
@@ -217,6 +241,11 @@ input[type='number']:focus {
 input[type='number'].input-error {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(239, 111, 67, 0.18);
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent-2);
 }
 
 .hint {
@@ -432,6 +461,10 @@ button.ghost {
 @media (max-width: 720px) {
   .shell {
     padding: 32px 20px 60px;
+  }
+
+  .slider-control {
+    grid-template-columns: 1fr;
   }
 
   .status-card {

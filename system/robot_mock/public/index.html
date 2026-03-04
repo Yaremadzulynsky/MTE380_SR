@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robot Mock (2D)</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <div class="left">
+        <div class="title">Robot Mock (2D)</div>
+        <div class="row"><span class="k">Mode</span><span id="mode">paused</span></div>
+        <div class="row">
+          <span class="k">FSM</span><span id="fsm">unknown</span>
+          <span class="sep"></span>
+          <span class="k">Control</span><span id="control">x=0 y=0 s=0</span>
+        </div>
+        <div class="row"><span class="k">Link</span><span id="link">polling…</span></div>
+        <div class="row"><span class="k">Robot</span><span id="robot">x=0 y=0</span></div>
+      </div>
+      <div class="right">
+        <button id="start-btn">Start</button>
+        <button id="pause-btn" title="Toggle pause (p)">Pause</button>
+        <button id="restart-fsm-btn" title="Reset state-machine to searching">Restart FSM</button>
+        <button id="pen-toggle-btn" title="Toggle line drawing mode (l)">Pen: Off</button>
+        <button id="clear-line-btn" title="Reset line to home→target">Clear Line</button>
+        <button id="save-course-btn" title="Save course as JSON">Save Course</button>
+        <button id="load-course-btn" title="Load course from JSON">Load Course</button>
+        <input type="file" id="load-course-input" accept="application/json,.json" hidden />
+        <label class="toggle">
+          <input type="checkbox" id="manual-toggle" />
+          <span>Manual override (WASD)</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="inputs-toggle" checked />
+          <span>Send sim inputs</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="vectors-toggle" checked />
+          <span>Show vectors</span>
+        </label>
+        <div class="fov-control">
+          <label for="vision-depth">Vision Depth</label>
+          <input id="vision-depth" type="range" min="0.4" max="6" step="0.05" value="1.6" />
+          <span id="vision-depth-value">1.60</span>
+        </div>
+        <div class="fov-control">
+          <label for="vision-width">Vision Width</label>
+          <input id="vision-width" type="range" min="0.4" max="6" step="0.05" value="1.6" />
+          <span id="vision-width-value">1.60</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="wrap">
+      <canvas id="game" width="960" height="600"></canvas>
+      <div id="help">
+        <div class="help-title">Controls</div>
+        <ul>
+          <li>Drag <span class="pill target">target</span>, <span class="pill safe">safe</span>, <span class="pill home">home</span></li>
+          <li>Toggle <span class="pill key">Pen</span> and draw the red path directly on canvas</li>
+          <li><span class="pill key">p</span> pause/resume</li>
+          <li><span class="pill key">l</span> toggle pen mode</li>
+          <li><span class="pill key">f</span> fullscreen</li>
+          <li>Save/load course JSON (path + POIs)</li>
+          <li>Use control-screen to send x/y/speed to control-communication</li>
+        </ul>
+      </div>
+    </div>
+
+    <script src="/main.js"></script>
+  </body>
+</html>

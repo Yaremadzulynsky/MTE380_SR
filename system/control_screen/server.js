@@ -17,6 +17,17 @@ const CONTROL_COMM_HEALTH_PATH =
   process.env.CONTROL_COMM_HEALTH_PATH || '/health';
 const CONTROL_COMM_CONTROL_PATH =
   process.env.CONTROL_COMM_CONTROL_PATH || '/control';
+const CONTROL_COMM_STATE_PATH =
+  process.env.CONTROL_COMM_STATE_PATH || '/state';
+const STATE_MACHINE_BASE_URL =
+  process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
+const STATE_MACHINE_LINE_FOLLOW_PID_PATH =
+  process.env.STATE_MACHINE_LINE_FOLLOW_PID_PATH || '/line-follow-pid';
+const STATE_MACHINE_STATES_PATH =
+  process.env.STATE_MACHINE_STATES_PATH || '/states';
+const STATE_MACHINE_SET_STATE_PATH =
+  process.env.STATE_MACHINE_SET_STATE_PATH || '/set-state';
+const ROBOT_MOCK_URL = process.env.ROBOT_MOCK_URL || 'http://localhost:8200';
 const LOG_PATH = process.env.LOG_PATH || process.env.INSIGHTS_IPC_PATH;
 
 const DEFAULT_RANGE = { min: -1000, max: 1000 };
@@ -25,6 +36,21 @@ const pidRanges = {
   p: buildRange(process.env.PID_P_MIN, process.env.PID_P_MAX),
   i: buildRange(process.env.PID_I_MIN, process.env.PID_I_MAX),
   d: buildRange(process.env.PID_D_MIN, process.env.PID_D_MAX)
+};
+
+const linePidRanges = {
+  kp: buildRange(process.env.LINE_PID_KP_MIN, process.env.LINE_PID_KP_MAX, 0, 20),
+  ki: buildRange(process.env.LINE_PID_KI_MIN, process.env.LINE_PID_KI_MAX, 0, 20),
+  kd: buildRange(process.env.LINE_PID_KD_MIN, process.env.LINE_PID_KD_MAX, 0, 20),
+  i_max: buildRange(process.env.LINE_PID_I_MAX_MIN, process.env.LINE_PID_I_MAX_MAX, 0, 20),
+  out_max: buildRange(process.env.LINE_PID_OUT_MAX_MIN, process.env.LINE_PID_OUT_MAX_MAX, 0, 20),
+  base_speed: buildRange(process.env.LINE_PID_BASE_SPEED_MIN, process.env.LINE_PID_BASE_SPEED_MAX, 0, 5),
+  min_speed: buildRange(process.env.LINE_PID_MIN_SPEED_MIN, process.env.LINE_PID_MIN_SPEED_MAX, 0, 5),
+  max_speed: buildRange(process.env.LINE_PID_MAX_SPEED_MIN, process.env.LINE_PID_MAX_SPEED_MAX, 0, 5),
+  follow_max_speed: buildRange(process.env.LINE_PID_FOLLOW_MAX_SPEED_MIN, process.env.LINE_PID_FOLLOW_MAX_SPEED_MAX, 0, 5),
+  turn_slowdown: buildRange(process.env.LINE_PID_TURN_SLOWDOWN_MIN, process.env.LINE_PID_TURN_SLOWDOWN_MAX, 0, 5),
+  error_slowdown: buildRange(process.env.LINE_PID_ERROR_SLOWDOWN_MIN, process.env.LINE_PID_ERROR_SLOWDOWN_MAX, 0, 5),
+  deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1)
 };
 
 const insightsLogger = createInsightsLogger(LOG_PATH);
@@ -40,9 +66,14 @@ app.get('/control', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'control.html'));
 });
 
+app.get('/robot-mock', (req, res) => {
+  res.redirect(ROBOT_MOCK_URL);
+});
+
 app.get('/api/config', (req, res) => {
   res.json({
     ranges: pidRanges,
+    linePidRanges,
     controlComm: {
       baseUrl: CONTROL_COMM_BASE_URL,
       paths: {
@@ -50,6 +81,15 @@ app.get('/api/config', (req, res) => {
         i: CONTROL_COMM_I_PATH,
         d: CONTROL_COMM_D_PATH,
         control: CONTROL_COMM_CONTROL_PATH
+      },
+      robotMockUrl: ROBOT_MOCK_URL
+    },
+    stateMachine: {
+      baseUrl: STATE_MACHINE_BASE_URL,
+      paths: {
+        lineFollowPid: STATE_MACHINE_LINE_FOLLOW_PID_PATH,
+        states: STATE_MACHINE_STATES_PATH,
+        setState: STATE_MACHINE_SET_STATE_PATH
       }
     }
   });
@@ -166,6 +206,108 @@ app.post('/api/pid', async (req, res) => {
   return res.json({ updated });
 });
 
+app.get('/api/line-follow-pid', async (req, res) => {
+  const result = await fetchLineFollowPidSettings();
+  if (result.error) {
+    logInsight('line_follow_pid_fetch_error', { error: result.error });
+    return res.status(502).json({
+      message: 'Failed to fetch line-follow PID settings.',
+      error: result.error
+    });
+  }
+  return res.json(result);
+});
+
+app.post('/api/line-follow-pid', async (req, res) => {
+  const payload = req.body || {};
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return res.status(400).json({ message: 'Payload must be an object.' });
+  }
+
+  const updates = {};
+  const validationErrors = {};
+  for (const [key, rawValue] of Object.entries(payload)) {
+    if (!linePidRanges[key]) {
+      validationErrors[key] = 'Unknown setting.';
+      continue;
+    }
+    const value = Number(rawValue);
+    if (!Number.isFinite(value)) {
+      validationErrors[key] = 'Value must be a finite number.';
+      continue;
+    }
+    const range = linePidRanges[key];
+    if (value < range.min || value > range.max) {
+      validationErrors[key] = `Value must be between ${range.min} and ${range.max}.`;
+      continue;
+    }
+    updates[key] = value;
+  }
+
+  if (Object.keys(validationErrors).length > 0) {
+    return res.status(400).json({
+      message: 'Invalid line-follow PID update.',
+      errors: validationErrors
+    });
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ message: 'No settings to update.' });
+  }
+
+  if (
+    (updates.min_speed !== undefined && updates.max_speed !== undefined && updates.min_speed > updates.max_speed)
+  ) {
+    return res.status(400).json({
+      message: 'Invalid speed bounds.',
+      errors: {
+        min_speed: 'min_speed must be <= max_speed.',
+        max_speed: 'max_speed must be >= min_speed.'
+      }
+    });
+  }
+
+  const result = await setLineFollowPidSettings(updates);
+  if (result.error) {
+    logInsight('line_follow_pid_update_error', { error: result.error, updates });
+    return res.status(502).json({
+      message: 'Failed to update line-follow PID settings.',
+      error: result.error
+    });
+  }
+  logInsight('line_follow_pid_update_ok', { updates });
+  return res.json(result);
+});
+
+app.get('/api/state-machine/states', async (req, res) => {
+  const result = await fetchStateMachineStates();
+  if (result.error) {
+    logInsight('state_machine_states_fetch_error', { error: result.error });
+    return res.status(502).json({
+      message: 'Failed to fetch state-machine states.',
+      error: result.error
+    });
+  }
+  return res.json(result);
+});
+
+app.post('/api/state-machine/set-state', async (req, res) => {
+  const rawState = req.body?.state;
+  if (typeof rawState !== 'string' || !rawState.trim()) {
+    return res.status(400).json({ message: "Missing 'state' in payload." });
+  }
+
+  const result = await setStateMachineState(rawState.trim());
+  if (result.error) {
+    logInsight('state_machine_set_state_error', { error: result.error, state: rawState });
+    return res.status(502).json({
+      message: 'Failed to set state-machine state.',
+      error: result.error
+    });
+  }
+  logInsight('state_machine_set_state_ok', { state: rawState });
+  return res.json(result);
+});
+
 app.post('/api/control', async (req, res) => {
   const { x, y, speed } = req.body || {};
   const errors = {};
@@ -224,9 +366,9 @@ app.listen(PORT, () => {
   logServiceLine(`Control screen running on http://localhost:${PORT}`);
 });
 
-function buildRange(minValue, maxValue) {
-  const min = parseNumber(minValue, DEFAULT_RANGE.min);
-  const max = parseNumber(maxValue, DEFAULT_RANGE.max);
+function buildRange(minValue, maxValue, fallbackMin = DEFAULT_RANGE.min, fallbackMax = DEFAULT_RANGE.max) {
+  const min = parseNumber(minValue, fallbackMin);
+  const max = parseNumber(maxValue, fallbackMax);
 
   if (min > max) {
     return { min: max, max: min };
@@ -326,6 +468,22 @@ function getControlCommUrl(kind) {
 
 function getControlCommHealthUrl() {
   return new URL(CONTROL_COMM_HEALTH_PATH, CONTROL_COMM_BASE_URL).toString();
+}
+
+function getControlCommStateUrl() {
+  return new URL(CONTROL_COMM_STATE_PATH, CONTROL_COMM_BASE_URL).toString();
+}
+
+function getControlCommLineFollowPidUrl() {
+  return new URL(STATE_MACHINE_LINE_FOLLOW_PID_PATH, STATE_MACHINE_BASE_URL).toString();
+}
+
+function getStateMachineStatesUrl() {
+  return new URL(STATE_MACHINE_STATES_PATH, STATE_MACHINE_BASE_URL).toString();
+}
+
+function getStateMachineSetStateUrl() {
+  return new URL(STATE_MACHINE_SET_STATE_PATH, STATE_MACHINE_BASE_URL).toString();
 }
 
 async function fetchControlHealth() {
@@ -435,6 +593,117 @@ async function sendControlCommand(command) {
     }
 
     return { command };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function fetchLineFollowPidSettings() {
+  const url = getControlCommLineFollowPidUrl();
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json, text/plain' }
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      return { error: `Upstream status ${response.status}`, detail: body };
+    }
+    const parsed = safeJsonParse(body);
+    if (!parsed || typeof parsed !== 'object' || !parsed.values) {
+      return { error: 'Upstream returned invalid line-follow payload.', detail: body };
+    }
+    return {
+      values: parsed.values,
+      bounds: parsed.bounds || linePidRanges
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function setLineFollowPidSettings(updates) {
+  const url = getControlCommLineFollowPidUrl();
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain'
+      },
+      body: JSON.stringify(updates)
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      return { error: `Upstream status ${response.status}`, detail: body };
+    }
+    const parsed = safeJsonParse(body);
+    if (!parsed || typeof parsed !== 'object') {
+      return { values: updates };
+    }
+    return {
+      values: parsed.values || updates,
+      updated: parsed.updated || updates
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function fetchStateMachineStates() {
+  const url = getStateMachineStatesUrl();
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json, text/plain' }
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      return { error: `Upstream status ${response.status}`, detail: body };
+    }
+    const parsed = safeJsonParse(body);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.states)) {
+      return { error: 'Upstream returned invalid state list payload.', detail: body };
+    }
+    return {
+      states: parsed.states,
+      current_state: parsed.current_state
+    };
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+async function setStateMachineState(nextState) {
+  const stateUrl = getStateMachineSetStateUrl();
+  const controlStateUrl = getControlCommStateUrl();
+  try {
+    const response = await fetch(stateUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain'
+      },
+      body: JSON.stringify({ state: nextState })
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      return { error: `Upstream status ${response.status}`, detail: body };
+    }
+
+    const parsed = safeJsonParse(body);
+    const state = parsed?.state || nextState;
+    const controlStateResponse = await fetch(controlStateUrl, {
+      method: 'GET',
+      headers: { Accept: 'application/json, text/plain' }
+    });
+    const controlStateBody = await controlStateResponse.text();
+    const controlState = safeJsonParse(controlStateBody);
+
+    return {
+      state,
+      control_state: controlState
+    };
   } catch (err) {
     return { error: err.message };
   }

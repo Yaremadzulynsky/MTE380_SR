@@ -60,18 +60,20 @@ class Logger:
 LOGGER = Logger(LOG_PATH)
 
 
-def parse_float(value, fallback: float = 0.0) -> float:
+def parse_finite_float(value, field_name: str) -> float:
     try:
         parsed = float(value)
     except (TypeError, ValueError):
-        return fallback
+        raise ValueError(f"{field_name} must be a finite number.") from None
     if parsed != parsed or parsed in (float("inf"), float("-inf")):
-        return fallback
+        raise ValueError(f"{field_name} must be a finite number.")
     return parsed
 
 
-def normalize_vector(data: dict) -> dict:
+def normalize_vector(data: dict, name: str) -> dict:
     data = data or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"{name} must be an object.")
     detected_value = data.get("detected")
     if detected_value is None:
         detected_value = False
@@ -80,23 +82,62 @@ def normalize_vector(data: dict) -> dict:
                 detected_value = value
                 break
     detected = bool(detected_value)
-    vector = data.get("vector") if isinstance(data.get("vector"), dict) else {}
-    x = parse_float(vector.get("x", data.get("x", 0.0)), 0.0)
-    y = parse_float(vector.get("y", data.get("y", 0.0)), 0.0)
+    vector = data.get("vector")
+    if vector is None:
+        vector = {}
+    elif not isinstance(vector, dict):
+        raise ValueError(f"{name}.vector must be an object.")
+    x = parse_finite_float(vector.get("x", data.get("x", 0.0)), f"{name}.x")
+    y = parse_finite_float(vector.get("y", data.get("y", 0.0)), f"{name}.y")
     return {"detected": detected, "vector": {"x": x, "y": y}}
 
 
 def normalize_payload(payload: dict) -> dict:
     payload = payload or {}
+    if not isinstance(payload, dict):
+        raise ValueError("Payload must be a JSON object.")
     normalized = {
-        "safe_zone": normalize_vector(payload.get("safe_zone")),
-        "danger_zone": normalize_vector(payload.get("danger_zone")),
-        "target": normalize_vector(payload.get("target")),
-        "line": normalize_vector(payload.get("line")),
+        "safe_zone": normalize_vector(payload.get("safe_zone"), "safe_zone"),
+        "danger_zone": normalize_vector(payload.get("danger_zone"), "danger_zone"),
+        "target": normalize_vector(payload.get("target"), "target"),
+        "line": normalize_vector(payload.get("line"), "line"),
     }
     for key in DEFAULT_FLAGS:
         normalized[key] = bool(payload.get(key, False))
     return normalized
+
+
+def parse_timestamp_ms(value) -> int | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed or parsed in (float("inf"), float("-inf")):
+        return None
+    return int(parsed)
+
+
+def extract_trace(payload: dict) -> dict | None:
+    if not payload:
+        return None
+    trace = payload.get("trace")
+    trace_id = None
+    sent_at = None
+    if isinstance(trace, dict):
+        trace_id = trace.get("id") or trace.get("trace_id")
+        sent_at = trace.get("sent_at_ms") or trace.get("sent_at")
+    else:
+        trace_id = payload.get("trace_id")
+        sent_at = payload.get("trace_sent_at_ms")
+
+    if not trace_id:
+        return None
+
+    trace_payload = {"id": str(trace_id)}
+    sent_at_ms = parse_timestamp_ms(sent_at)
+    if sent_at_ms is not None:
+        trace_payload["sent_at_ms"] = sent_at_ms
+    return trace_payload
 
 
 def update_state(payload: dict) -> dict:
@@ -114,10 +155,16 @@ def get_state() -> dict:
 def send_to_state_machine(payload: dict) -> dict:
     url = urljoin(STATE_MACHINE_BASE_URL.rstrip("/") + "/", STATE_MACHINE_INPUT_PATH.lstrip("/"))
     response = requests.post(url, json=payload, timeout=1.0)
+    response_payload = None
+    if response.content:
+        try:
+            response_payload = response.json()
+        except ValueError:
+            response_payload = {"text": response.text[:2000]}
     return {
         "status_code": response.status_code,
         "ok": response.ok,
-        "response": response.json() if response.content else None,
+        "response": response_payload,
     }
 
 
@@ -151,7 +198,10 @@ def api_update_state():
     if not request.is_json:
         return jsonify({"message": "Expected JSON payload."}), 400
     payload = request.get_json(silent=True) or {}
-    state = update_state(payload)
+    try:
+        state = update_state(payload)
+    except ValueError as exc:
+        return jsonify({"message": str(exc)}), 400
     LOGGER.log("mock_state_updated", {"state": state})
     return jsonify({"state": state})
 
@@ -160,13 +210,39 @@ def api_update_state():
 def api_send():
     if request.is_json:
         payload = request.get_json(silent=True) or {}
-        state = update_state(payload)
+        try:
+            state = update_state(payload)
+        except ValueError as exc:
+            return jsonify({"message": str(exc)}), 400
+        trace = extract_trace(payload)
     else:
         state = get_state()
+        trace = None
 
     try:
-        result = send_to_state_machine(state)
-        LOGGER.log("mock_state_sent", {"result": result})
+        outbound = dict(state)
+        if trace:
+            outbound["trace"] = trace
+        start = time.perf_counter()
+        result = send_to_state_machine(outbound)
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+        log_payload = {"result": result, "request_ms": elapsed_ms}
+        if trace:
+            log_payload["trace_id"] = trace.get("id")
+            if trace.get("sent_at_ms") is not None:
+                log_payload["trace_sent_at_ms"] = trace.get("sent_at_ms")
+        LOGGER.log("mock_state_sent", log_payload)
+        if trace:
+            LOGGER.log(
+                "diagnostic_trace_sent",
+                {
+                    "trace_id": trace.get("id"),
+                    "trace_sent_at_ms": trace.get("sent_at_ms"),
+                    "request_ms": elapsed_ms,
+                    "state_machine_ok": result.get("ok"),
+                    "status_code": result.get("status_code"),
+                },
+            )
         return jsonify({"state": state, "result": result})
     except requests.RequestException as exc:
         LOGGER.log("mock_state_error", {"error": str(exc)})

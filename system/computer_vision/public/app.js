@@ -11,13 +11,20 @@ const state = {
   at_home: false
 };
 
+const diagnostic = {
+  enabled: false,
+  pendingTraceId: null
+};
+
 const elements = {
   sendBtn: document.getElementById('sendBtn'),
   autoSend: document.getElementById('autoSend'),
+  traceToggle: document.getElementById('traceToggle'),
   intervalInput: document.getElementById('intervalInput'),
   payloadPreview: document.getElementById('payloadPreview'),
   status: document.getElementById('stateMachineStatus'),
-  lastSent: document.getElementById('lastSent')
+  lastSent: document.getElementById('lastSent'),
+  lastTrace: document.getElementById('lastTrace')
 };
 
 let autoSendTimer = null;
@@ -32,6 +39,7 @@ async function initialize() {
   updatePreview();
   elements.sendBtn.addEventListener('click', () => sendPayload());
   elements.autoSend.addEventListener('change', handleAutoSendToggle);
+  elements.traceToggle.addEventListener('change', handleTraceToggle);
   elements.intervalInput.addEventListener('change', restartAutoSend);
 }
 
@@ -95,7 +103,7 @@ function bindFlags() {
 }
 
 function updatePreview() {
-  elements.payloadPreview.textContent = JSON.stringify(state, null, 2);
+  elements.payloadPreview.textContent = JSON.stringify(buildPreviewPayload(), null, 2);
 }
 
 async function loadState() {
@@ -133,10 +141,11 @@ function applyState(incoming) {
 
 async function sendPayload() {
   elements.status.textContent = 'Sending...';
+  const payload = buildPayload();
   const result = await requestJson('/api/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state)
+    body: JSON.stringify(payload)
   });
 
   if (!result.ok) {
@@ -158,6 +167,15 @@ function handleAutoSendToggle() {
   }
 }
 
+function handleTraceToggle() {
+  diagnostic.enabled = elements.traceToggle.checked;
+  diagnostic.pendingTraceId = diagnostic.enabled ? generateTraceId() : null;
+  if (!diagnostic.enabled) {
+    elements.lastTrace.textContent = 'Trace: --';
+  }
+  updatePreview();
+}
+
 function restartAutoSend() {
   if (!elements.autoSend.checked) {
     return;
@@ -165,6 +183,35 @@ function restartAutoSend() {
   clearInterval(autoSendTimer);
   const interval = Math.max(100, parseInt(elements.intervalInput.value, 10) || 500);
   autoSendTimer = setInterval(sendPayload, interval);
+}
+
+function buildPayload() {
+  const payload = { ...state };
+  if (diagnostic.enabled) {
+    const traceId = diagnostic.pendingTraceId || generateTraceId();
+    const sentAtMs = Date.now();
+    payload.trace = {
+      id: traceId,
+      sent_at_ms: sentAtMs
+    };
+    diagnostic.pendingTraceId = generateTraceId();
+    elements.lastTrace.textContent = `Trace: ${traceId}`;
+    updatePreview();
+  }
+  return payload;
+}
+
+function buildPreviewPayload() {
+  if (!diagnostic.enabled) {
+    return state;
+  }
+  return {
+    ...state,
+    trace: {
+      id: diagnostic.pendingTraceId || 'pending',
+      sent_at_ms: null
+    }
+  };
 }
 
 function computeMagnitude(vector) {
@@ -176,6 +223,12 @@ function clamp(value, min, max) {
     return 0;
   }
   return Math.min(max, Math.max(min, value));
+}
+
+function generateTraceId() {
+  const now = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `trace-${now}-${rand}`;
 }
 
 async function requestJson(url, options) {
