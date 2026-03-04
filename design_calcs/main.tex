@@ -1,0 +1,185 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\setlength{\parindent}{0pt}
+
+\setstretch{1.15}
+
+\begin{document}
+
+\begin{center}
+    {\Large \textbf{MTE 380 – Design Calculations Report}}\\[0.5em]
+    {\large \textbf{System Latency}}
+\end{center}
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{1. Objective / Purpose Statement}
+% (Describe what you are calculating and why)
+
+
+
+
+
+% This latency determines whether the robot can safely detect and respond to obstacles before reaching them. To meet the design requirement, the end-to-end latency must be low enough that the robot’s travel distance during the delay is smaller than the camera’s effective look-ahead distance. The calculated latency will therefore be compared against this requirement to determine whether the current system architecture supports safe operation at the intended robot speed.
+The design objective for this system is that the end-to-end latency must be less than 
+250 ms. This threshold ensures that, at the robot’s intended operating speed and the 
+camera’s look-ahead distance, the robot has sufficient time to react to obstacles before 
+reaching them. The purpose of this calculation is therefore to determine whether the 
+measured end-to-end latency satisfies the 250 ms requirement.
+The team chose a 250 ms target latency as an initial design requirement during early planning. Although it was not formally calculated, it reflects a reasonable and conservative estimate for ensuring timely reaction to obstacles at the robot’s expected speed.
+This memo documents the end-to-end latency calculation used to justify that the current perception–decision–control architecture is safe to proceed with. 
+
+
+
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{2. References}
+% (Standards, lecture notes, datasheets, textbook formulas, etc.)
+
+Latency information for the camera (frame capture) is provided in the IMX219PQ data sheet: \\
+https://www.opensourceinstruments.com/Electronics/Data/IMX219PQ.pdf\\
+Latency information for each software module was either experimentally measured or estimated using trace events and timestamps.
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{3. Design Inputs}
+% (All known parameters with units)
+
+
+Frame capture latency ($t_{FC}$) could be determined from the IMX219PQ data sheet. However, other inputs ($t_{CV\text{-}SM}$, $t_{SM}$, $t_{SM\text{-}CSG}$) are purely software latency,
+which is contingent on software architecture. Therefore, software latency was measured experimentally by tracing event timestamps through the software pipeline with the exception of computer vision processing latency and control system latency.
+Due to the complexity of both computer vision processing and the control system, software prototypes were not yet developed and therefore latency 
+could not be experimentally determined. Therefore, an estimated worst case latency ($t_{CV}$, $t_{CS}$) was provided by the control system and computer vision leads. 
+
+\begin{description}%[leftmargin=3cm, style=nextline]
+    \item[$t_{FC}$] = 21.3 ms
+    \item[$t_{CV}$] = 100 ms
+    \item[$t_{CV\text{-}SM}$] = 6.24 ms
+    \item[$t_{SM}$] = 21.3 ms
+    \item[$t_{SM\text{-}CSG}$] = 6.24 ms
+    \item[$t_{CS}$] = 20 ms
+\end{description}
+
+
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{4. Assumptions}
+% (State clearly, justify if needed)
+
+The following are not considered in the latency calculations as they are orders of magnitude smaller than Raspberry Pi processing times:
+\begin{itemize}
+    \item Latency from signals traveling through wires.
+    \item Latency from SPI communication (SPI operates at 8 MHz, <1 µs per transfer).
+    \item Latency from motor driver.
+\end{itemize}
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{5. Analytical Method and Computations}
+% (Explain formulas, why they apply, step-by-step derivation)
+
+
+The system can be broken down into multiple sequential processes, each contributing latency to the overall system latency. The overall 
+system latency can therefore be calculated by adding up the latency contributed by each process.  
+\\
+
+The processes are as follows: frame capture, computer vision (CV) processing, REST data transfer from computer vision to state machine, state machine (SM) processing, REST data transfer from state machine to control system gateway (CSG) and control system (CS) processing.
+
+\subsection{Frame Capture}
+Frame capture latency includes the time the sensor takes to capture the image and the time in between frames. 
+\subsection{CV Processing}
+Computer vision processing latency is the time it takes from the time a frame enters the frame processing queue to the time it is fully processed and extracted data is ready to be sent to the next stage. 
+Processing in this stage includes: Producing a vector in the direction of the line to follow, a vector pointing at the Lego man, a vector pointing to the safe zone and a vector pointing to the danger zone. 
+
+\subsection{REST CV to SM}
+The output of the computer vision processing is directly sent to the next stage (SM) and occurs over HTTP REST protocol. This is being sent within the internal Raspberry Pi network.
+
+\subsection{SM processing}
+The state machine is responsible for applying specific algorithms for given states to achieve concrete outcomes. 
+For example, when in the SEARCHING state, the algorithm running is the line following algorithm which 
+will lead the robot to the Lego man. Once the Lego man is detected, the state machine will transition to the ALIGN-FOR-RETRIEVE state in which a 
+different algorithm performs micro adjustments to align the gripper with the Lego man. In total there are 13 states, each with a concrete set of 
+conditions that force a transition to a new state. State machine processing latency includes the time it takes for a transition condition to be received by the state machine to the actual state transition occurring. 
+
+\subsection{REST SM to CSG}
+The output of the state machine is directly sent to the next stage (CSG) and occurs over HTTP REST protocol. This is being sent within the internal Raspberry Pi network.
+
+\subsection{Control System Gateway}
+Control system gateway simply acts as a bridge that receives HTTP REST messages and forwards them to the Arduino via SPI acting as a bridge between 
+the high level software running on the Raspberry Pi and the low level firmware running on the Arduino. It adds negligible latency, but is provided for completeness.
+
+\subsection{CS Processing}
+Control system processing latency includes the time it takes for the control system to drive GPIO pins to respond to SPI input.
+
+\vspace{1em}
+
+
+The total end-to-end system latency is modeled as:
+\[
+t_{EE} = t_{FC} + t_{CV} + t_{CV\text{-}SM} + t_{SM} + t_{SM\text{-}CSG} + t_{CS}
+\]
+
+\noindent\textbf{Where:}
+\begin{description}[leftmargin=3cm, style=nextline]
+    \item[$t_{EE}$] End-to-end system latency
+    \item[$t_{FC}$] Frame capture latency
+    \item[$t_{CV}$] Computer vision processing latency
+    \item[$t_{CV\text{-}SM}$] REST transfer latency (CV → SM)
+    \item[$t_{SM}$] State machine processing latency
+    \item[$t_{SM\text{-}CSG}$] REST transfer latency (SM → CSG)
+    \item[$t_{CS}$] Control system processing latency
+\end{description}
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{6. Calculations}
+% (Insert step-by-step numeric computation)
+\[
+t_{EE} = 21.3 ms + 100 ms + 6.24 ms + 21.3 ms + 6.24 ms + 20 ms
+\]
+\[
+t_{EE} = 175.08 ms
+\]
+
+\vspace{1em}
+
+% ------------------------------------------------------------
+\section*{7. Results / Conclusions}
+% (Summarize and tie back to objective)
+The calculated end to end latency of the system is:
+\[
+t_{EE} = 175.08\ \text{ms}
+\]
+
+This value is compared to the objective set out in section 1
+\[
+t_{EE} \leq 250\ \text{ms},
+\]
+which ensures the robot can react to points of interest within the cameras lookahead distance at the intended operating speed.
+
+Since 
+\[
+175.08\ \text{ms} < 250\ \text{ms},
+\]
+the system meets the latency requirements.
+
+This result indicates that the robot will begin responding quickly enough to avoid obstacles detected within the visible range, and that the current perception–decision–control architecture is adequate for safe operation. No architectural changes are required based on latency performance, although future optimization (particularly in computer vision processing) may further increase the available safety margin.
+
+\vspace{1em}
+
+\end{document}

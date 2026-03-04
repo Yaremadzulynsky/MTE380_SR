@@ -4,6 +4,8 @@ services:
       context: ./control_communication
     container_name: control-communication
     network_mode: host
+    # devices:
+      # - "/dev/i2c-1:/dev/i2c-1"
     environment:
       PORT: 5001
       HARDWARE_MODE: "mock"
@@ -69,7 +71,6 @@ services:
     environment:
       LOG_PATH: "/var/log/state-machine/state-machine.log"
       CONTROL_COMM_BASE_URL: "http://control-communication:5001"
-      CONTROL_COMM_STATE_PATH: "/state"
       LINE_PID_SETTINGS_PATH: "/var/log/state-machine/line-follow-pid.json"
       TICK_INTERVAL: "0.01"
       FAILED_PICKUP_LIMIT: "3"
@@ -107,9 +108,9 @@ services:
       PORT: "8200"
       CONTROL_COMM_BASE_URL: "http://control-communication:5001"
       CONTROL_COMM_CONTROL_PATH: "/control"
-      CONTROL_COMM_STATE_PATH: "/state"
       STATE_MACHINE_BASE_URL: "http://state-machine:8000"
       STATE_MACHINE_INPUT_PATH: "/inputs"
+      STATE_MACHINE_STATES_PATH: "/states"
       SYSTEM_POLL_INTERVAL_S: "0.1"
     depends_on:
       - control-communication

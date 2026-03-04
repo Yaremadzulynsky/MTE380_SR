@@ -4,10 +4,8 @@ import time
 from threading import Event, Thread
 
 from sm_api import create_app
-from sm_control_comm import ControlCommClient
 from sm_input_buffer import InputBuffer
-from sm_logging import create_logger, log_delivery_failure, log_event
-from sm_models import State
+from sm_logging import create_logger, log_event
 from sm_state_machine import LINE_FOLLOW_PID_BOUNDS, StateMachine
 
 logger = create_logger()
@@ -52,12 +50,8 @@ def persist_pid_settings(path: str, state_machine: StateMachine) -> bool:
 
 def main() -> None:
     failed_pickup_limit = int(os.getenv("FAILED_PICKUP_LIMIT", "3"))
-    control_comm_base = os.getenv("CONTROL_COMM_BASE_URL", "http://control-communication:5001").strip()
-    control_comm_state_path = os.getenv("CONTROL_COMM_STATE_PATH", "/state")
-    control_comm_control_path = os.getenv("CONTROL_COMM_CONTROL_PATH", "/control")
     target_align_threshold = float(os.getenv("TARGET_ALIGN_THRESHOLD", "0.15"))
     place_align_threshold = float(os.getenv("PLACE_ALIGN_THRESHOLD", "0.2"))
-    state_sync_interval = float(os.getenv("STATE_SYNC_INTERVAL", "1.0"))
     line_pid_settings_path = (
         os.getenv("LINE_PID_SETTINGS_PATH") or "/var/log/state-machine/line-follow-pid.json"
     ).strip()
@@ -81,46 +75,12 @@ def main() -> None:
                 "line_follow_pid_loaded",
                 {"path": line_pid_settings_path, "updated": updated},
             )
-    if not control_comm_base:
-        raise ValueError(
-            "CONTROL_COMM_BASE_URL must be set because state machine requires control communication."
-        )
-    control_comm = ControlCommClient(
-        control_comm_base,
-        control_comm_state_path,
-        control_path=control_comm_control_path,
-    )
 
     stop_event = Event()
 
     def state_worker() -> None:
-        last_state_sync_at = 0.0
-        last_state_sent: str | None = None
-
-        def sync_state(context: str) -> None:
-            nonlocal last_state_sync_at, last_state_sent
-            result = control_comm.send_state(state_machine.state)
-            if bool(result.get("ok")):
-                last_state_sync_at = time.time()
-                last_state_sent = state_machine.state.value
-                return
-            log_delivery_failure(
-                logger,
-                "state_delivery_failed",
-                result,
-                {"state": state_machine.state.value, "context": context},
-            )
-
-        # Publish current state immediately so control-communication `/state`
-        # does not remain `unknown` while waiting for a transition.
-        sync_state("startup")
         while not stop_event.is_set():
-            transition = state_machine.step(input_buffer.latest_inputs())
-            now = time.time()
-            state_changed = transition is not None
-            stale = state_sync_interval > 0 and (now - last_state_sync_at) >= state_sync_interval
-            if state_changed or stale or last_state_sent != state_machine.state.value:
-                sync_state("state_worker")
+            state_machine.step(input_buffer.latest_inputs())
             time.sleep(state_machine.tick_interval)
 
     loop_thread = Thread(
@@ -136,14 +96,7 @@ def main() -> None:
     # flag_thread.start()
 
     def reset_runtime_state() -> None:
-        result = control_comm.send_state(state_machine.state)
-        if not bool(result.get("ok")):
-            log_delivery_failure(
-                logger,
-                "state_delivery_failed",
-                result,
-                {"state": state_machine.state.value, "context": "manual_reset"},
-            )
+        return None
 
     app = create_app(input_buffer, logger, state_machine, reset_callback=reset_runtime_state)
 

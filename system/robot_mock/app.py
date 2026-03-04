@@ -18,11 +18,11 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 CONTROL_COMM_BASE_URL = os.getenv("CONTROL_COMM_BASE_URL", "http://control-communication:5000")
 CONTROL_COMM_CONTROL_PATH = os.getenv("CONTROL_COMM_CONTROL_PATH", "/control")
-CONTROL_COMM_STATE_PATH = os.getenv("CONTROL_COMM_STATE_PATH", "/state")
 
 STATE_MACHINE_BASE_URL = os.getenv("STATE_MACHINE_BASE_URL", "http://state-machine:8000")
 STATE_MACHINE_INPUT_PATH = os.getenv("STATE_MACHINE_INPUT_PATH", "/inputs")
 STATE_MACHINE_RESET_PATH = os.getenv("STATE_MACHINE_RESET_PATH", "/reset")
+STATE_MACHINE_STATES_PATH = os.getenv("STATE_MACHINE_STATES_PATH", "/states")
 
 DISABLE_EXTERNAL_REQUESTS = env_bool("DISABLE_EXTERNAL_REQUESTS", False)
 QUIET_ACCESS_LOG = env_bool("QUIET_ACCESS_LOG", False)
@@ -113,7 +113,7 @@ def _token_ok() -> bool:
 
 def _fetch_system_snapshot() -> dict:
     control_url = _absolute_url(CONTROL_COMM_BASE_URL, CONTROL_COMM_CONTROL_PATH)
-    state_url = _absolute_url(CONTROL_COMM_BASE_URL, CONTROL_COMM_STATE_PATH)
+    state_url = _absolute_url(STATE_MACHINE_BASE_URL, STATE_MACHINE_STATES_PATH)
     return {
         "ts_ms": int(time.time() * 1000),
         "control": _fetch_json(control_url),
@@ -151,7 +151,6 @@ def config():
                 "base_url": CONTROL_COMM_BASE_URL,
                 "paths": {
                     "control": CONTROL_COMM_CONTROL_PATH,
-                    "state": CONTROL_COMM_STATE_PATH,
                 },
             },
             "state_machine": {
@@ -159,6 +158,7 @@ def config():
                 "paths": {
                     "inputs": STATE_MACHINE_INPUT_PATH,
                     "reset": STATE_MACHINE_RESET_PATH,
+                    "states": STATE_MACHINE_STATES_PATH,
                 },
             },
             "external_requests_disabled": DISABLE_EXTERNAL_REQUESTS,

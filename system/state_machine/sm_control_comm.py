@@ -10,7 +10,7 @@ class ControlCommClient:
     def __init__(
         self,
         base_url: str,
-        state_path: str,
+        state_path: str = "/state",
         control_path: str = "/control",
         line_follow_pid_path: str = "/line-follow-pid",
         timeout: float = 0.5,
@@ -95,8 +95,13 @@ class ControlCommClient:
         return result
 
     def send_state(self, state: State) -> dict[str, Any]:
-        payload = {"state": state.value}
-        return self._post(self._state_url, payload)
+        _ = state
+        return {
+            "ok": True,
+            "status_code": None,
+            "url": self._state_url,
+            "state_transport": "disabled",
+        }
 
     def send_control(
         self,

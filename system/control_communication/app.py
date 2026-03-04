@@ -1,592 +1,347 @@
-import json
+#!/usr/bin/env python3
+import atexit
+import math
 import os
-import sys
-from datetime import datetime
-from typing import Optional
+import signal
+import threading
+import time
+from typing import Any, Optional
 
-from flask import Flask, Response, jsonify, request
-from prometheus_client import Counter, Gauge, CONTENT_TYPE_LATEST, generate_latest
-
-
-class PidStore:
-    def get(self, key: str) -> float:
-        raise NotImplementedError
-
-    def set(self, key: str, value: float) -> float:
-        raise NotImplementedError
+from flask import Flask, jsonify, request
+from smbus2 import SMBus, i2c_msg
 
 
-class MockPidStore(PidStore):
-    def __init__(self, initial_values: dict[str, float]):
-        self._values = dict(initial_values)
-
-    def get(self, key: str) -> float:
-        return self._values[key]
-
-    def set(self, key: str, value: float) -> float:
-        self._values[key] = value
-        return value
+def parse_env_int(name: str, default: str) -> int:
+    raw = os.getenv(name, default).strip()
+    return int(raw, 0)
 
 
-class SpiPidStore(PidStore):
-    def __init__(self, spi_client, initial_values: dict[str, float]):
-        self._spi = spi_client
-        self._values = dict(initial_values)
-
-    def get(self, key: str) -> float:
-        return self._values[key]
-
-    def set(self, key: str, value: float) -> float:
-        self._values[key] = value
-        payload = f"pid:{key}:{value}\n".encode("utf-8")
-        self._spi.send(payload)
-        return value
+def parse_env_bool(name: str, default: str = "0") -> bool:
+    raw = (os.getenv(name, default) or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
-class ControlStore:
-    def send(self, x: float, y: float, speed: float) -> dict:
-        raise NotImplementedError
+def parse_hardware_mode() -> str:
+    raw = (os.getenv("HARDWARE_MODE") or "mock").strip().lower()
+    if raw in {"mock", "sim", "simulation"}:
+        return "mock"
+    return "i2c"
 
 
-class MockControlStore(ControlStore):
-    def __init__(self):
-        self._last = {"x": 0.0, "y": 0.0, "speed": 0.0}
-
-    def send(self, x: float, y: float, speed: float) -> dict:
-        self._last = {"x": x, "y": y, "speed": speed}
-        return dict(self._last)
-
-
-class SpiControlStore(ControlStore):
-    def __init__(self, spi_client):
-        self._spi = spi_client
-        self._last = {"x": 0.0, "y": 0.0, "speed": 0.0}
-
-    def send(self, x: float, y: float, speed: float) -> dict:
-        self._last = {"x": x, "y": y, "speed": speed}
-        payload = f"control:{x}:{y}:{speed}\n".encode("utf-8")
-        self._spi.send(payload)
-        return dict(self._last)
-
-
-class SpiClient:
-    def __init__(self, bus: int, device: int, speed_hz: int):
-        import spidev  # type: ignore
-
-        self._spi = spidev.SpiDev()
-        self._spi.open(bus, device)
-        self._spi.max_speed_hz = speed_hz
-
-    def send(self, payload: bytes) -> None:
-        self._spi.xfer2(list(payload))
-
-
-def parse_float(value: str) -> Optional[float]:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not (parsed == parsed and abs(parsed) != float("inf")):
-        return None
-    return parsed
-
-
-def parse_timestamp_ms(value) -> Optional[int]:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    if parsed != parsed or parsed in (float("inf"), float("-inf")):
-        return None
-    return int(parsed)
-
-
-def extract_trace(payload: dict) -> Optional[dict]:
-    if not payload:
-        return None
-    trace = payload.get("trace")
-    trace_id = None
-    sent_at = None
-    if isinstance(trace, dict):
-        trace_id = trace.get("id") or trace.get("trace_id")
-        sent_at = trace.get("sent_at_ms") or trace.get("sent_at")
-    else:
-        trace_id = payload.get("trace_id")
-        sent_at = payload.get("trace_sent_at_ms")
-
-    if not trace_id:
-        return None
-
-    trace_payload = {"id": str(trace_id)}
-    sent_at_ms = parse_timestamp_ms(sent_at)
-    if sent_at_ms is not None:
-        trace_payload["sent_at_ms"] = sent_at_ms
-    return trace_payload
-
-
-def trace_log_fields(trace: Optional[dict]) -> dict:
-    if not trace or not trace.get("id"):
-        return {}
-    fields = {"trace_id": trace["id"]}
-    sent_at_ms = trace.get("sent_at_ms")
-    if sent_at_ms is not None:
-        fields["trace_sent_at_ms"] = sent_at_ms
-        fields["trace_latency_ms"] = int(datetime.utcnow().timestamp() * 1000) - int(sent_at_ms)
-    return fields
-
-
-def load_initial_values() -> dict[str, float]:
-    return {
-        "p": parse_float(os.getenv("PID_P_DEFAULT", "0")) or 0.0,
-        "i": parse_float(os.getenv("PID_I_DEFAULT", "0")) or 0.0,
-        "d": parse_float(os.getenv("PID_D_DEFAULT", "0")) or 0.0,
-    }
-
-
-def get_pid_settings_path() -> str:
-    return (os.getenv("PID_SETTINGS_PATH") or "/var/log/control-communication/pid-settings.json").strip()
-
-
-def load_persisted_settings(path: str) -> dict:
-    if not path:
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        if isinstance(data, dict):
-            return data
-    except FileNotFoundError:
-        return {}
-    except (OSError, json.JSONDecodeError) as exc:
-        log_event("pid_settings_load_failed", {"path": path, "error": str(exc)})
-        return {}
-    return {}
-
-
-def resolve_initial_pid_values(persisted_settings: dict) -> dict[str, float]:
-    values = load_initial_values()
-    persisted_pid = persisted_settings.get("pid")
-    if not isinstance(persisted_pid, dict):
-        return values
-
-    for axis in ("p", "i", "d"):
-        parsed = parse_float(persisted_pid.get(axis))
-        if parsed is not None:
-            values[axis] = parsed
-    return values
-
-
-def create_spi_client():
-    try:
-        bus = int(os.getenv("SPI_BUS", "0"))
-        device = int(os.getenv("SPI_DEVICE", "0"))
-        speed_hz = int(os.getenv("SPI_SPEED_HZ", "500000"))
-        return SpiClient(bus, device, speed_hz)
-    except Exception as exc:  # pylint: disable=broad-except
-        log_event("hardware_init_failed", {"error": str(exc)})
-        return None
-
-
-def create_stores(initial_values: dict[str, float]) -> tuple[PidStore, ControlStore, str]:
-    mode = os.getenv("HARDWARE_MODE", "mock").lower()
-    if mode in {"mock", "sim", "simulation"}:
-        return MockPidStore(initial_values), MockControlStore(), "mock"
-
-    spi_client = create_spi_client()
-    if spi_client:
-        return (
-            SpiPidStore(spi_client, initial_values),
-            SpiControlStore(spi_client),
-            "spi",
-        )
-
-    return MockPidStore(initial_values), MockControlStore(), "mock"
-
-
-def create_insights_logger():
-    path = os.getenv("LOG_PATH") or os.getenv("INSIGHTS_IPC_PATH")
-    if not path:
-        return None
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        return open(path, "a", encoding="utf-8")
-    except OSError as exc:
-        print(f"Unable to open insights IPC pipe: {exc}", file=sys.stderr)
-        return None
-
-
-def log_event(event: str, payload: dict):
-    entry = {
-        "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        "event": event,
-        "payload": payload,
-    }
-    line = json.dumps(entry)
-    print(line, flush=True)
-    if INSIGHTS_LOGGER:
-        INSIGHTS_LOGGER.write(line + "\n")
-        INSIGHTS_LOGGER.flush()
-
-
-def log_service_line(message: str):
-    log_event("service_log", {"message": message})
-
-
-INSIGHTS_LOGGER = create_insights_logger()
-PID_SETTINGS_PATH = get_pid_settings_path()
-PERSISTED_SETTINGS = load_persisted_settings(PID_SETTINGS_PATH)
-PID_STORE, CONTROL_STORE, PID_MODE = create_stores(resolve_initial_pid_values(PERSISTED_SETTINGS))
+HOST = (os.getenv("HOST") or "0.0.0.0").strip()
+PORT = parse_env_int("PORT", "5001")
+I2C_BUS_NUM = parse_env_int("I2C_BUS", "1")
+I2C_ADDR = parse_env_int("I2C_ADDR", "0x08")
+DEBUG = parse_env_bool("DEBUG", "0")
+MODE = parse_hardware_mode()
 
 app = Flask(__name__)
 
-PID_GAIN = Gauge("pid_gain", "Current PID gain value", ["axis"])
-PID_SET_TOTAL = Counter("pid_set_total", "PID set requests", ["axis"])
-PID_GET_TOTAL = Counter("pid_get_total", "PID get requests", ["axis"])
-PID_ERRORS_TOTAL = Counter("pid_errors_total", "PID errors", ["axis", "type"])
-PID_MODE_GAUGE = Gauge("pid_bridge_mode", "Bridge mode status", ["mode"])
-CONTROL_COMMAND_TOTAL = Counter(
-    "control_command_total", "Control commands sent", []
-)
-CONTROL_ERRORS_TOTAL = Counter(
-    "control_command_errors_total", "Control command errors", ["type"]
-)
-CONTROL_VECTOR = Gauge("control_vector", "Control vector", ["axis"])
-CONTROL_SPEED = Gauge("control_speed", "Control speed", [])
-SYSTEM_STATE_GAUGE = Gauge("system_state", "State machine state", ["state"])
+bus_lock = threading.Lock()
+bus: Optional[SMBus] = None
+last_sent: Optional[dict[str, Any]] = None
 
-SYSTEM_STATE = {
-    "state": "unknown",
-    "updated_at": None,
-}
 
-LAST_CONTROL_COMMAND = {
-    "x": 0.0,
-    "y": 0.0,
-    "speed": 0.0,
-    "updated_at": None,
-}
+def now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-LINE_FOLLOW_DEFAULTS = {
-    "kp": "0.2",
-    "ki": "0.04",
-    "kd": "4.92",
-    "i_max": "20",
-    "out_max": "20",
-    "base_speed": "1",
-    "min_speed": "0.18",
-    "max_speed": "1",
-    "follow_max_speed": "1",
-    "turn_slowdown": "5",
-    "error_slowdown": "0.14",
-    "deadband": "0.01",
-}
 
-LINE_FOLLOW_BOUNDS = {
-    "kp": (0.0, 20.0),
-    "ki": (0.0, 20.0),
-    "kd": (0.0, 20.0),
-    "i_max": (0.0, 20.0),
-    "out_max": (0.0, 20.0),
-    "base_speed": (0.0, 5.0),
-    "min_speed": (0.0, 5.0),
-    "max_speed": (0.0, 5.0),
-    "follow_max_speed": (0.0, 5.0),
-    "turn_slowdown": (0.0, 5.0),
-    "error_slowdown": (0.0, 5.0),
-    "deadband": (0.0, 1.0),
-}
+def log_line(event: str, fields: dict[str, Any]) -> None:
+    parts = [f"ts={now_iso()}", f"event={event}"]
+    for key, value in fields.items():
+        parts.append(f"{key}={value}")
+    print(" ".join(parts), flush=True)
 
-def load_line_follow_settings(persisted_settings: dict) -> dict[str, float]:
-    values = {
-        key: (parse_float(os.getenv(f"LINE_PID_{key.upper()}", default)) or parse_float(default) or 0.0)
-        for key, default in LINE_FOLLOW_DEFAULTS.items()
+
+def close_bus() -> None:
+    global bus
+    if bus is not None:
+        try:
+            bus.close()
+        except Exception:
+            pass
+        bus = None
+
+
+def handle_signal(signum, _frame) -> None:
+    log_line("shutdown", {"signal": signum})
+    close_bus()
+    raise SystemExit(0)
+
+
+def parse_numeric(payload: dict[str, Any], key: str) -> tuple[Optional[float], Optional[str]]:
+    value = payload.get(key, None)
+    if value is None:
+        return None, f"Missing '{key}'."
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None, f"'{key}' must be numeric."
+    if not math.isfinite(float(value)):
+        return None, f"'{key}' must be finite."
+    return float(value), None
+
+
+def parse_optional_speed(payload: dict[str, Any]) -> tuple[Optional[float], Optional[str]]:
+    if "speed" not in payload or payload.get("speed") is None:
+        return None, None
+    raw_value = payload.get("speed")
+    if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+        return None, "'speed' must be numeric."
+    speed = float(raw_value)
+    if not math.isfinite(speed):
+        return None, "'speed' must be finite."
+    if not (0.0 <= speed <= 5.0):
+        return None, "'speed' must be between 0 and 5."
+    return speed, None
+
+
+def normalized_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]:
+    if not (-1.0 <= value <= 1.0):
+        return None, f"'{name}' must be between -1.0 and 1.0 for format='normalized'."
+    quantized = int(round(value * 127.0))
+    quantized = max(-128, min(127, quantized))
+    return quantized, None
+
+
+def int8_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]:
+    if not value.is_integer():
+        return None, f"'{name}' must be an integer for format='int8'."
+    as_int = int(value)
+    if not (-128 <= as_int <= 127):
+        return None, f"'{name}' must be between -128 and 127 for format='int8'."
+    return as_int, None
+
+
+def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
+    fmt_raw = payload.get("format", "normalized")
+    fmt = str(fmt_raw).strip().lower()
+    if fmt not in {"normalized", "int8"}:
+        return None, {"message": "Invalid format. Use 'normalized' or 'int8'."}
+
+    x_val, x_err = parse_numeric(payload, "x")
+    y_val, y_err = parse_numeric(payload, "y")
+    speed_val, speed_err = parse_optional_speed(payload)
+
+    errors: dict[str, str] = {}
+    if x_err:
+        errors["x"] = x_err
+    if y_err:
+        errors["y"] = y_err
+    if speed_err:
+        errors["speed"] = speed_err
+    if errors:
+        return None, {"message": "Invalid vector payload.", "errors": errors}
+
+    if fmt == "normalized":
+        x_i8, x_i8_err = normalized_to_int8(x_val, "x")
+        y_i8, y_i8_err = normalized_to_int8(y_val, "y")
+    else:
+        x_i8, x_i8_err = int8_to_int8(x_val, "x")
+        y_i8, y_i8_err = int8_to_int8(y_val, "y")
+
+    errors = {}
+    if x_i8_err:
+        errors["x"] = x_i8_err
+    if y_i8_err:
+        errors["y"] = y_i8_err
+    if errors:
+        return None, {"message": "Invalid vector payload.", "errors": errors}
+
+    encoded = {
+        "format": fmt,
+        "x_input": x_val,
+        "y_input": y_val,
+        "speed": speed_val,
+        "x_int8": x_i8,
+        "y_int8": y_i8,
+        "bytes": [x_i8 & 0xFF, y_i8 & 0xFF],
+    }
+    return encoded, None
+
+
+def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    global last_sent
+
+    encoded, error = encode_payload(payload)
+    if error:
+        return {"ok": False, **error, "payload": payload}, 400
+    speed_value = encoded["speed"] if encoded["speed"] is not None else 0.0
+
+    if MODE == "i2c":
+        try:
+            with bus_lock:
+                if bus is None:
+                    raise OSError("I2C bus is not available.")
+                msg = i2c_msg.write(I2C_ADDR, encoded["bytes"])
+                bus.i2c_rdwr(msg)
+        except Exception as exc:
+            log_line(
+                "vector_send_fail",
+                {
+                    "client": request.remote_addr,
+                    "x": encoded["x_input"],
+                    "y": encoded["y_input"],
+                    "speed": speed_value,
+                    "x_int8": encoded["x_int8"],
+                    "y_int8": encoded["y_int8"],
+                    "bytes": encoded["bytes"],
+                    "error": repr(exc),
+                },
+            )
+            return (
+                {
+                    "ok": False,
+                    "message": "I2C write failed.",
+                    "error": str(exc),
+                    "i2c": {
+                        "bus": I2C_BUS_NUM,
+                        "addr": f"0x{I2C_ADDR:02X}",
+                        "active": False,
+                    },
+                },
+                503,
+            )
+
+    ts = now_iso()
+    last_sent = {
+        "updated_at": ts,
+        "ts": ts,
+        "format": encoded["format"],
+        "x_input": encoded["x_input"],
+        "y_input": encoded["y_input"],
+        "speed": speed_value,
+        "x_int8": encoded["x_int8"],
+        "y_int8": encoded["y_int8"],
+        "bytes": encoded["bytes"],
     }
 
-    persisted_line_follow = persisted_settings.get("line_follow_pid")
-    if isinstance(persisted_line_follow, dict):
-        for key, raw_value in persisted_line_follow.items():
-            if key not in LINE_FOLLOW_BOUNDS:
-                continue
-            parsed = parse_float(raw_value)
-            if parsed is None:
-                continue
-            low, high = LINE_FOLLOW_BOUNDS[key]
-            if low <= parsed <= high:
-                values[key] = parsed
+    log_line(
+        "vector_send_ok",
+        {
+            "client": request.remote_addr,
+            "mode": MODE,
+            "x": encoded["x_input"],
+            "y": encoded["y_input"],
+            "speed": speed_value,
+            "x_int8": encoded["x_int8"],
+            "y_int8": encoded["y_int8"],
+            "bytes": encoded["bytes"],
+        },
+    )
 
-    if values["min_speed"] > values["max_speed"]:
-        values["min_speed"], values["max_speed"] = values["max_speed"], values["min_speed"]
-    return values
-
-
-LINE_FOLLOW_SETTINGS = load_line_follow_settings(PERSISTED_SETTINGS)
-
-
-def persist_settings() -> bool:
-    if not PID_SETTINGS_PATH:
-        return False
-
-    payload = {
-        "pid": {axis: PID_STORE.get(axis) for axis in ("p", "i", "d")},
-        "line_follow_pid": dict(LINE_FOLLOW_SETTINGS),
-        "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-    }
-
-    try:
-        directory = os.path.dirname(PID_SETTINGS_PATH)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
-        temp_path = f"{PID_SETTINGS_PATH}.tmp"
-        with open(temp_path, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-        os.replace(temp_path, PID_SETTINGS_PATH)
-        return True
-    except OSError as exc:
-        log_event("pid_settings_persist_failed", {"path": PID_SETTINGS_PATH, "error": str(exc)})
-        return False
-
-
-def initialize_metrics():
-    for mode in ("mock", "spi"):
-        PID_MODE_GAUGE.labels(mode=mode).set(1 if PID_MODE == mode else 0)
-    for axis in ("p", "i", "d"):
-        PID_GAIN.labels(axis=axis).set(PID_STORE.get(axis))
-    CONTROL_VECTOR.labels(axis="x").set(0)
-    CONTROL_VECTOR.labels(axis="y").set(0)
-    CONTROL_SPEED.set(0)
-    SYSTEM_STATE_GAUGE.labels(state="unknown").set(1)
+    return (
+        {
+            "ok": True,
+            "sent": {
+                "x_int8": encoded["x_int8"],
+                "y_int8": encoded["y_int8"],
+                "bytes": encoded["bytes"],
+            },
+            "command": {
+                "x": encoded["x_input"],
+                "y": encoded["y_input"],
+                "speed": speed_value,
+                "updated_at": ts,
+                "format": encoded["format"],
+                "bytes": encoded["bytes"],
+            },
+            "i2c": {
+                "bus": I2C_BUS_NUM,
+                "addr": f"0x{I2C_ADDR:02X}",
+                "active": MODE == "i2c",
+            },
+            "mode": MODE,
+            "ts": ts,
+        },
+        200,
+    )
 
 
 @app.get("/health")
 def health():
     return jsonify(
         {
+            "ok": True,
             "status": "ok",
-            "mode": PID_MODE,
-            "spi_active": PID_MODE == "spi",
+            "mode": MODE,
+            "i2c_active": MODE == "i2c",
+            "spi_active": False,
+            "i2c_bus": I2C_BUS_NUM,
+            "i2c_addr": f"0x{I2C_ADDR:02X}",
         }
     )
 
 
-@app.get("/metrics")
-def metrics():
-    return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
-
-
-def handle_get_pid(key: str):
-    value = PID_STORE.get(key)
-    PID_GET_TOTAL.labels(axis=key).inc()
-    PID_GAIN.labels(axis=key).set(value)
-    log_event("pid_get", {"key": key, "value": value})
-    return jsonify({"value": value})
-
-
-def extract_value_from_request():
-    if request.is_json:
-        payload = request.get_json(silent=True) or {}
-        value = payload.get("value")
-        if value is None:
-            return None, "Missing 'value' in JSON payload."
-        return value, None
-
-    raw = request.get_data(as_text=True).strip()
-    if not raw:
-        return None, "Empty request body."
-    return raw, None
-
-
-def handle_set_pid(key: str):
-    raw_value, error = extract_value_from_request()
-    if error:
-        PID_ERRORS_TOTAL.labels(axis=key, type="payload").inc()
-        return jsonify({"message": error}), 400
-
-    value = parse_float(raw_value)
-    if value is None:
-        PID_ERRORS_TOTAL.labels(axis=key, type="parse").inc()
-        return jsonify({"message": "Value must be a finite number."}), 400
-
-    updated = PID_STORE.set(key, value)
-    persist_settings()
-    PID_SET_TOTAL.labels(axis=key).inc()
-    PID_GAIN.labels(axis=key).set(updated)
-    log_event("pid_set", {"key": key, "value": updated})
-    return jsonify({"value": updated})
-
-
-def parse_control_payload():
-    if not request.is_json:
-        return None, {"payload": "Expected JSON payload."}
-
-    payload = request.get_json(silent=True) or {}
-    errors = {}
-
-    x = parse_float(payload.get("x"))
-    y = parse_float(payload.get("y"))
-    speed = parse_float(payload.get("speed"))
-
-    if x is None:
-        errors["x"] = "X must be a finite number."
-    if y is None:
-        errors["y"] = "Y must be a finite number."
-    if speed is None:
-        errors["speed"] = "Speed must be a finite number."
-
-    if x is not None and not (-1.0 <= x <= 1.0):
-        errors["x"] = "X must be between -1 and 1."
-    if y is not None and not (-1.0 <= y <= 1.0):
-        errors["y"] = "Y must be between -1 and 1."
-    if speed is not None and not (0.0 <= speed <= 5.0):
-        errors["speed"] = "Speed must be between 0 and 5."
-
-    if errors:
-        return None, errors
-
-    return {"x": x, "y": y, "speed": speed}, None
-
-
-@app.post("/control")
-def send_control():
-    payload, errors = parse_control_payload()
-    if errors:
-        CONTROL_ERRORS_TOTAL.labels(type="validation").inc()
-        return jsonify({"message": "Invalid control payload.", "errors": errors}), 400
-
-    command = CONTROL_STORE.send(payload["x"], payload["y"], payload["speed"])
-    LAST_CONTROL_COMMAND.update(
-        {
-            "x": command["x"],
-            "y": command["y"],
-            "speed": command["speed"],
-            "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        }
-    )
-    CONTROL_COMMAND_TOTAL.inc()
-    CONTROL_VECTOR.labels(axis="x").set(command["x"])
-    CONTROL_VECTOR.labels(axis="y").set(command["y"])
-    CONTROL_SPEED.set(command["speed"])
-    log_event("control_command", command)
-    return jsonify({"command": command})
+@app.get("/last")
+def get_last():
+    return jsonify({"ok": True, "last": last_sent})
 
 
 @app.get("/control")
 def get_control():
-    return jsonify({"command": dict(LAST_CONTROL_COMMAND)})
+    if last_sent is None:
+        command = {
+            "x": 0.0,
+            "y": 0.0,
+            "speed": 0.0,
+            "updated_at": None,
+            "format": "normalized",
+            "bytes": [0, 0],
+        }
+    else:
+        command = {
+            "x": last_sent["x_input"],
+            "y": last_sent["y_input"],
+            "speed": last_sent.get("speed", 0.0),
+            "updated_at": last_sent.get("updated_at"),
+            "format": last_sent.get("format", "normalized"),
+            "bytes": list(last_sent.get("bytes", [0, 0])),
+        }
+    return jsonify({"ok": True, "command": command})
 
 
-@app.get("/state")
-def get_state():
-    return jsonify(SYSTEM_STATE)
-
-
-@app.post("/state")
-def set_state():
+@app.post("/vector")
+def post_vector():
     if not request.is_json:
-        return jsonify({"message": "Expected JSON payload."}), 400
-    payload = request.get_json(silent=True) or {}
-    state = payload.get("state")
-    if not isinstance(state, str) or not state:
-        return jsonify({"message": "Missing 'state' in payload."}), 400
-    trace = extract_trace(payload)
+        return jsonify({"ok": False, "message": "Expected JSON payload."}), 400
 
-    SYSTEM_STATE["state"] = state
-    SYSTEM_STATE["updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    SYSTEM_STATE_GAUGE.clear()
-    SYSTEM_STATE_GAUGE.labels(state=state).set(1)
-    log_payload = dict(SYSTEM_STATE)
-    log_payload.update(trace_log_fields(trace))
-    log_event("state_update", log_payload)
-    if trace:
-        log_event(
-            "diagnostic_trace_received",
-            {
-                "state": state,
-                **trace_log_fields(trace),
-            },
-        )
-    return jsonify(SYSTEM_STATE)
-
-
-@app.get("/line-follow-pid")
-def get_line_follow_pid():
-    return jsonify({"values": dict(LINE_FOLLOW_SETTINGS), "bounds": LINE_FOLLOW_BOUNDS})
-
-
-@app.post("/line-follow-pid")
-def set_line_follow_pid():
-    if not request.is_json:
-        return jsonify({"message": "Expected JSON payload."}), 400
-
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return jsonify({"message": "Payload must be an object."}), 400
+        return jsonify({"ok": False, "message": "JSON payload must be an object."}), 400
 
-    updates = {}
-    errors = {}
-    for key, value in payload.items():
-        if key not in LINE_FOLLOW_BOUNDS:
-            errors[key] = "Unknown setting."
-            continue
-        parsed = parse_float(value)
-        if parsed is None:
-            errors[key] = "Value must be a finite number."
-            continue
-        low, high = LINE_FOLLOW_BOUNDS[key]
-        if not (low <= parsed <= high):
-            errors[key] = f"Value must be between {low} and {high}."
-            continue
-        updates[key] = parsed
-
-    # Keep speed ordering sane if updated independently.
-    preview = dict(LINE_FOLLOW_SETTINGS)
-    preview.update(updates)
-    if preview["min_speed"] > preview["max_speed"]:
-        errors["min_speed"] = "min_speed must be <= max_speed."
-        errors["max_speed"] = "max_speed must be >= min_speed."
-
-    if errors:
-        return jsonify({"message": "Invalid line-follow PID payload.", "errors": errors}), 400
-
-    LINE_FOLLOW_SETTINGS.update(updates)
-    persist_settings()
-    log_event("line_follow_pid_update", {"updated": updates})
-    return jsonify({"values": dict(LINE_FOLLOW_SETTINGS), "updated": updates})
+    response_payload, status_code = process_vector_payload(payload)
+    return jsonify(response_payload), status_code
 
 
-@app.get("/pid/proportional")
-def get_proportional():
-    return handle_get_pid("p")
+@app.post("/control")
+def post_control():
+    return post_vector()
 
 
-@app.post("/pid/proportional")
-def set_proportional():
-    return handle_set_pid("p")
+def main() -> None:
+    global bus
+
+    if MODE == "i2c":
+        bus = SMBus(I2C_BUS_NUM)
+
+    log_line(
+        "startup",
+        {
+            "host": HOST,
+            "port": PORT,
+            "mode": MODE,
+            "i2c_active": MODE == "i2c",
+            "i2c_bus": I2C_BUS_NUM,
+            "i2c_addr": f"0x{I2C_ADDR:02X}",
+            "debug": DEBUG,
+        },
+    )
+    app.run(host=HOST, port=PORT, debug=DEBUG)
 
 
-@app.get("/pid/integral")
-def get_integral():
-    return handle_get_pid("i")
-
-
-@app.post("/pid/integral")
-def set_integral():
-    return handle_set_pid("i")
-
-
-@app.get("/pid/derivative")
-def get_derivative():
-    return handle_get_pid("d")
-
-
-@app.post("/pid/derivative")
-def set_derivative():
-    return handle_set_pid("d")
+atexit.register(close_bus)
+signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGTERM, handle_signal)
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    persist_settings()
-    initialize_metrics()
-    log_service_line(f"Control communication running on 0.0.0.0:{port}")
-    app.run(host="0.0.0.0", port=port)
+    main()

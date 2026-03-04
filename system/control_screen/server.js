@@ -17,8 +17,6 @@ const CONTROL_COMM_HEALTH_PATH =
   process.env.CONTROL_COMM_HEALTH_PATH || '/health';
 const CONTROL_COMM_CONTROL_PATH =
   process.env.CONTROL_COMM_CONTROL_PATH || '/control';
-const CONTROL_COMM_STATE_PATH =
-  process.env.CONTROL_COMM_STATE_PATH || '/state';
 const STATE_MACHINE_BASE_URL =
   process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
 const STATE_MACHINE_LINE_FOLLOW_PID_PATH =
@@ -470,10 +468,6 @@ function getControlCommHealthUrl() {
   return new URL(CONTROL_COMM_HEALTH_PATH, CONTROL_COMM_BASE_URL).toString();
 }
 
-function getControlCommStateUrl() {
-  return new URL(CONTROL_COMM_STATE_PATH, CONTROL_COMM_BASE_URL).toString();
-}
-
 function getControlCommLineFollowPidUrl() {
   return new URL(STATE_MACHINE_LINE_FOLLOW_PID_PATH, STATE_MACHINE_BASE_URL).toString();
 }
@@ -675,10 +669,10 @@ async function fetchStateMachineStates() {
 }
 
 async function setStateMachineState(nextState) {
-  const stateUrl = getStateMachineSetStateUrl();
-  const controlStateUrl = getControlCommStateUrl();
+  const setStateUrl = getStateMachineSetStateUrl();
+  const statesUrl = getStateMachineStatesUrl();
   try {
-    const response = await fetch(stateUrl, {
+    const response = await fetch(setStateUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -692,17 +686,21 @@ async function setStateMachineState(nextState) {
     }
 
     const parsed = safeJsonParse(body);
-    const state = parsed?.state || nextState;
-    const controlStateResponse = await fetch(controlStateUrl, {
+    const requestedState = parsed?.state || nextState;
+
+    const statesResponse = await fetch(statesUrl, {
       method: 'GET',
       headers: { Accept: 'application/json, text/plain' }
     });
-    const controlStateBody = await controlStateResponse.text();
-    const controlState = safeJsonParse(controlStateBody);
+    const statesBody = await statesResponse.text();
+    if (!statesResponse.ok) {
+      return { error: `Upstream status ${statesResponse.status}`, detail: statesBody };
+    }
+    const statesParsed = safeJsonParse(statesBody);
+    const currentState = statesParsed?.current_state || requestedState;
 
     return {
-      state,
-      control_state: controlState
+      state: currentState
     };
   } catch (err) {
     return { error: err.message };
