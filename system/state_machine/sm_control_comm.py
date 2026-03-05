@@ -111,7 +111,7 @@ class ControlCommClient:
     ) -> dict[str, Any]:
         payload = {"x": x, "y": y, "speed": speed}
 
-        payload_real = {"x": x, "y": -y}
+        payload_real = {"x": x, "y": y}
 
         # print(f"Posting to control communication: {payload_real}")
         # post to the actual thing just as a test
