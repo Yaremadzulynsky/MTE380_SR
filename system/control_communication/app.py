@@ -34,6 +34,9 @@ I2C_BUS_NUM = parse_env_int("I2C_BUS", "1")
 I2C_ADDR = parse_env_int("I2C_ADDR", "0x08")
 DEBUG = parse_env_bool("DEBUG", "0")
 MODE = parse_hardware_mode()
+SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "0")
+SERVO_MAX_DEG = parse_env_int("SERVO_MAX_DEG", "90")
+SERVO_DEFAULT_DEG = parse_env_int("SERVO_DEFAULT_DEG", "0")
 
 app = Flask(__name__)
 
@@ -94,6 +97,23 @@ def parse_optional_speed(payload: dict[str, Any]) -> tuple[Optional[float], Opti
     return speed, None
 
 
+def parse_optional_servo(payload: dict[str, Any]) -> tuple[Optional[int], Optional[str]]:
+    if "servo" not in payload or payload.get("servo") is None:
+        return None, None
+    raw_value = payload.get("servo")
+    if isinstance(raw_value, bool) or not isinstance(raw_value, (int, float)):
+        return None, "'servo' must be numeric."
+    servo_float = float(raw_value)
+    if not math.isfinite(servo_float):
+        return None, "'servo' must be finite."
+    if not servo_float.is_integer():
+        return None, "'servo' must be an integer angle in degrees."
+    servo = int(servo_float)
+    if not (SERVO_MIN_DEG <= servo <= SERVO_MAX_DEG):
+        return None, f"'servo' must be between {SERVO_MIN_DEG} and {SERVO_MAX_DEG}."
+    return servo, None
+
+
 def normalized_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]:
     if not (-1.0 <= value <= 1.0):
         return None, f"'{name}' must be between -1.0 and 1.0 for format='normalized'."
@@ -129,6 +149,7 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
     x_val, x_err = parse_numeric(payload, "x")
     y_val, y_err = parse_numeric(payload, "y")
     speed_val, speed_err = parse_optional_speed(payload)
+    servo_val, servo_err = parse_optional_servo(payload)
 
     errors: dict[str, str] = {}
     if x_err:
@@ -137,6 +158,8 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
         errors["y"] = y_err
     if speed_err:
         errors["speed"] = speed_err
+    if servo_err:
+        errors["servo"] = servo_err
     if errors:
         return None, {"message": "Invalid vector payload.", "errors": errors}
 
@@ -161,17 +184,26 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
     right_norm = clamp(y_norm - x_norm, -1.0, 1.0)
     left_i8 = int(round(left_norm * 127.0))
     right_i8 = int(round(right_norm * 127.0))
+    if servo_val is None:
+        if last_sent is not None and isinstance(last_sent.get("servo_deg"), int):
+            servo_deg = int(last_sent["servo_deg"])
+        else:
+            servo_deg = SERVO_DEFAULT_DEG
+    else:
+        servo_deg = servo_val
+    servo_deg = max(SERVO_MIN_DEG, min(SERVO_MAX_DEG, servo_deg))
 
     encoded = {
         "format": fmt,
         "x_input": x_val,
         "y_input": y_val,
         "speed": speed_val,
+        "servo_deg": servo_deg,
         "x_int8": x_i8,
         "y_int8": y_i8,
         "left_int8": left_i8,
         "right_int8": right_i8,
-        "bytes": [int8_to_twos_complement_u8(left_i8), int8_to_twos_complement_u8(right_i8)],
+        "bytes": [int8_to_twos_complement_u8(x_i8), int8_to_twos_complement_u8(y_i8), servo_deg],
     }
     return encoded, None
 
@@ -201,6 +233,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                     "speed": speed_value,
                     "x_int8": encoded["x_int8"],
                     "y_int8": encoded["y_int8"],
+                    "servo_deg": encoded["servo_deg"],
                     "left_int8": encoded["left_int8"],
                     "right_int8": encoded["right_int8"],
                     "bytes": encoded["bytes"],
@@ -229,6 +262,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
         "x_input": encoded["x_input"],
         "y_input": encoded["y_input"],
         "speed": speed_value,
+        "servo_deg": encoded["servo_deg"],
         "x_int8": encoded["x_int8"],
         "y_int8": encoded["y_int8"],
         "left_int8": encoded["left_int8"],
@@ -246,6 +280,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "speed": speed_value,
             "x_int8": encoded["x_int8"],
             "y_int8": encoded["y_int8"],
+            "servo_deg": encoded["servo_deg"],
             "left_int8": encoded["left_int8"],
             "right_int8": encoded["right_int8"],
             "bytes": encoded["bytes"],
@@ -266,6 +301,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 "x": encoded["x_input"],
                 "y": encoded["y_input"],
                 "speed": speed_value,
+                "servo": encoded["servo_deg"],
                 "left": encoded["left_int8"] / 127.0,
                 "right": encoded["right_int8"] / 127.0,
                 "updated_at": ts,
@@ -311,22 +347,24 @@ def get_control():
             "x": 0.0,
             "y": 0.0,
             "speed": 0.0,
+            "servo": SERVO_DEFAULT_DEG,
             "left": 0.0,
             "right": 0.0,
             "updated_at": None,
             "format": "normalized",
-            "bytes": [0, 0],
+            "bytes": [0, 0, SERVO_DEFAULT_DEG],
         }
     else:
         command = {
             "x": last_sent["x_input"],
             "y": last_sent["y_input"],
             "speed": last_sent.get("speed", 0.0),
+            "servo": int(last_sent.get("servo_deg", SERVO_DEFAULT_DEG)),
             "left": last_sent.get("left_int8", 0) / 127.0,
             "right": last_sent.get("right_int8", 0) / 127.0,
             "updated_at": last_sent.get("updated_at"),
             "format": last_sent.get("format", "normalized"),
-            "bytes": list(last_sent.get("bytes", [0, 0])),
+            "bytes": list(last_sent.get("bytes", [0, 0, SERVO_DEFAULT_DEG])),
         }
     return jsonify({"ok": True, "command": command})
 
@@ -364,6 +402,9 @@ def main() -> None:
             "i2c_active": MODE == "i2c",
             "i2c_bus": I2C_BUS_NUM,
             "i2c_addr": f"0x{I2C_ADDR:02X}",
+            "servo_min_deg": SERVO_MIN_DEG,
+            "servo_max_deg": SERVO_MAX_DEG,
+            "servo_default_deg": SERVO_DEFAULT_DEG,
             "debug": DEBUG,
         },
     )

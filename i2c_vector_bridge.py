@@ -89,6 +89,15 @@ def int8_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]
     return as_int, None
 
 
+def int8_to_twos_complement_u8(value: int) -> int:
+    # Keep signed int8 semantics on-wire; neutral (0) stays 0.
+    return value & 0xFF
+
+
+def clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
 def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
     fmt_raw = payload.get("format", "normalized")
     fmt = str(fmt_raw).strip().lower()
@@ -120,13 +129,22 @@ def encode_payload(payload: dict[str, Any]) -> tuple[Optional[dict[str, Any]], O
     if errors:
         return None, {"message": "Invalid vector payload.", "errors": errors}
 
+    x_norm = clamp(x_i8 / 127.0, -1.0, 1.0)
+    y_norm = clamp(y_i8 / 127.0, -1.0, 1.0)
+    left_norm = clamp(y_norm + x_norm, -1.0, 1.0)
+    right_norm = clamp(y_norm - x_norm, -1.0, 1.0)
+    left_i8 = int(round(left_norm * 127.0))
+    right_i8 = int(round(right_norm * 127.0))
+
     encoded = {
         "format": fmt,
         "x_input": x_val,
         "y_input": y_val,
         "x_int8": x_i8,
         "y_int8": y_i8,
-        "bytes": [x_i8 & 0xFF, y_i8 & 0xFF],
+        "left_int8": left_i8,
+        "right_int8": right_i8,
+        "bytes": [int8_to_twos_complement_u8(left_i8), int8_to_twos_complement_u8(right_i8)],
     }
     return encoded, None
 
