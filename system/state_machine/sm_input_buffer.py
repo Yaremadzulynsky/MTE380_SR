@@ -45,6 +45,8 @@ class InputBuffer:
             self._updated_at = None
 
     def _inputs_from_payload(self, payload: dict[str, Any]) -> Inputs:
+        has_red_line = "red_line" in payload
+        red_line = Vector.from_dict(payload.get("red_line"), "red_line")
         safe_zone = Vector.from_dict(payload.get("safe_zone"), "safe_zone")
         danger_zone = Vector.from_dict(payload.get("danger_zone"), "danger_zone")
         target = Vector.from_dict(payload.get("target"), "target")
@@ -68,7 +70,9 @@ class InputBuffer:
         # source of truth for red-line detection (including detected=false).
         # Legacy `line/home` fallback is only for payloads that don't include
         # `line_error` at all.
-        if has_line_error:
+        if has_red_line:
+            _line = red_line
+        elif has_line_error:
             _line = line_error
 
         return Inputs(

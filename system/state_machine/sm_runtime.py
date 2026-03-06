@@ -50,6 +50,7 @@ def _send_control_command(
         command["x"],
         command["y"],
         command["speed"],
+        servo=int(command["servo"]) if "servo" in command and command["servo"] is not None else None,
     )
     if not result.get("ok"):
         log_delivery_failure(

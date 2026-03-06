@@ -27,6 +27,8 @@ const STATE_MACHINE_SET_STATE_PATH =
   process.env.STATE_MACHINE_SET_STATE_PATH || '/set-state';
 const ROBOT_MOCK_URL = process.env.ROBOT_MOCK_URL || 'http://localhost:8200';
 const LOG_PATH = process.env.LOG_PATH || process.env.INSIGHTS_IPC_PATH;
+const SERVO_MIN_DEG = Number.parseInt(process.env.SERVO_MIN_DEG || '0', 10);
+const SERVO_MAX_DEG = Number.parseInt(process.env.SERVO_MAX_DEG || '90', 10);
 
 const DEFAULT_RANGE = { min: -1000, max: 1000 };
 
@@ -307,12 +309,13 @@ app.post('/api/state-machine/set-state', async (req, res) => {
 });
 
 app.post('/api/control', async (req, res) => {
-  const { x, y, speed } = req.body || {};
+  const { x, y, speed, servo } = req.body || {};
   const errors = {};
 
   const parsedX = parseNumberValue(x);
   const parsedY = parseNumberValue(y);
   const parsedSpeed = parseNumberValue(speed);
+  const parsedServo = parseOptionalIntegerValue(servo);
 
   if (!Number.isFinite(parsedX)) {
     errors.x = 'X must be a finite number.';
@@ -322,6 +325,9 @@ app.post('/api/control', async (req, res) => {
   }
   if (!Number.isFinite(parsedSpeed)) {
     errors.speed = 'Speed must be a finite number.';
+  }
+  if (servo !== undefined && servo !== null && servo !== '' && !Number.isFinite(parsedServo)) {
+    errors.servo = 'Servo must be an integer.';
   }
 
   if (Number.isFinite(parsedX) && (parsedX < -1 || parsedX > 1)) {
@@ -333,6 +339,12 @@ app.post('/api/control', async (req, res) => {
   if (Number.isFinite(parsedSpeed) && (parsedSpeed < 0 || parsedSpeed > 1)) {
     errors.speed = 'Speed must be between 0 and 1.';
   }
+  if (
+    Number.isFinite(parsedServo)
+    && (parsedServo < SERVO_MIN_DEG || parsedServo > SERVO_MAX_DEG)
+  ) {
+    errors.servo = `Servo must be between ${SERVO_MIN_DEG} and ${SERVO_MAX_DEG}.`;
+  }
 
   if (Object.keys(errors).length > 0) {
     return res.status(400).json({
@@ -341,11 +353,16 @@ app.post('/api/control', async (req, res) => {
     });
   }
 
-  const result = await sendControlCommand({
+  const command = {
     x: parsedX,
     y: parsedY,
     speed: parsedSpeed
-  });
+  };
+  if (Number.isFinite(parsedServo)) {
+    command.servo = parsedServo;
+  }
+
+  const result = await sendControlCommand(command);
 
   if (!result || result.error) {
     logInsight('control_command_error', { error: result?.error });
@@ -391,6 +408,17 @@ function parseNumberValue(value) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function parseOptionalIntegerValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return Number.NaN;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    return Number.NaN;
+  }
+  return parsed;
 }
 
 function collectUpdate(key, rawValue, updates, validationErrors) {

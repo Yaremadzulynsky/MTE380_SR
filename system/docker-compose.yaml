@@ -1,22 +1,27 @@
 services:
-  control-communication:
-    build:
-      context: ./control_communication
-    container_name: control-communication
-    network_mode: host
-    # devices:
-      # - "/dev/i2c-1:/dev/i2c-1"
-    environment:
-      PORT: 5001
-      HARDWARE_MODE: "mock"
-      PID_P_DEFAULT: "0"
-      PID_I_DEFAULT: "0"
-      PID_D_DEFAULT: "0"
-      PID_SETTINGS_PATH: "/var/log/control-communication/pid-settings.json"
-      LOG_PATH: "/var/log/control-communication/control-communication.log"
-    volumes:
-      - metrics-pipe:/var/run/metrics
-      - service-logs:/var/log
+  # control-communication:
+  #   build:
+  #     context: ./control_communication
+  #   container_name: control-communication
+  #   network_mode: host
+  #   # devices:
+  #     # - "/dev/i2c-1:/dev/i2c-1"
+  #     # - "/dev/cu.usbmodem21401:/dev/cu.usbmodem21401"
+  #   environment:
+  #     PORT: 5001
+  #     HARDWARE_MODE: "serial"
+  #     SERIAL_PORT: "/dev/cu.usbmodem21401"
+  #     SERIAL_BAUDRATE: "115200"
+  #     SERIAL_TIMEOUT_S: "1.0"
+  #     SERIAL_WRITE_TIMEOUT_S: "1.0"
+  #     PID_P_DEFAULT: "0"
+  #     PID_I_DEFAULT: "0"
+  #     PID_D_DEFAULT: "0"
+  #     PID_SETTINGS_PATH: "/var/log/control-communication/pid-settings.json"
+  #     LOG_PATH: "/var/log/control-communication/control-communication.log"
+  #   volumes:
+  #     - metrics-pipe:/var/run/metrics
+  #     - service-logs:/var/log
 
   control-screen:
     build:
@@ -42,8 +47,8 @@ services:
     volumes:
       - metrics-pipe:/var/run/metrics
       - service-logs:/var/log
-    depends_on:
-      - control-communication
+    # depends_on:
+    #   - control-communication
 
   metrics-aggregator:
     build:
@@ -77,8 +82,8 @@ services:
       PORT: "8000"
     volumes:
       - service-logs:/var/log
-    depends_on:
-      - control-communication
+    # depends_on:
+    #   - control-communication
 
   computer-vision:
     build:
@@ -112,8 +117,8 @@ services:
       STATE_MACHINE_INPUT_PATH: "/inputs"
       STATE_MACHINE_STATES_PATH: "/states"
       SYSTEM_POLL_INTERVAL_S: "0.1"
-    depends_on:
-      - control-communication
+    # depends_on:
+      # - control-communication
       # - state-machine
 
   prometheus:

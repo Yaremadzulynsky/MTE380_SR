@@ -3,10 +3,12 @@ const state = {
   pointerId: null,
   center: { x: 0, y: 0 },
   radius: 0,
-  vector: { x: 0, y: 0, speed: 0 },
+  vector: { x: 0, y: 0, speed: 0, servo: 0 },
   lastSentAt: 0,
   sendIntervalMs: 120,
   deadzone: 0.08,
+  servoMin: 0,
+  servoMax: 90,
   usingPointerEvents: typeof window !== 'undefined' && 'PointerEvent' in window
 };
 
@@ -16,6 +18,9 @@ const elements = {
   vectorX: document.getElementById('vectorX'),
   vectorY: document.getElementById('vectorY'),
   speed: document.getElementById('speed'),
+  servoValue: document.getElementById('servoValue'),
+  servoRange: document.getElementById('servoRange'),
+  servoNumber: document.getElementById('servoNumber'),
   feedback: document.getElementById('controlFeedback'),
   connectionStatus: document.getElementById('connectionStatus'),
   lastSync: document.getElementById('lastSync')
@@ -25,12 +30,15 @@ initialize();
 
 function initialize() {
   updateGeometry();
+  setServo(state.vector.servo);
   bindEvents();
   refreshBridgeStatus(false);
   window.addEventListener('resize', updateGeometry);
 }
 
 function bindEvents() {
+  bindServoEvents();
+
   if (state.usingPointerEvents) {
     elements.joystick.addEventListener('pointerdown', handlePointerDown);
     elements.joystick.addEventListener('pointermove', handlePointerMove);
@@ -48,6 +56,24 @@ function bindEvents() {
   window.addEventListener('touchmove', handleTouchMove, { passive: false });
   window.addEventListener('touchend', handleTouchEnd);
   window.addEventListener('touchcancel', handleTouchEnd);
+}
+
+function bindServoEvents() {
+  if (!elements.servoRange || !elements.servoNumber) {
+    return;
+  }
+
+  elements.servoRange.addEventListener('input', async (event) => {
+    const nextServo = clampServo(Number(event.target.value));
+    setServo(nextServo);
+    await sendControlCommand(true);
+  });
+
+  elements.servoNumber.addEventListener('input', async (event) => {
+    const nextServo = clampServo(Number(event.target.value));
+    setServo(nextServo);
+    await sendControlCommand(true);
+  });
 }
 
 function updateGeometry() {
@@ -198,13 +224,35 @@ function updateVector(normalizedX, normalizedY) {
   const y = inDeadzone ? 0 : normalizedY;
   const speed = inDeadzone ? 0 : Math.min(1, magnitude);
 
-  state.vector = { x, y, speed };
+  state.vector = { x, y, speed, servo: state.vector.servo };
   elements.vectorX.textContent = x.toFixed(2);
   elements.vectorY.textContent = y.toFixed(2);
   elements.speed.textContent = speed.toFixed(2);
 
   if (inDeadzone && !state.active) {
     moveHandle(0, 0);
+  }
+}
+
+function clampServo(value) {
+  if (!Number.isFinite(value)) {
+    return state.vector.servo;
+  }
+  const bounded = Math.max(state.servoMin, Math.min(state.servoMax, value));
+  return Math.round(bounded);
+}
+
+function setServo(servo) {
+  const clamped = clampServo(servo);
+  state.vector.servo = clamped;
+  if (elements.servoRange) {
+    elements.servoRange.value = String(clamped);
+  }
+  if (elements.servoNumber) {
+    elements.servoNumber.value = String(clamped);
+  }
+  if (elements.servoValue) {
+    elements.servoValue.textContent = String(clamped);
   }
 }
 
@@ -218,7 +266,8 @@ async function sendControlCommand(force) {
   const payload = {
     x: Number(state.vector.x.toFixed(3)),
     y: Number(state.vector.y.toFixed(3)),
-    speed: Number(state.vector.speed.toFixed(3))
+    speed: Number(state.vector.speed.toFixed(3)),
+    servo: state.vector.servo
   };
 
   if (payload.speed === 0 && payload.x === 0 && payload.y === 0) {

@@ -7,11 +7,12 @@ from sm_parse import parse_finite_float
 
 
 class State(Enum):
-    TESTING = "testing"
-    REMOTE_CONTROL = "remote_control"
-    SEARCHING = "searching"
-    FIND_TARGET = "find_target"
-    ALIGN_FOR_RETRIEVE = "align_for_retrieve"
+    TESTING = "testing",
+    PICKUP = "pickup",
+    REMOTE_CONTROL = "remote_control",
+    SEARCHING = "searching",
+    FIND_TARGET = "find_target",
+    ALIGN_FOR_RETRIEVE = "align_for_retrieve",
     RETRIEVING = "retrieving"
     RETRIEVED = "retrieved"
     TRANSPORTING = "transporting"

@@ -10,6 +10,11 @@ from typing import Any, Optional
 from flask import Flask, jsonify, request
 from smbus2 import SMBus, i2c_msg
 
+try:
+    import serial
+except Exception:
+    serial = None
+
 
 def parse_env_int(name: str, default: str) -> int:
     raw = os.getenv(name, default).strip()
@@ -25,6 +30,8 @@ def parse_hardware_mode() -> str:
     raw = (os.getenv("HARDWARE_MODE") or "mock").strip().lower()
     if raw in {"mock", "sim", "simulation"}:
         return "mock"
+    if raw in {"serial", "uart"}:
+        return "serial"
     return "i2c"
 
 
@@ -32,6 +39,10 @@ HOST = (os.getenv("HOST") or "0.0.0.0").strip()
 PORT = parse_env_int("PORT", "5001")
 I2C_BUS_NUM = parse_env_int("I2C_BUS", "1")
 I2C_ADDR = parse_env_int("I2C_ADDR", "0x08")
+SERIAL_PORT = (os.getenv("SERIAL_PORT") or "/dev/ttyUSB0").strip()
+SERIAL_BAUDRATE = parse_env_int("SERIAL_BAUDRATE", "115200")
+SERIAL_TIMEOUT_S = float((os.getenv("SERIAL_TIMEOUT_S") or "1.0").strip())
+SERIAL_WRITE_TIMEOUT_S = float((os.getenv("SERIAL_WRITE_TIMEOUT_S") or "1.0").strip())
 DEBUG = parse_env_bool("DEBUG", "0")
 MODE = parse_hardware_mode()
 SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "0")
@@ -42,6 +53,7 @@ app = Flask(__name__)
 
 bus_lock = threading.Lock()
 bus: Optional[SMBus] = None
+serial_link = None
 last_sent: Optional[dict[str, Any]] = None
 
 
@@ -66,9 +78,20 @@ def close_bus() -> None:
         bus = None
 
 
+def close_serial_link() -> None:
+    global serial_link
+    if serial_link is not None:
+        try:
+            serial_link.close()
+        except Exception:
+            pass
+        serial_link = None
+
+
 def handle_signal(signum, _frame) -> None:
     log_line("shutdown", {"signal": signum})
     close_bus()
+    close_serial_link()
     raise SystemExit(0)
 
 
@@ -228,6 +251,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 "vector_send_fail",
                 {
                     "client": request.remote_addr,
+                    "mode": MODE,
                     "x": encoded["x_input"],
                     "y": encoded["y_input"],
                     "speed": speed_value,
@@ -248,6 +272,46 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                     "i2c": {
                         "bus": I2C_BUS_NUM,
                         "addr": f"0x{I2C_ADDR:02X}",
+                        "active": False,
+                    },
+                },
+                503,
+            )
+
+    if MODE == "serial":
+        try:
+            with bus_lock:
+                if serial_link is None:
+                    raise OSError("Serial port is not available.")
+                # Keep byte-for-byte parity with I2C payload format.
+                serial_link.write(bytes(encoded["bytes"]))
+                serial_link.flush()
+        except Exception as exc:
+            log_line(
+                "vector_send_fail",
+                {
+                    "client": request.remote_addr,
+                    "mode": MODE,
+                    "x": encoded["x_input"],
+                    "y": encoded["y_input"],
+                    "speed": speed_value,
+                    "x_int8": encoded["x_int8"],
+                    "y_int8": encoded["y_int8"],
+                    "servo_deg": encoded["servo_deg"],
+                    "left_int8": encoded["left_int8"],
+                    "right_int8": encoded["right_int8"],
+                    "bytes": encoded["bytes"],
+                    "error": repr(exc),
+                },
+            )
+            return (
+                {
+                    "ok": False,
+                    "message": "Serial write failed.",
+                    "error": str(exc),
+                    "serial": {
+                        "port": SERIAL_PORT,
+                        "baudrate": SERIAL_BAUDRATE,
                         "active": False,
                     },
                 },
@@ -313,6 +377,11 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 "addr": f"0x{I2C_ADDR:02X}",
                 "active": MODE == "i2c",
             },
+            "serial": {
+                "port": SERIAL_PORT,
+                "baudrate": SERIAL_BAUDRATE,
+                "active": MODE == "serial",
+            },
             "mode": MODE,
             "ts": ts,
         },
@@ -328,9 +397,12 @@ def health():
             "status": "ok",
             "mode": MODE,
             "i2c_active": MODE == "i2c",
+            "serial_active": MODE == "serial",
             "spi_active": False,
             "i2c_bus": I2C_BUS_NUM,
             "i2c_addr": f"0x{I2C_ADDR:02X}",
+            "serial_port": SERIAL_PORT,
+            "serial_baudrate": SERIAL_BAUDRATE,
         }
     )
 
@@ -388,10 +460,19 @@ def post_control():
 
 
 def main() -> None:
-    global bus
+    global bus, serial_link
 
     if MODE == "i2c":
         bus = SMBus(I2C_BUS_NUM)
+    elif MODE == "serial":
+        if serial is None:
+            raise RuntimeError("pyserial is required for HARDWARE_MODE=serial but is not installed.")
+        serial_link = serial.Serial(
+            port=SERIAL_PORT,
+            baudrate=SERIAL_BAUDRATE,
+            timeout=SERIAL_TIMEOUT_S,
+            write_timeout=SERIAL_WRITE_TIMEOUT_S,
+        )
 
     log_line(
         "startup",
@@ -400,8 +481,11 @@ def main() -> None:
             "port": PORT,
             "mode": MODE,
             "i2c_active": MODE == "i2c",
+            "serial_active": MODE == "serial",
             "i2c_bus": I2C_BUS_NUM,
             "i2c_addr": f"0x{I2C_ADDR:02X}",
+            "serial_port": SERIAL_PORT,
+            "serial_baudrate": SERIAL_BAUDRATE,
             "servo_min_deg": SERVO_MIN_DEG,
             "servo_max_deg": SERVO_MAX_DEG,
             "servo_default_deg": SERVO_DEFAULT_DEG,
@@ -412,6 +496,7 @@ def main() -> None:
 
 
 atexit.register(close_bus)
+atexit.register(close_serial_link)
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
 

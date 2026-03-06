@@ -10,6 +10,9 @@ from sm_models import Inputs, State, StateContext, TransitionResult, Vector
 Command = dict[str, float]
 STOP_COMMAND: Command = {"x": 0.0, "y": 0.0, "speed": 0.0}
 MAX_CONTROL_SPEED = 5.0
+SERVO_MIN_DEG = int(os.getenv("SERVO_MIN_DEG", "0"))
+SERVO_MAX_DEG = int(os.getenv("SERVO_MAX_DEG", "90"))
+SERVO_CENTER_DEG = int(os.getenv("SERVO_CENTER_DEG", "45"))
 val = 0
 
 LINE_FOLLOW_PID_BOUNDS: dict[str, tuple[float, float]] = {
@@ -38,6 +41,11 @@ def clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
 
+def parse_env_bool(name: str, default: str = "0") -> bool:
+    raw = (os.getenv(name, default) or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def wrap_angle(rad: float) -> float:
     a = rad
     while a > math.pi:
@@ -61,15 +69,31 @@ def send_stop_command(context: str = "stop") -> None:
         x=STOP_COMMAND["x"],
         y=STOP_COMMAND["y"],
         speed=STOP_COMMAND["speed"],
+        servo=SERVO_CENTER_DEG,
         context=context,
     )
 
 
-def _send_control_command(x: float, y: float, speed: float, context: str) -> None:
+def _angle_rad_to_servo_deg(angle_rad: float) -> int:
+    # Map steering angle [-pi/2, +pi/2] to servo range [min, max].
+    clamped = clamp(angle_rad, -math.pi / 2.0, math.pi / 2.0)
+    unit = (clamped + (math.pi / 2.0)) / math.pi
+    servo = int(round(SERVO_MIN_DEG + unit * (SERVO_MAX_DEG - SERVO_MIN_DEG)))
+    return int(clamp(servo, SERVO_MIN_DEG, SERVO_MAX_DEG))
+
+
+def _send_control_command(
+    x: float,
+    y: float,
+    speed: float,
+    context: str,
+    servo: int | None = None,
+) -> None:
     result = control.send_control(
         x,
         y,
         speed,
+        servo=servo,
     )
     # Keep failure handling minimal for now; context retained for future logs.
     if not bool(result.get("ok")):
@@ -83,7 +107,13 @@ def _send_control_polar(angle_rad: float, speed: float, context: str) -> None:
         return
     x = math.sin(angle_rad)
     y = math.cos(angle_rad)
-    _send_control_command(x=x, y=y, speed=clamped_speed, context=context)
+    _send_control_command(
+        x=x,
+        y=y,
+        speed=clamped_speed,
+        context=context,
+        servo=_angle_rad_to_servo_deg(angle_rad),
+    )
 
 
 class StateMachine:
@@ -125,6 +155,8 @@ class StateMachine:
         self._find_line_phase = self.FOLLOW_LINE_PHASE_IDLE
         self._line_last_turn_sign = 1.0
         self._retrieved_turn_target_heading: float | None = None
+
+       
         self.remote_control_poll_interval = max(
             float(os.getenv("REMOTE_CONTROL_POLL_INTERVAL", "0.1")),
             0.5,
@@ -417,95 +449,32 @@ class StateMachine:
         global val
         match self.state:
             case State.TESTING:
-                
-                
-
-                
-                # self.follow_line(
-                #     inputs.red_line,
-                #     now=now,
-                #     context="testing_command_pid",
-                #     follow_max_speed=self.line_pid_follow_max_speed,
-                #     heading_rad=inputs.heading_rad,
-                # )
-                
-                if False:
-                    if val % 4 == 0:
-                        # This state is for testing purposes and does not affect the main flow.
-                        direction = normalized_direction(inputs.danger_zone.x, inputs.danger_zone.y)
-                        if direction is not None:
-                            dx, dy = direction
-                            magnitude = (inputs.danger_zone.x * inputs.danger_zone.x + inputs.danger_zone.y * inputs.danger_zone.y) ** 0.5
-                            magnitude /= 6
-                            print(magnitude)
-                            speed = clamp(magnitude, 0.0, 0.5)
-                            _send_control_command(
-                                x=dx,
-                                y=dy,
-                                speed=speed,
-                                context="testing_command",
-                            )
-                        else:
-                            send_stop_command(context="testing_stop")
-                        if (inputs.danger_zone.x**2 + inputs.danger_zone.y**2)**0.5 < 0.5:
-                            val += 1
-                    elif val % 4 == 1:
-                        val += 1
-                        direction = normalized_direction(inputs.red_line.x, inputs.red_line.y)
-                        if direction is not None:
-                            dx, dy = direction
-                            magnitude = (inputs.red_line.x * inputs.red_line.x + inputs.red_line.y * inputs.red_line.y) ** 0.5
-                            magnitude /= 6
-                            print(magnitude)
-                            speed = clamp(magnitude, 0.0, 0.5)
-                            _send_control_command(
-                                x=dx,
-                                y=dy,
-                                speed=speed,
-                                context="testing_command",
-                            )
-                        else:
-                            send_stop_command(context="testing_stop")
-
-                        
-                            
-                    elif val % 4 == 2:
-                        direction = normalized_direction(inputs.target.x, inputs.target.y)
-                        if direction is not None:
-                            dx, dy = direction
-                            magnitude = (inputs.target.x * inputs.target.x + inputs.target.y * inputs.target.y) ** 0.5
-                            magnitude /= 6
-                            print(magnitude)
-                            speed = clamp(magnitude, 0.0, 0.5)
-                            _send_control_command(
-                                x=dx,
-                                y=dy,
-                                speed=speed,
-                                context="testing_command",
-                            )
-                        else:
-                            send_stop_command(context="testing_stop")
-                        if (inputs.target.x**2 + inputs.target.y**2)**0.5 < 0.5:
-                            val += 1
+                if inputs.red_line.detected:
+                    x_cmd = clamp(inputs.red_line.x, -1.0, 1.0)
+                    y_cmd = clamp(inputs.red_line.y, -1.0, 1.0)
+                    clamped_magnitude = (x_cmd * x_cmd + y_cmd * y_cmd) ** 0.5
+                    if clamped_magnitude <= 1e-6:
+                        send_stop_command(context="testing_red_line_passthrough_stop")
+                        self._last_command_at = now
                     else:
-                        direction = normalized_direction(inputs.safe_zone.x, inputs.safe_zone.y)
-                        if direction is not None:
-                            dx, dy = direction
-                            magnitude = (inputs.safe_zone.x * inputs.safe_zone.x + inputs.safe_zone.y * inputs.safe_zone.y) ** 0.5
-                            magnitude /= 6
-                            print(magnitude)
-                            speed = clamp(magnitude, 0.0, 0.5)
-                            _send_control_command(
-                                x=dx,
-                                y=dy,
-                                speed=speed,
-                                context="testing_command",
-                            )
-                        else:
-                            send_stop_command(context="testing_stop")
-                        if (inputs.safe_zone.x ** 2 + inputs.safe_zone.y ** 2) ** 0.5 < 0.5:
-                            val += 1
+                        speed = clamped_magnitude
+                        _send_control_command(
+                            x=x_cmd,
+                            y=y_cmd,
+                            speed=speed,
+                            context="line input",
+                        )
+                        self._last_command_at = now
+                else:
+                    
+                    send_stop_command(context="line input stop")
+                    self._last_command_at = now
 
+            case State.PICKUP:
+                if inputs.red_line.detected:
+                    _send_control_command(x=0, y=0, speed=0, servo=90, context="pickup_stop")
+                    
+                
             case State.REMOTE_CONTROL:
                 should_forward = (
                     now - self._last_remote_control_poll_at

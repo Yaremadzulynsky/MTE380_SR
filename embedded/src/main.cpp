@@ -142,6 +142,14 @@ static void applyDriveFromVector(int8_t x, int8_t y) {
 #endif
 }
 
+static void queueVectorPacket(uint8_t xRaw, uint8_t yRaw, uint8_t servoRaw) {
+  g_pendingX = static_cast<int8_t>(xRaw);
+  g_pendingY = static_cast<int8_t>(yRaw);
+  g_pendingServoAngle = servoRaw;
+  g_pendingPacketType = PACKET_VECTOR_XY;
+  g_packetReady = true;
+}
+
 void onI2cReceive(int howMany) {
   if (howMany <= 0) {
     return;
@@ -157,15 +165,24 @@ void onI2cReceive(int howMany) {
   }
 
   if (bytesRead == 3) {
-    g_pendingX = static_cast<int8_t>(buffer[0]);
-    g_pendingY = static_cast<int8_t>(buffer[1]);
-    g_pendingServoAngle = buffer[2];
-    g_pendingPacketType = PACKET_VECTOR_XY;
-    g_packetReady = true;
+    queueVectorPacket(buffer[0], buffer[1], buffer[2]);
     return;
   }
 
   g_invalidPacket = true;
+}
+
+static void pollSerialPackets() {
+  // Same 3-byte command format as I2C:
+  // [int8 x][int8 y][uint8 angle_0_to_90]
+  while (Serial.available() >= 3) {
+    const uint8_t xRaw = static_cast<uint8_t>(Serial.read());
+    const uint8_t yRaw = static_cast<uint8_t>(Serial.read());
+    const uint8_t servoRaw = static_cast<uint8_t>(Serial.read());
+    noInterrupts();
+    queueVectorPacket(xRaw, yRaw, servoRaw);
+    interrupts();
+  }
 }
 
 void setup() {
@@ -191,11 +208,13 @@ void setup() {
 #if ENABLE_SERIAL_DEBUG
   Serial.print("I2C slave ready at 0x");
   Serial.println(I2C_ADDRESS, HEX);
-  Serial.println("Packet format: [int8 x][int8 y][uint8 angle_0_to_90]");
+  Serial.println("I2C + Serial packet format: [int8 x][int8 y][uint8 angle_0_to_90]");
 #endif
 }
 
 void loop() {
+  pollSerialPackets();
+
   bool hadPacket = false;
   bool hadInvalidPacket = false;
   PacketType packetType = PACKET_NONE;

@@ -57,6 +57,32 @@
               <span class="telemetry-label">Speed</span>
               <span class="telemetry-value" id="speed">0.00</span>
             </div>
+            <div class="telemetry-card">
+              <span class="telemetry-label">Servo (deg)</span>
+              <span class="telemetry-value" id="servoValue">0</span>
+            </div>
+            <div class="servo-controls">
+              <label class="field-label" for="servoRange">Servo Angle</label>
+              <div class="slider-control">
+                <input
+                  id="servoRange"
+                  type="range"
+                  min="0"
+                  max="90"
+                  step="1"
+                  value="0"
+                />
+                <input
+                  id="servoNumber"
+                  type="number"
+                  min="0"
+                  max="90"
+                  step="1"
+                  value="0"
+                />
+              </div>
+              <p class="hint">Set servo position from 0 to 90 degrees.</p>
+            </div>
             <div class="feedback" id="controlFeedback" role="status" aria-live="polite">
               Waiting for input.
             </div>

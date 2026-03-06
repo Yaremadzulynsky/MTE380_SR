@@ -108,8 +108,11 @@ class ControlCommClient:
         x: float,
         y: float,
         speed: float,
+        servo: int | None = None,
     ) -> dict[str, Any]:
         payload = {"x": x, "y": y, "speed": speed}
+        if servo is not None:
+            payload["servo"] = int(servo)
 
         payload_real = {"x": x, "y": y}
 
