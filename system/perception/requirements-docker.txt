@@ -1,0 +1,6 @@
+# Docker: use headless OpenCV (smaller, no GUI). Same API as opencv-python.
+opencv-python-headless
+numpy
+pyserial
+pyyaml
+pytest

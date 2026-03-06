@@ -1,0 +1,57 @@
+fps: 30.0
+roi_y_start: 240
+alpha: 0.9
+show_masks: true
+
+camera:
+  source: webcam
+  webcam_index: 0
+  width: 640
+  height: 480
+
+red1:
+  lo: [0, 120, 80]
+  hi: [10, 255, 255]
+red2:
+  lo: [170, 120, 80]
+  hi: [179, 255, 255]
+green:
+  lo: [35, 60, 60]
+  hi: [85, 255, 255]
+blue:
+  lo: [95, 80, 80]
+  hi: [130, 255, 255]
+danger:
+  lo: [0, 0, 0]
+  hi: [179, 60, 90]
+
+morph:
+  kernel_size: 5
+  open_iters: 1
+  close_iters: 1
+
+heading:
+  min_area: 150.0
+  use_centerline: true
+
+zones:
+  target_min_area: 300.0
+  target_min_circularity: 0.6
+  danger_mode: either
+  danger_ratio_thresh: 0.08
+  danger_area_thresh: 4000.0
+  path_ratio_thresh: 0.03
+  path_area_thresh: 1500.0
+  safe_green_required: false
+  green_ratio_thresh: 0.02
+
+confidence:
+  expected_area: 6000.0
+
+comms:
+  method: udp
+  zone_encoding: string
+  udp_ip: 127.0.0.1
+  udp_port: 5005
+  serial_port: /dev/ttyUSB0
+  serial_baud: 115200
