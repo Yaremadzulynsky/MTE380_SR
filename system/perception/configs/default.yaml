@@ -8,6 +8,8 @@ camera:
   webcam_index: 0
   width: 640
   height: 480
+  backend: auto  # auto | gstreamer | ffmpeg
+  # gstreamer_device: /dev/video0  # optional: override device for GStreamer
 
 red1:
   lo: [0, 120, 80]
@@ -49,9 +51,10 @@ confidence:
   expected_area: 6000.0
 
 comms:
-  method: udp
+  method: http
   zone_encoding: string
-  udp_ip: 127.0.0.1
-  udp_port: 5005
+  udp_ip: localhost
+  udp_port: 8000
   serial_port: /dev/ttyUSB0
   serial_baud: 115200
+  http_url: http://100.72.60.28:8000/inputs

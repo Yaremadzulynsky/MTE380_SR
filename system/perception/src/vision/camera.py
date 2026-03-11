@@ -10,6 +10,35 @@ import cv2
 import numpy as np
 
 
+def build_gstreamer_pipeline(
+    source: int | str,
+    width: int = 640,
+    height: int = 480,
+    fps: float = 30.0,
+    device: str | None = None,
+) -> str:
+    """
+    Build a GStreamer pipeline string for OpenCV VideoCapture.
+    Pipeline must end with appsink for OpenCV to consume frames.
+    """
+    if isinstance(source, int):
+        dev = device or f"/dev/video{source}"
+        # v4l2src -> capsfilter (w,h,fps) -> videoconvert -> BGR -> appsink
+        return (
+            f"v4l2src device={dev} ! "
+            f"video/x-raw,width={width},height={height},framerate={int(fps)}/1 ! "
+            "videoconvert ! video/x-raw,format=BGR ! "
+            "appsink drop=1 max-buffers=1"
+        )
+    # Video file
+    path = str(source)
+    return (
+        f"filesrc location={path} ! "
+        "decodebin ! videoconvert ! video/x-raw,format=BGR ! "
+        "appsink drop=1 max-buffers=1"
+    )
+
+
 @dataclass
 class OpenCVCamera:
     """Simple camera/video source wrapper."""
@@ -20,10 +49,22 @@ class OpenCVCamera:
     fps: float = 30.0
     backend: str = "auto"  # auto | gstreamer | ffmpeg
     threaded: bool = False
+    gstreamer_device: str | None = None  # override /dev/videoN for GStreamer
 
     def __post_init__(self) -> None:
         if self.backend == "gstreamer":
-            self.cap = cv2.VideoCapture(self.source, cv2.CAP_GSTREAMER)
+            pipeline = build_gstreamer_pipeline(
+                self.source,
+                width=self.width,
+                height=self.height,
+                fps=self.fps,
+                device=self.gstreamer_device,
+            )
+            self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            if not self.cap.isOpened():
+                # Pip opencv lacks GStreamer; opencv-python-custom-gst can conflict with system
+                # GStreamer (GLib type errors). Fallback to default backend for local dev.
+                self.cap = cv2.VideoCapture(self.source)
         elif self.backend == "ffmpeg":
             self.cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
         else:

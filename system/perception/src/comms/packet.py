@@ -23,6 +23,9 @@ class PerceptionPacket:
     t: float
     path_detected: bool = False
     path_mask_key: str = "red"
+    target_detected: bool = False
+    target_px: float = 0.0
+    target_py: float = 0.0
 
     def to_dict(self, zone_encoding: str = "string") -> dict[str, float | int | str | bool]:
         data = asdict(self)

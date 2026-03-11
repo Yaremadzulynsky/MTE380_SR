@@ -1,0 +1,21 @@
+# Docker production config: uses GStreamer for webcam capture.
+# Extends defaults; override camera.backend for GStreamer.
+fps: 30.0
+roi_y_start: 240
+alpha: 0.9
+show_masks: false
+
+camera:
+  source: webcam
+  webcam_index: 0
+  width: 640
+  height: 480
+  backend: gstreamer
+  gstreamer_device: /dev/video0
+
+comms:
+  method: http
+  zone_encoding: string
+  udp_ip: 127.0.0.1
+  udp_port: 8000
+  http_url: http://100.72.60.28:8000/inputs

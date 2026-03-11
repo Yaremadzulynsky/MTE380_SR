@@ -33,7 +33,14 @@ def main() -> None:
         cfg.camera.source = args.source
     source = _parse_source(cfg.camera.source, cfg)
 
-    cam = OpenCVCamera(source=source, width=cfg.camera.width, height=cfg.camera.height, fps=cfg.fps)
+    cam = OpenCVCamera(
+        source=source,
+        width=cfg.camera.width,
+        height=cfg.camera.height,
+        fps=cfg.fps,
+        backend=cfg.camera.backend,
+        gstreamer_device=cfg.camera.gstreamer_device,
+    )
     frame = cam.read()
     if frame is None:
         cam.release()

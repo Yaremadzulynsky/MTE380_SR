@@ -1,11 +1,11 @@
 """Read perception JSON lines from stdin and POST to an inputs endpoint.
 
 Payload schema:
-  {"red_line": {"detected": bool, "vector": {"x": float, "y": float}}}
-  or
-  {"blue_line": {"detected": bool, "vector": {"x": float, "y": float}}}
-
-Uses path_mask_key from each packet to choose red_line vs blue_line.
+  {
+    "target": {"detected": bool, "vector": {"x": float, "y": float}},
+    "red_line": {"detected": bool, "vector": {"x": float, "y": float}}
+  }
+  or blue_line when path_mask_key is blue.
 """
 
 from __future__ import annotations
@@ -91,6 +91,10 @@ def main() -> None:
             latest_py = data.get("py", 1.0)
             latest_detected = data.get("path_detected", False)
             latest_path_mask = data.get("path_mask_key", "red")
+            # target.detected: True when blue circular blob (TARGET zone), False otherwise
+            latest_target_detected = bool(data.get("target_detected", False))
+            latest_target_px = data.get("target_px", 0.0)
+            latest_target_py = data.get("target_py", 0.0)
         except (json.JSONDecodeError, TypeError):
             continue
 
@@ -109,10 +113,14 @@ def main() -> None:
 
         line_key = "blue_line" if latest_path_mask == "blue" else "red_line"
         payload = {
+            "target": {
+                "detected": latest_target_detected,
+                "vector": {"x": latest_target_px, "y": latest_target_py},
+            },
             line_key: {
                 "detected": bool(latest_detected),
                 "vector": {"x": latest_px, "y": latest_py},
-            }
+            },
         }
         body = json.dumps(payload).encode("utf-8")
         sys.stderr.write(f"post_vectors: sending {json.dumps(payload)}\n")

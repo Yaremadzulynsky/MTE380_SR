@@ -58,12 +58,13 @@ class ConfidenceConfig:
 
 @dataclass
 class CommsConfig:
-    method: str = "udp"  # udp | serial | stdout
+    method: str = "udp"  # udp | serial | stdout | http
     zone_encoding: str = "string"  # string | int
     udp_ip: str = "127.0.0.1"
     udp_port: int = 5005
     serial_port: str = "/dev/ttyUSB0"
     serial_baud: int = 115200
+    http_url: str = ""  # e.g. http://100.72.60.28:8000/inputs
 
 
 @dataclass
@@ -72,6 +73,8 @@ class CameraConfig:
     webcam_index: int = 0
     width: int = 640
     height: int = 480
+    backend: str = "auto"  # auto | gstreamer | ffmpeg
+    gstreamer_device: str | None = None  # e.g. /dev/video0; overrides webcam_index when set
 
 
 @dataclass

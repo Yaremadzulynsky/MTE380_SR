@@ -9,6 +9,7 @@ from typing import Any
 
 import cv2
 
+from src.comms.http_tx import HTTPSender
 from src.comms.packet import PerceptionPacket
 from src.comms.serial_tx import SerialSender
 from src.comms.udp_tx import UDPSender
@@ -26,13 +27,18 @@ def process_roi(
     roi_bgr: Any,
     state: PipelineState,
     cfg: AppConfig,
-) -> tuple[float, float, str, float, bool, str, dict[str, Any]]:
+) -> tuple[float, float, str, float, bool, str, bool, float, float, dict[str, Any]]:
     """
     Single pipeline function:
-      ROI BGR -> (px, py, zone, gamma, path_detected, path_mask_key, debug_artifacts)
+      ROI BGR -> (px, py, zone, gamma, path_detected, path_mask_key, target_detected, target_px, target_py, debug_artifacts)
     """
     out: PipelineOutput = run_pipeline(roi_bgr=roi_bgr, state=state, cfg=cfg)
-    return out.px, out.py, out.zone, out.gamma, out.path_detected, out.path_mask_key, out.debug_artifacts
+    return (
+        out.px, out.py, out.zone, out.gamma,
+        out.path_detected, out.path_mask_key,
+        out.target_detected, out.target_px, out.target_py,
+        out.debug_artifacts,
+    )
 
 
 def _make_sender(method: str, cfg: AppConfig) -> Any:
@@ -40,6 +46,10 @@ def _make_sender(method: str, cfg: AppConfig) -> Any:
         return UDPSender(cfg.comms.udp_ip, cfg.comms.udp_port)
     if method == "serial":
         return SerialSender(cfg.comms.serial_port, cfg.comms.serial_baud)
+    if method == "http":
+        if not cfg.comms.http_url:
+            raise ValueError("comms.method is 'http' but comms.http_url is not set")
+        return HTTPSender(cfg.comms.http_url)
     if method == "stdout":
         return None
     raise ValueError(f"Unsupported comms method: {method}")
@@ -62,9 +72,8 @@ def main() -> None:
         default=None,
         help="test: GUI + heading arrow + packet logging (stdout). production: full packet over UDP/serial, no GUI",
     )
-    parser.add_argument("--no-gui", action="store_true", help="Disable OpenCV debug windows")
     parser.add_argument("--source", default=None, help="webcam or video:/path/to/file")
-    parser.add_argument("--comms", choices=["udp", "serial", "stdout"], default=None)
+    parser.add_argument("--comms", choices=["udp", "serial", "stdout", "http"], default=None)
     parser.add_argument("--fps", type=float, default=None)
     args = parser.parse_args()
 
@@ -81,17 +90,16 @@ def main() -> None:
             cfg.comms.method = "stdout"
         else:
             cfg.comms.method = args.comms
-        gui = not args.no_gui
+        gui = not getattr(args, "no_gui", False)
     elif args.mode == "production":
-        if args.comms is None:
-            cfg.comms.method = "udp"
-        else:
+        if args.comms is not None:
             cfg.comms.method = args.comms
+        # else: use cfg.comms.method from config (http in default/docker)
         gui = False  # production: no GUI
     else:
         if args.comms is not None:
             cfg.comms.method = args.comms
-        gui = not args.no_gui
+        gui = not getattr(args, "no_gui", False)
     source = _parse_source(cfg.camera.source, cfg)
     sender = _make_sender(cfg.comms.method, cfg)
     regulator = LoopRegulator(target_hz=cfg.fps)
@@ -101,12 +109,15 @@ def main() -> None:
         state.path_mask_key = "blue"
         log("path_mask_blue", reason="test clip uses blue line")
 
+    backend = "gstreamer" if isinstance(source, str) else cfg.camera.backend
     try:
         cam = OpenCVCamera(
             source=source,
             width=cfg.camera.width,
             height=cfg.camera.height,
             fps=cfg.fps,
+            backend=backend,
+            gstreamer_device=cfg.camera.gstreamer_device,
         )
     except RuntimeError as exc:
         raise SystemExit(f"Camera initialization failed: {exc}") from exc
@@ -122,7 +133,7 @@ def main() -> None:
                 break
 
             roi = crop_roi(frame, cfg.roi_y_start)
-            px, py, zone, gamma, path_detected, path_mask_key, debug = process_roi(roi, state, cfg)
+            px, py, zone, gamma, path_detected, path_mask_key, target_detected, target_px, target_py, debug = process_roi(roi, state, cfg)
             # Robot frame: X+ right, Y+ forward; clamp so sqrt(px^2+py^2) <= 1 (max speed)
             px_out, py_out = to_robot_frame_clamped(px, py)
 
@@ -134,6 +145,9 @@ def main() -> None:
                 t=time.time(),
                 path_detected=path_detected,
                 path_mask_key=path_mask_key,
+                target_detected=target_detected,
+                target_px=target_px,
+                target_py=target_py,
             )
             line = pkt.to_json(zone_encoding=cfg.comms.zone_encoding)
             if sender is None:

@@ -122,7 +122,7 @@ class StateMachine:
     FOLLOW_LINE_PHASE_SCAN_RIGHT = "to_right"
 
     def __init__(self, failed_pickup_limit: int = 3) -> None:
-        self.state = State.TESTING
+        self.state = State.SEARCHING_DEMO
         # self.state = State.SEARCHING
         self.context = StateContext()
         self.failed_pickup_limit = failed_pickup_limit
@@ -448,7 +448,7 @@ class StateMachine:
 
         global val
         match self.state:
-            case State.TESTING:
+            case State.SEARCHING_DEMO:
                 if inputs.red_line.detected:
                     x_cmd = clamp(inputs.red_line.x, -1.0, 1.0)
                     y_cmd = clamp(inputs.red_line.y, -1.0, 1.0)
@@ -462,18 +462,27 @@ class StateMachine:
                             x=x_cmd,
                             y=y_cmd,
                             speed=speed,
+                            servo=0, 
                             context="line input",
                         )
                         self._last_command_at = now
                 else:
                     
+                    
                     send_stop_command(context="line input stop")
                     self._last_command_at = now
+                
+                if inputs.target.detected:
+                    next_state = State.PICKUP
+                    label = "PU"
 
             case State.PICKUP:
                 if inputs.red_line.detected:
                     _send_control_command(x=0, y=0, speed=0, servo=90, context="pickup_stop")
-                    
+                    self._last_command_at = now    
+                if not inputs.target.detected:
+                    next_state = State.SEARCHING_DEMO
+                    label = "PU"
                 
             case State.REMOTE_CONTROL:
                 should_forward = (

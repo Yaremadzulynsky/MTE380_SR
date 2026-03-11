@@ -204,12 +204,14 @@ def main() -> None:
             if Path(source).name in {"test_video.mp4", "test_run.mp4"}:
                 # These test clips use a blue line instead of red tape.
                 state.path_mask_key = "blue"
+        backend = "gstreamer" if isinstance(source, str) else args.backend
         cam = OpenCVCamera(
             source=source,
             width=cfg.camera.width,
             height=cfg.camera.height,
             fps=cfg.fps,
-            backend=args.backend,
+            backend=backend,
+            gstreamer_device=cfg.camera.gstreamer_device,
             threaded=True,
         )
 

@@ -1,27 +1,46 @@
 services:
-  # control-communication:
-  #   build:
-  #     context: ./control_communication
-  #   container_name: control-communication
-  #   network_mode: host
-  #   # devices:
-  #     # - "/dev/i2c-1:/dev/i2c-1"
-  #     # - "/dev/cu.usbmodem21401:/dev/cu.usbmodem21401"
-  #   environment:
-  #     PORT: 5001
-  #     HARDWARE_MODE: "serial"
-  #     SERIAL_PORT: "/dev/cu.usbmodem21401"
-  #     SERIAL_BAUDRATE: "115200"
-  #     SERIAL_TIMEOUT_S: "1.0"
-  #     SERIAL_WRITE_TIMEOUT_S: "1.0"
-  #     PID_P_DEFAULT: "0"
-  #     PID_I_DEFAULT: "0"
-  #     PID_D_DEFAULT: "0"
-  #     PID_SETTINGS_PATH: "/var/log/control-communication/pid-settings.json"
-  #     LOG_PATH: "/var/log/control-communication/control-communication.log"
-  #   volumes:
-  #     - metrics-pipe:/var/run/metrics
-  #     - service-logs:/var/log
+  perception:
+    build:
+      context: ./perception
+    container_name: perception
+    network_mode: host
+    devices:
+      - "/dev/video0:/dev/video0"
+    # environment:
+    #   PORT: 4000
+    #   CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+    #   CONTROL_COMM_CONTROL_PATH: "/control"
+    #   STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+    #   STATE_MACHINE_INPUT_PATH: "/inputs"
+    #   LOG_PATH: "/var/log/perception/perception.log"
+    # volumes:
+    #   - service-logs:/var/log
+    # depends_on:
+    #   - control-communication
+    #   - state-machine
+  control-communication:
+    build:
+      context: ./control_communication
+    container_name: control-communication
+    network_mode: host
+    devices:
+      - "/dev/i2c-1:/dev/i2c-1"
+      # - "/dev/cu.usbmodem21401:/dev/cu.usbmodem21401"
+    environment:
+      PORT: 5001
+      HARDWARE_MODE: "i2c"
+      SERIAL_PORT: "/dev/cu.usbmodem21401"
+      SERIAL_BAUDRATE: "115200"
+      SERIAL_TIMEOUT_S: "1.0"
+      SERIAL_WRITE_TIMEOUT_S: "1.0"
+      PID_P_DEFAULT: "0"
+      PID_I_DEFAULT: "0"
+      PID_D_DEFAULT: "0"
+      PID_SETTINGS_PATH: "/var/log/control-communication/pid-settings.json"
+      LOG_PATH: "/var/log/control-communication/control-communication.log"
+    volumes:
+      - metrics-pipe:/var/run/metrics
+      - service-logs:/var/log
 
   control-screen:
     build:
@@ -47,8 +66,8 @@ services:
     volumes:
       - metrics-pipe:/var/run/metrics
       - service-logs:/var/log
-    # depends_on:
-    #   - control-communication
+    depends_on:
+      - control-communication
 
   metrics-aggregator:
     build:
@@ -82,8 +101,8 @@ services:
       PORT: "8000"
     volumes:
       - service-logs:/var/log
-    # depends_on:
-    #   - control-communication
+    depends_on:
+      - control-communication
 
   computer-vision:
     build:

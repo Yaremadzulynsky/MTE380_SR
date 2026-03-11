@@ -118,7 +118,7 @@ class ControlCommClient:
 
         # print(f"Posting to control communication: {payload_real}")
         # post to the actual thing just as a test
-        self._post("http://192.168.0.101:5001/vector", payload_real)
+        self._post("http://100.72.60.28/:5001/vector", payload_real)
         return self._post(self._control_url, payload)
 
     def get_control(self) -> dict[str, Any]:

@@ -42,8 +42,9 @@ def classify_zone(
 
     # TARGET: blue circular blobs
     target_found = False
-    target_best = {"area": 0.0, "circularity": 0.0}
+    target_best: dict[str, Any] = {"area": 0.0, "circularity": 0.0, "cx": 0.0, "cy": 0.0}
     blue_contours, _ = _contour_areas(blue)
+    h, w = blue.shape[:2]
     for c in blue_contours:
         area = float(cv2.contourArea(c))
         if area < zone_cfg.target_min_area:
@@ -53,7 +54,10 @@ def classify_zone(
         if circ >= zone_cfg.target_min_circularity:
             target_found = True
             if area > target_best["area"]:
-                target_best = {"area": area, "circularity": circ}
+                M = cv2.moments(c)
+                cx = float(M["m10"] / M["m00"]) if M["m00"] > 0 else w / 2.0
+                cy = float(M["m01"] / M["m00"]) if M["m00"] > 0 else h / 2.0
+                target_best = {"area": area, "circularity": circ, "cx": cx, "cy": cy}
 
     danger_by_ratio = danger_ratio >= zone_cfg.danger_ratio_thresh
     danger_by_area = danger_area_largest >= zone_cfg.danger_area_thresh

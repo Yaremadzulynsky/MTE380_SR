@@ -31,7 +31,10 @@ class PipelineOutput:
     gamma: float
     path_detected: bool
     path_mask_key: str
-    debug_artifacts: dict[str, Any]
+    target_detected: bool = False
+    target_px: float = 0.0
+    target_py: float = 0.0
+    debug_artifacts: dict[str, Any] = field(default_factory=dict)
 
 
 def run_pipeline(roi_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) -> PipelineOutput:
@@ -61,6 +64,23 @@ def run_pipeline(roi_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) -> P
 
     path_detected = heading_debug.get("fit_ok", False)
 
+    # target_detected: True when blue circular blob found (TARGET zone), False otherwise
+    target_found = zone_debug.get("target_found", False)
+    target_detected = bool(target_found)
+    target_px, target_py = 0.0, 0.0
+    if target_detected:
+        tb = zone_debug.get("target_best", {})
+        cx = tb.get("cx", 0.0)
+        cy = tb.get("cy", 0.0)
+        h, w = masks["blue"].shape[:2]
+        if w > 0 and h > 0:
+            dx = (cx - w / 2.0) / (w / 2.0)
+            dy = (h / 2.0 - cy) / (h / 2.0)
+            norm = float(np.linalg.norm([dx, dy]))
+            if norm > 1e-9:
+                target_px = float(dx / norm)
+                target_py = float(dy / norm)
+
     return PipelineOutput(
         px=float(p_filt[0]),
         py=float(p_filt[1]),
@@ -68,6 +88,9 @@ def run_pipeline(roi_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) -> P
         gamma=float(gamma),
         path_detected=path_detected,
         path_mask_key=state.path_mask_key,
+        target_detected=target_detected,
+        target_px=target_px,
+        target_py=target_py,
         debug_artifacts={
             "masks": masks,
             "raw_heading": raw_heading,
