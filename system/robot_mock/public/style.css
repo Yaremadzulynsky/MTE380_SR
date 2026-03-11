@@ -87,6 +87,10 @@ button:hover {
   background: rgba(255, 255, 255, 0.1);
 }
 
+#turn-sensitivity-btn {
+  min-width: 114px;
+}
+
 .toggle {
   display: inline-flex;
   gap: 8px;

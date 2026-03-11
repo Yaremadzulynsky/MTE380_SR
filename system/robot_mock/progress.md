@@ -236,3 +236,67 @@ Verification
 - `python3 -m py_compile system/state_machine/sm_state_machine.py system/control_communication/app.py` passes.
 - `node --check system/control_screen/server.js` passes.
 - `node --check system/control_screen/public/app.js` passes.
+
+Update (remove robot-mock reads from control-communication /control)
+- Removed robot-mock backend dependency on `CONTROL_COMM_BASE_URL` and `CONTROL_COMM_CONTROL_PATH`:
+  - `system/robot_mock/app.py`
+  - `/api/system` now returns a local neutral control payload (`x=0, y=0, speed=0`) and only fetches state from state-machine (`/states`).
+- Updated robot-mock compose env to remove `CONTROL_COMM_*` wiring:
+  - `system/docker-compose.yaml` (`robot-mock` service).
+- Updated robot-mock docs to reflect new behavior:
+  - `system/robot_mock/README.md`.
+
+Verification
+- `python3 -m py_compile system/robot_mock/app.py` passes.
+- `rg -n "CONTROL_COMM|control-communication|/control" system/robot_mock -S` confirms no runtime `/control` fetch path remains in robot-mock backend.
+
+TODO
+- If autonomous movement should still be driven by state-machine outputs without reading control-communication, add a state-machine endpoint for the currently desired command and point robot-mock to that.
+- Updated robot-mock UI help text to remove control-communication driving instruction:
+  - `system/robot_mock/public/index.html`
+- Wired direct state-machine -> robot-mock simulator control mirroring:
+  - Added `POST /api/sim-control` in `system/robot_mock/app.py` to accept `{x,y,speed}` and store latest simulated control.
+  - `GET /api/system` now reports last posted simulator control command (source: `state_machine_posted_sim_control`).
+  - Updated `system/state_machine/sm_control_comm.py` mirror post target from control-communication vector endpoint to robot-mock endpoint.
+  - Added `ROBOT_MOCK_CONTROL_URL` config plumbed through `system/state_machine/sm_state_machine.py` and `system/docker-compose.yaml`.
+
+Verification
+- `python3 -m py_compile system/state_machine/sm_control_comm.py system/state_machine/sm_state_machine.py system/robot_mock/app.py` passes.
+
+Update (simulator mirroring moved to control-communication)
+- Moved simulator-forward responsibility to `control_communication` so every accepted `/vector` or `/control` command is forwarded to robot-mock regardless of hardware mode.
+  - Added `ROBOT_MOCK_CONTROL_URL` env (default `http://localhost:8200/api/sim-control`) and `post_to_simulator(...)` in `system/control_communication/app.py`.
+  - Forwarding happens on every valid command path via `process_vector_payload(...)`.
+- Removed temporary direct state-machine -> robot-mock mirror from `system/state_machine/sm_control_comm.py`.
+- Removed `ROBOT_MOCK_CONTROL_URL` wiring from state-machine; added it to control-communication service env in compose.
+
+Verification
+- `python3 -m py_compile system/control_communication/app.py system/state_machine/sm_control_comm.py system/state_machine/sm_state_machine.py system/robot_mock/app.py` passes.
+- Fixed joystick non-reaction path when state-machine is in `REMOTE_CONTROL`:
+  - `system/control_screen/server.js` sends joystick vectors to state-machine `/inputs` as `red_line`.
+  - `system/state_machine/sm_state_machine.py` (`State.REMOTE_CONTROL`) now consumes `inputs.red_line` directly and emits control commands (stop on near-zero magnitude), instead of only polling `/control`.
+  - This restores flow: control-screen -> state-machine -> control-communication -> robot-mock simulator mirror.
+
+Verification
+- `python3 -m py_compile system/state_machine/sm_state_machine.py system/control_communication/app.py system/robot_mock/app.py system/control_screen/server.js` passes.
+- Added turn sensitivity control in robot-mock HUD:
+  - New button `#turn-sensitivity-btn` in `system/robot_mock/public/index.html`.
+  - Button cycles turn presets `Low/Medium/High` in `system/robot_mock/public/main.js`.
+  - Presets update `CONFIG.turnAggression`, `CONFIG.maxTurnRate`, and `CONFIG.turnInPlaceRate` live.
+  - Selection persists via `localStorage` key `robot_mock_turn_sensitivity_index`.
+  - Added `turn_sensitivity` fields to `render_game_to_text()` output.
+  - Added button width style in `system/robot_mock/public/style.css`.
+
+Verification
+- `node --check system/robot_mock/public/main.js` passes.
+- Playwright skill client check attempted after turn-sensitivity update:
+  - `node "$WEB_GAME_CLIENT" --url http://localhost:8200 ...` failed with `ERR_MODULE_NOT_FOUND: Cannot find package 'playwright'`.
+  - Used MCP Playwright browser interactions as fallback; confirmed button text cycles `Turn: High -> Turn: Low -> Turn: Medium`.
+- Updated robot-mock defaults:
+  - `Send sim inputs` now defaults OFF.
+  - `Show vectors` now defaults OFF.
+  - Turn sensitivity default preset is now `Low`.
+  - Added explicit `ui.inputsToggle.checked = state.sendInputs` on init to keep checkbox synced with runtime default.
+
+Verification
+- `node --check system/robot_mock/public/main.js` passes.

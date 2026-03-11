@@ -4,15 +4,15 @@ services:
       context: ./perception
     container_name: perception
     network_mode: host
-    devices:
-      - "/dev/video0:/dev/video0"
-    # environment:
-    #   PORT: 4000
-    #   CONTROL_COMM_BASE_URL: "http://control-communication:5001"
-    #   CONTROL_COMM_CONTROL_PATH: "/control"
-    #   STATE_MACHINE_BASE_URL: "http://state-machine:8000"
-    #   STATE_MACHINE_INPUT_PATH: "/inputs"
-    #   LOG_PATH: "/var/log/perception/perception.log"
+    # devices:
+    #   - "/dev/video0:/dev/video0"
+    environment:
+      PORT: 4000
+      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+      CONTROL_COMM_CONTROL_PATH: "/control"
+      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_INPUT_PATH: "/inputs"
+      LOG_PATH: "/var/log/perception/perception.log"
     # volumes:
     #   - service-logs:/var/log
     # depends_on:
@@ -23,12 +23,13 @@ services:
       context: ./control_communication
     container_name: control-communication
     network_mode: host
-    devices:
-      - "/dev/i2c-1:/dev/i2c-1"
+    # devices:
+    #   - "/dev/i2c-1:/dev/i2c-1"
       # - "/dev/cu.usbmodem21401:/dev/cu.usbmodem21401"
     environment:
       PORT: 5001
-      HARDWARE_MODE: "i2c"
+      HARDWARE_MODE: "mock"
+      ROBOT_MOCK_CONTROL_URL: "http://localhost:8200/api/sim-control"
       SERIAL_PORT: "/dev/cu.usbmodem21401"
       SERIAL_BAUDRATE: "115200"
       SERIAL_TIMEOUT_S: "1.0"
@@ -49,12 +50,13 @@ services:
     network_mode: host
     environment:
       PORT: 3000
-      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+      CONTROL_COMM_BASE_URL: "http://localhost:5001"
       CONTROL_COMM_P_PATH: "/pid/proportional"
       CONTROL_COMM_I_PATH: "/pid/integral"
       CONTROL_COMM_D_PATH: "/pid/derivative"
       CONTROL_COMM_CONTROL_PATH: "/control"
-      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_BASE_URL: "http://localhost:8000"
+      STATE_MACHINE_INPUT_PATH: "/inputs"
       STATE_MACHINE_LINE_FOLLOW_PID_PATH: "/line-follow-pid"
       PID_P_MIN: "-1000"
       PID_P_MAX: "1000"
@@ -94,7 +96,7 @@ services:
     network_mode: host
     environment:
       LOG_PATH: "/var/log/state-machine/state-machine.log"
-      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+      CONTROL_COMM_BASE_URL: "http://localhost:5001"
       LINE_PID_SETTINGS_PATH: "/var/log/state-machine/line-follow-pid.json"
       TICK_INTERVAL: "0.01"
       FAILED_PICKUP_LIMIT: "3"
@@ -130,8 +132,6 @@ services:
     network_mode: host
     environment:
       PORT: "8200"
-      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
-      CONTROL_COMM_CONTROL_PATH: "/control"
       STATE_MACHINE_BASE_URL: "http://state-machine:8000"
       STATE_MACHINE_INPUT_PATH: "/inputs"
       STATE_MACHINE_STATES_PATH: "/states"

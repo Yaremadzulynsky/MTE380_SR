@@ -7,7 +7,7 @@ from sm_parse import parse_finite_float
 
 
 class State(Enum):
-    SEARCHING_DEMO = "testing"
+    SEARCHING_DEMO = "searching_demo"
     PICKUP = "pickup"
     REMOTE_CONTROL = "remote_control"
     SEARCHING = "searching"

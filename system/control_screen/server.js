@@ -19,6 +19,8 @@ const CONTROL_COMM_CONTROL_PATH =
   process.env.CONTROL_COMM_CONTROL_PATH || '/control';
 const STATE_MACHINE_BASE_URL =
   process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
+const STATE_MACHINE_INPUT_PATH =
+  process.env.STATE_MACHINE_INPUT_PATH || '/inputs';
 const STATE_MACHINE_LINE_FOLLOW_PID_PATH =
   process.env.STATE_MACHINE_LINE_FOLLOW_PID_PATH || '/line-follow-pid';
 const STATE_MACHINE_STATES_PATH =
@@ -87,6 +89,7 @@ app.get('/api/config', (req, res) => {
     stateMachine: {
       baseUrl: STATE_MACHINE_BASE_URL,
       paths: {
+        inputs: STATE_MACHINE_INPUT_PATH,
         lineFollowPid: STATE_MACHINE_LINE_FOLLOW_PID_PATH,
         states: STATE_MACHINE_STATES_PATH,
         setState: STATE_MACHINE_SET_STATE_PATH
@@ -323,7 +326,7 @@ app.post('/api/control', async (req, res) => {
   if (!Number.isFinite(parsedY)) {
     errors.y = 'Y must be a finite number.';
   }
-  if (!Number.isFinite(parsedSpeed)) {
+  if (speed !== undefined && speed !== null && speed !== '' && !Number.isFinite(parsedSpeed)) {
     errors.speed = 'Speed must be a finite number.';
   }
   if (servo !== undefined && servo !== null && servo !== '' && !Number.isFinite(parsedServo)) {
@@ -355,24 +358,26 @@ app.post('/api/control', async (req, res) => {
 
   const command = {
     x: parsedX,
-    y: parsedY,
-    speed: parsedSpeed
+    y: parsedY
   };
+  if (Number.isFinite(parsedSpeed)) {
+    command.speed = parsedSpeed;
+  }
   if (Number.isFinite(parsedServo)) {
     command.servo = parsedServo;
   }
 
-  const result = await sendControlCommand(command);
+  const result = await sendRedLineInput(command);
 
   if (!result || result.error) {
-    logInsight('control_command_error', { error: result?.error });
+    logInsight('red_line_input_error', { error: result?.error });
     return res.status(502).json({
-      message: 'Failed to send control command.',
+      message: 'Failed to send red-line input to state machine.',
       error: result?.error
     });
   }
 
-  logInsight('control_command_ok', { command: result.command });
+  logInsight('red_line_input_ok', { command: result.command });
   return res.json({ command: result.command });
 });
 
@@ -508,6 +513,10 @@ function getStateMachineSetStateUrl() {
   return new URL(STATE_MACHINE_SET_STATE_PATH, STATE_MACHINE_BASE_URL).toString();
 }
 
+function getStateMachineInputsUrl() {
+  return new URL(STATE_MACHINE_INPUT_PATH, STATE_MACHINE_BASE_URL).toString();
+}
+
 async function fetchControlHealth() {
   const url = getControlCommHealthUrl();
 
@@ -591,8 +600,17 @@ async function setPidValue(kind, value) {
   }
 }
 
-async function sendControlCommand(command) {
-  const url = new URL(CONTROL_COMM_CONTROL_PATH, CONTROL_COMM_BASE_URL).toString();
+async function sendRedLineInput(command) {
+  const url = getStateMachineInputsUrl();
+  const payload = {
+    red_line: {
+      detected: true,
+      vector: {
+        x: command.x,
+        y: command.y
+      }
+    }
+  };
 
   try {
     const response = await fetch(url, {
@@ -601,7 +619,7 @@ async function sendControlCommand(command) {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/plain'
       },
-      body: JSON.stringify(command)
+      body: JSON.stringify(payload)
     });
 
     const body = await response.text();
@@ -610,10 +628,7 @@ async function sendControlCommand(command) {
     }
 
     const parsed = safeJsonParse(body);
-    if (parsed && parsed.command) {
-      return { command: parsed.command };
-    }
-
+    // Keep response shape expected by control UI.
     return { command };
   } catch (err) {
     return { error: err.message };

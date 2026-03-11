@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import atexit
+import json
 import math
 import os
 import signal
 import threading
 import time
 from typing import Any, Optional
+from urllib import request as urlrequest
 
 from flask import Flask, jsonify, request
 from smbus2 import SMBus, i2c_msg
@@ -48,6 +50,9 @@ MODE = parse_hardware_mode()
 SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "0")
 SERVO_MAX_DEG = parse_env_int("SERVO_MAX_DEG", "90")
 SERVO_DEFAULT_DEG = parse_env_int("SERVO_DEFAULT_DEG", "0")
+ROBOT_MOCK_CONTROL_URL = (
+    os.getenv("ROBOT_MOCK_CONTROL_URL") or "http://localhost:8200/api/sim-control"
+).strip()
 
 app = Flask(__name__)
 
@@ -238,6 +243,13 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
     if error:
         return {"ok": False, **error, "payload": payload}, 400
     speed_value = encoded["speed"] if encoded["speed"] is not None else 0.0
+    sim_payload = {
+        "x": encoded["x_input"],
+        "y": encoded["y_input"],
+        "speed": speed_value,
+        "servo": encoded["servo_deg"],
+    }
+    sim_result = post_to_simulator(sim_payload)
 
     if MODE == "i2c":
         try:
@@ -348,6 +360,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "left_int8": encoded["left_int8"],
             "right_int8": encoded["right_int8"],
             "bytes": encoded["bytes"],
+            "sim_forwarded": sim_result.get("ok", False),
         },
     )
 
@@ -383,10 +396,33 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 "active": MODE == "serial",
             },
             "mode": MODE,
+            "simulator": sim_result,
             "ts": ts,
         },
         200,
     )
+
+
+def post_to_simulator(payload: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    req = urlrequest.Request(
+        ROBOT_MOCK_CONTROL_URL,
+        data=body,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=0.25) as response:
+            return {"ok": 200 <= response.status < 300, "status_code": int(response.status)}
+    except Exception as exc:
+        log_line(
+            "simulator_forward_fail",
+            {
+                "url": ROBOT_MOCK_CONTROL_URL,
+                "error": repr(exc),
+            },
+        )
+        return {"ok": False, "error": str(exc)}
 
 
 @app.get("/health")

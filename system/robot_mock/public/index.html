@@ -24,6 +24,7 @@
         <button id="pause-btn" title="Toggle pause (p)">Pause</button>
         <button id="restart-fsm-btn" title="Reset state-machine to searching">Restart FSM</button>
         <button id="pen-toggle-btn" title="Toggle line drawing mode (l)">Pen: Off</button>
+        <button id="turn-sensitivity-btn" title="Cycle turn sensitivity">Turn: Low</button>
         <button id="clear-line-btn" title="Reset line to home→target">Clear Line</button>
         <button id="save-course-btn" title="Save course as JSON">Save Course</button>
         <button id="load-course-btn" title="Load course from JSON">Load Course</button>
@@ -33,11 +34,11 @@
           <span>Manual override (WASD)</span>
         </label>
         <label class="toggle">
-          <input type="checkbox" id="inputs-toggle" checked />
+          <input type="checkbox" id="inputs-toggle" />
           <span>Send sim inputs</span>
         </label>
         <label class="toggle">
-          <input type="checkbox" id="vectors-toggle" checked />
+          <input type="checkbox" id="vectors-toggle" />
           <span>Show vectors</span>
         </label>
         <div class="fov-control">
@@ -64,7 +65,7 @@
           <li><span class="pill key">l</span> toggle pen mode</li>
           <li><span class="pill key">f</span> fullscreen</li>
           <li>Save/load course JSON (path + POIs)</li>
-          <li>Use control-screen to send x/y/speed to control-communication</li>
+          <li>Enable Manual Override to drive with keyboard input in the simulator</li>
         </ul>
       </div>
     </div>

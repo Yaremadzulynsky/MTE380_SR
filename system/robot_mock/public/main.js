@@ -12,6 +12,7 @@
     pauseBtn: document.getElementById('pause-btn'),
     restartFsmBtn: document.getElementById('restart-fsm-btn'),
     penToggleBtn: document.getElementById('pen-toggle-btn'),
+    turnSensitivityBtn: document.getElementById('turn-sensitivity-btn'),
     clearLineBtn: document.getElementById('clear-line-btn'),
     saveCourseBtn: document.getElementById('save-course-btn'),
     loadCourseBtn: document.getElementById('load-course-btn'),
@@ -43,6 +44,12 @@
     pollIntervalMs: 100
   };
 
+  const TURN_SENSITIVITY_PRESETS = [
+    { label: 'Low', turnAggression: 0.26, maxTurnRate: 1.8, turnInPlaceRate: 1.6 },
+    { label: 'Medium', turnAggression: 0.45, maxTurnRate: 3.0, turnInPlaceRate: 2.4 },
+    { label: 'High', turnAggression: 0.78, maxTurnRate: 4.8, turnInPlaceRate: 3.8 }
+  ];
+
   const state = {
     // Starts paused; will auto-run once a non-zero control command arrives.
     mode: 'paused',
@@ -52,8 +59,8 @@
     lastSendOk: null,
     manualPaused: false,
     manualOverride: false,
-    sendInputs: true,
-    showVectors: true,
+    sendInputs: false,
+    showVectors: false,
     keys: new Set(),
     system: {
       control: { x: 0, y: 0, speed: 0 },
@@ -79,6 +86,7 @@
       { x: 1.2, y: 1.2 },
       { x: 9.8, y: 5.6 }
     ],
+    turnSensitivityIndex: 0,
     penMode: false,
     drawingLine: false,
     penBackupPath: null,
@@ -921,6 +929,27 @@
     updatePenButton();
   }
 
+  function updateTurnSensitivityButton() {
+    if (!ui.turnSensitivityBtn) return;
+    const preset = TURN_SENSITIVITY_PRESETS[state.turnSensitivityIndex] || TURN_SENSITIVITY_PRESETS[1];
+    ui.turnSensitivityBtn.textContent = `Turn: ${preset.label}`;
+    ui.turnSensitivityBtn.title = `Turn sensitivity is ${preset.label}. Click to cycle.`;
+  }
+
+  function setTurnSensitivity(index) {
+    const normalized = ((index % TURN_SENSITIVITY_PRESETS.length) + TURN_SENSITIVITY_PRESETS.length) % TURN_SENSITIVITY_PRESETS.length;
+    const preset = TURN_SENSITIVITY_PRESETS[normalized];
+    state.turnSensitivityIndex = normalized;
+    CONFIG.turnAggression = preset.turnAggression;
+    CONFIG.maxTurnRate = preset.maxTurnRate;
+    CONFIG.turnInPlaceRate = preset.turnInPlaceRate;
+    updateTurnSensitivityButton();
+  }
+
+  function cycleTurnSensitivity() {
+    setTurnSensitivity(state.turnSensitivityIndex + 1);
+  }
+
   function resetPathToHomeTarget() {
     state.path = [
       { x: state.home.x, y: state.home.y },
@@ -1038,6 +1067,12 @@
         depth: +CONFIG.visionDepth.toFixed(3),
         width: +CONFIG.visionWidth.toFixed(3)
       },
+      turn_sensitivity: {
+        preset: TURN_SENSITIVITY_PRESETS[state.turnSensitivityIndex]?.label || 'Medium',
+        turn_aggression: +CONFIG.turnAggression.toFixed(3),
+        max_turn_rate: +CONFIG.maxTurnRate.toFixed(3),
+        turn_in_place_rate: +CONFIG.turnInPlaceRate.toFixed(3)
+      },
       path: state.path.map((p) => ({ x: +p.x.toFixed(3), y: +p.y.toFixed(3) })),
       last_inputs: state._lastInputs
     };
@@ -1060,6 +1095,7 @@
   });
   ui.pauseBtn.addEventListener('click', togglePause);
   if (ui.penToggleBtn) ui.penToggleBtn.addEventListener('click', togglePenMode);
+  if (ui.turnSensitivityBtn) ui.turnSensitivityBtn.addEventListener('click', cycleTurnSensitivity);
   if (ui.clearLineBtn) ui.clearLineBtn.addEventListener('click', resetPathToHomeTarget);
   if (ui.saveCourseBtn) ui.saveCourseBtn.addEventListener('click', saveCourseToJson);
   if (ui.loadCourseBtn && ui.loadCourseInput) {
@@ -1087,6 +1123,7 @@
   ui.inputsToggle.addEventListener('change', (e) => {
     state.sendInputs = !!e.target.checked;
   });
+  ui.inputsToggle.checked = state.sendInputs;
   if (ui.vectorsToggle) {
     ui.vectorsToggle.addEventListener('change', (e) => {
       state.showVectors = !!e.target.checked;
@@ -1121,6 +1158,7 @@
 
   // Initial poll so the HUD isn't blank.
   updatePenButton();
+  setTurnSensitivity(0);
   applyVisionControlInputs();
   resetPathToHomeTarget();
   loadConfig();

@@ -114,11 +114,6 @@ class ControlCommClient:
         if servo is not None:
             payload["servo"] = int(servo)
 
-        payload_real = {"x": x, "y": y}
-
-        # print(f"Posting to control communication: {payload_real}")
-        # post to the actual thing just as a test
-        self._post("http://100.72.60.28/:5001/vector", payload_real)
         return self._post(self._control_url, payload)
 
     def get_control(self) -> dict[str, Any]:

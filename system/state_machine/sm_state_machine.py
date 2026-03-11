@@ -31,7 +31,7 @@ LINE_FOLLOW_PID_BOUNDS: dict[str, tuple[float, float]] = {
 }
 
 control = ControlCommClient(
-    base_url=os.getenv("CONTROL_COMM_BASE_URL", "http://control-communication:5001").strip(),
+    base_url=os.getenv("CONTROL_COMM_BASE_URL", "http://localhost:5001").strip(),
     state_path=os.getenv("CONTROL_COMM_STATE_PATH", "/state"),
     control_path=os.getenv("CONTROL_COMM_CONTROL_PATH", "/control"),
 )
@@ -122,7 +122,7 @@ class StateMachine:
     FOLLOW_LINE_PHASE_SCAN_RIGHT = "to_right"
 
     def __init__(self, failed_pickup_limit: int = 3) -> None:
-        self.state = State.SEARCHING_DEMO
+        self.state = State.REMOTE_CONTROL
         # self.state = State.SEARCHING
         self.context = StateContext()
         self.failed_pickup_limit = failed_pickup_limit
@@ -485,20 +485,36 @@ class StateMachine:
                     label = "PU"
                 
             case State.REMOTE_CONTROL:
-                should_forward = (
-                    now - self._last_remote_control_poll_at
-                ) >= self.remote_control_poll_interval
-                if should_forward:
-                    command = self._fetch_remote_control_command()
-                    if command is not None:
+                if inputs.red_line.detected:
+                    x_cmd = clamp(inputs.red_line.x, -1.0, 1.0)
+                    y_cmd = clamp(inputs.red_line.y, -1.0, 1.0)
+                    magnitude = (x_cmd * x_cmd + y_cmd * y_cmd) ** 0.5
+                    if magnitude <= 1e-6:
+                        send_stop_command(context="remote_control_red_line_stop")
+                    else:
                         _send_control_command(
-                            x=command["x"],
-                            y=command["y"],
-                            speed=command["speed"],
-                            context="remote_control_passthrough",
+                            x=x_cmd,
+                            y=y_cmd,
+                            speed=clamp(magnitude, 0.0, MAX_CONTROL_SPEED),
+                            context="remote_control_red_line",
                         )
-                        self._last_command_at = now
+                    self._last_command_at = now
                     self._last_remote_control_poll_at = now
+                else:
+                    should_forward = (
+                        now - self._last_remote_control_poll_at
+                    ) >= self.remote_control_poll_interval
+                    if should_forward:
+                        command = self._fetch_remote_control_command()
+                        if command is not None:
+                            _send_control_command(
+                                x=command["x"],
+                                y=command["y"],
+                                speed=command["speed"],
+                                context="remote_control_passthrough",
+                            )
+                            self._last_command_at = now
+                        self._last_remote_control_poll_at = now
             case State.SEARCHING:
                 self.follow_line(
                     inputs.red_line,

@@ -16,9 +16,6 @@ def env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-CONTROL_COMM_BASE_URL = os.getenv("CONTROL_COMM_BASE_URL", "http://control-communication:5000")
-CONTROL_COMM_CONTROL_PATH = os.getenv("CONTROL_COMM_CONTROL_PATH", "/control")
-
 STATE_MACHINE_BASE_URL = os.getenv("STATE_MACHINE_BASE_URL", "http://state-machine:8000")
 STATE_MACHINE_INPUT_PATH = os.getenv("STATE_MACHINE_INPUT_PATH", "/inputs")
 STATE_MACHINE_RESET_PATH = os.getenv("STATE_MACHINE_RESET_PATH", "/reset")
@@ -40,6 +37,8 @@ _system_cache_updated_at_ms: int | None = None
 
 _rate_lock = Lock()
 _rate_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+_sim_control_lock = Lock()
+_sim_control_command = {"x": 0.0, "y": 0.0, "speed": 0.0, "updated_at": None}
 
 
 def _absolute_url(base_url: str, path: str) -> str:
@@ -111,12 +110,38 @@ def _token_ok() -> bool:
     return bool(provided) and provided == API_TOKEN
 
 
+def _set_sim_control(x: float, y: float, speed: float, updated_at: int | None = None) -> None:
+    global _sim_control_command
+    with _sim_control_lock:
+        _sim_control_command = {
+            "x": float(x),
+            "y": float(y),
+            "speed": float(speed),
+            "updated_at": updated_at,
+        }
+
+
+def _get_sim_control() -> dict:
+    with _sim_control_lock:
+        return dict(_sim_control_command)
+
+
 def _fetch_system_snapshot() -> dict:
-    control_url = _absolute_url(CONTROL_COMM_BASE_URL, CONTROL_COMM_CONTROL_PATH)
     state_url = _absolute_url(STATE_MACHINE_BASE_URL, STATE_MACHINE_STATES_PATH)
+    now_ms = int(time.time() * 1000)
+    sim_command = _get_sim_control()
+    if sim_command.get("updated_at") is None:
+        sim_command["updated_at"] = now_ms
     return {
-        "ts_ms": int(time.time() * 1000),
-        "control": _fetch_json(control_url),
+        "ts_ms": now_ms,
+        "control": {
+            "ok": True,
+            "status_code": 200,
+            "data": {
+                "command": sim_command
+            },
+            "source": "state_machine_posted_sim_control",
+        },
         "state": _fetch_json(state_url),
     }
 
@@ -147,12 +172,6 @@ def health():
 def config():
     return jsonify(
         {
-            "control_comm": {
-                "base_url": CONTROL_COMM_BASE_URL,
-                "paths": {
-                    "control": CONTROL_COMM_CONTROL_PATH,
-                },
-            },
             "state_machine": {
                 "base_url": STATE_MACHINE_BASE_URL,
                 "paths": {
@@ -220,6 +239,30 @@ def restart_state_machine():
     result = _post_json(url, {})
     status = 200 if result.get("ok") else 502
     return jsonify({"result": result}), status
+
+
+@app.post("/api/sim-control")
+def update_sim_control():
+    if not request.is_json:
+        return jsonify({"message": "Expected JSON payload."}), 400
+    payload = request.get_json(silent=True) or {}
+    raw_x = payload.get("x")
+    raw_y = payload.get("y")
+    raw_speed = payload.get("speed", 0.0)
+    try:
+        x = float(raw_x)
+        y = float(raw_y)
+        speed = float(raw_speed)
+    except (TypeError, ValueError):
+        return jsonify({"message": "x, y, and speed must be numeric values."}), 400
+    if not (-1.0 <= x <= 1.0):
+        return jsonify({"message": "x must be between -1 and 1."}), 400
+    if not (-1.0 <= y <= 1.0):
+        return jsonify({"message": "y must be between -1 and 1."}), 400
+    if speed < 0:
+        return jsonify({"message": "speed must be >= 0."}), 400
+    _set_sim_control(x, y, speed, int(time.time() * 1000))
+    return jsonify({"ok": True, "command": _get_sim_control()})
 
 
 if __name__ == "__main__":
