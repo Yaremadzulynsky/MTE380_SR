@@ -5,7 +5,7 @@ Payload schema:
     "target": {"detected": bool, "vector": {"x": float, "y": float}},
     "red_line": {"detected": bool, "vector": {"x": float, "y": float}}
   }
-  or blue_line when path_mask_key is blue.
+  or blue_line/black_line when path_mask_key is blue/black.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _send_request(url: str, body: bytes, timeout: float) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Read perception packets from stdin; POST red_line/blue_line schema to URL"
+        description="Read perception packets from stdin; POST red_line/blue_line/black_line schema to URL"
     )
     parser.add_argument(
         "url",
@@ -111,7 +111,8 @@ def main() -> None:
         last_sent_px, last_sent_py = latest_px, latest_py
         request_count += 1
 
-        line_key = "blue_line" if latest_path_mask == "blue" else "red_line"
+        # State machine reads red_line or black_line (prefers black_line when present).
+        line_key = "black_line" if latest_path_mask == "black" else "red_line"
         payload = {
             "target": {
                 "detected": latest_target_detected,

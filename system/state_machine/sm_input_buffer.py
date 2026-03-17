@@ -46,7 +46,11 @@ class InputBuffer:
 
     def _inputs_from_payload(self, payload: dict[str, Any]) -> Inputs:
         has_red_line = "red_line" in payload
+        has_blue_line = "blue_line" in payload
+        has_black_line = "black_line" in payload
         red_line = Vector.from_dict(payload.get("red_line"), "red_line")
+        blue_line = Vector.from_dict(payload.get("blue_line"), "blue_line")
+        black_line = Vector.from_dict(payload.get("black_line"), "black_line")
         safe_zone = Vector.from_dict(payload.get("safe_zone"), "safe_zone")
         danger_zone = Vector.from_dict(payload.get("danger_zone"), "danger_zone")
         target = Vector.from_dict(payload.get("target"), "target")
@@ -66,12 +70,13 @@ class InputBuffer:
         if line_payload is None:
             line_payload = payload.get("home")
         _line = Vector.from_dict(line_payload, "line")
-        # If `line_error` is explicitly provided by simulator/CV, it is the
-        # source of truth for red-line detection (including detected=false).
-        # Legacy `line/home` fallback is only for payloads that don't include
-        # `line_error` at all.
-        if has_red_line:
+        # Perception sends red_line, blue_line, or black_line; state machine uses a single line for control.
+        if has_black_line:
+            _line = black_line
+        elif has_red_line:
             _line = red_line
+        elif has_blue_line:
+            _line = blue_line
         elif has_line_error:
             _line = line_error
 

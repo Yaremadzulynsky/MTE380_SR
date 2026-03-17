@@ -1,0 +1,22 @@
+[Unit]
+# GPIO GO/STOP buttons: start/stop docker-compose (MTE380_SR/system) and
+# run_perception_rpicam.sh. Waits for camera detection and logs errors.
+Description=MTE380 GPIO button controller (docker-compose + perception script)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=passwordiswaterloo
+Group=passwordiswaterloo
+WorkingDirectory=/home/passwordiswaterloo/Documents/MTE380_SR/system
+ExecStart=/usr/bin/python3 /home/passwordiswaterloo/Documents/MTE380_SR/system/button_stack_controller.py
+Restart=on-failure
+RestartSec=5
+# GPIO / hardware access
+SupplementaryGroups=gpio
+# So docker compose works
+Environment=HOME=/home/passwordiswaterloo
+
+[Install]
+WantedBy=multi-user.target

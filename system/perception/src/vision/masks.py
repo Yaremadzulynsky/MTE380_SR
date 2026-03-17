@@ -36,10 +36,11 @@ def clean_mask(mask: np.ndarray, kernel_size: int, open_iters: int, close_iters:
 
 
 def build_masks(hsv: np.ndarray, cfg: AppConfig) -> Dict[str, np.ndarray]:
-    """Build cleaned binary masks for red/green/blue/danger."""
+    """Build cleaned binary masks for red/green/blue/black/danger."""
     red = cv2.bitwise_or(_mask_range(hsv, cfg.red1), _mask_range(hsv, cfg.red2))
     green = _mask_range(hsv, cfg.green)
     blue = _mask_range(hsv, cfg.blue)
+    black = _mask_range(hsv, cfg.black)
     danger = _mask_range(hsv, cfg.danger)
 
     m = cfg.morph
@@ -47,6 +48,7 @@ def build_masks(hsv: np.ndarray, cfg: AppConfig) -> Dict[str, np.ndarray]:
         "red": clean_mask(red, m.kernel_size, m.open_iters, m.close_iters),
         "green": clean_mask(green, m.kernel_size, m.open_iters, m.close_iters),
         "blue": clean_mask(blue, m.kernel_size, m.open_iters, m.close_iters),
+        "black": clean_mask(black, m.kernel_size, m.open_iters, m.close_iters),
         "danger": clean_mask(danger, m.kernel_size, m.open_iters, m.close_iters),
     }
 

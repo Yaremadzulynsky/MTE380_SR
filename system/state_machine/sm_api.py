@@ -41,17 +41,19 @@ def create_app(
             inputs = input_buffer.update(payload)
         except ValueError as exc:
             return jsonify({"message": str(exc)}), 400
+        
         log_event(
             logger,
             "inputs_received",
             {
-                "lego_detected": inputs.lego_detected,
-                "safe_zone_detected": inputs.safe_zone_detected,
-                "danger_zone_detected": inputs.danger_zone_detected,
-                "aligned_for_retrieve": inputs.aligned_for_retrieve,
-                "aligned_for_place": inputs.aligned_for_place,
+                "line_detected": payload,
+                
             },
         )
+        # log_event(
+        #     logger,
+        #     str(payload)
+        # )
         # return jsonify({"status": "ok", "inputs": inputs.__dict__})
         return jsonify({"status": "ok", "inputs": ["inputs_hidden_for_log"]})
 

@@ -4,8 +4,9 @@ services:
       context: ./perception
     container_name: perception
     network_mode: host
-    # devices:
-    #   - "/dev/video0:/dev/video0"
+    # For UsSB webcam, map the device (e.g. /dev/video0). Not needed for Pi Camera Module 2 (rpicam).
+    devices:
+      - "/dev/video0:/dev/video1"
     environment:
       PORT: 4000
       CONTROL_COMM_BASE_URL: "http://control-communication:5001"
@@ -18,17 +19,44 @@ services:
     # depends_on:
     #   - control-communication
     #   - state-machine
+
+  # Pi Camera Module 2: use run_perception_rpicam.sh on the HOST (Docker libcamera doesn't see the camera).
+  # perception-rpicam service kept for reference; use host script for actual Pi camera.
+  perception-rpicam:
+    build:
+      context: ./perception
+      dockerfile: Dockerfile.rpicam
+    container_name: perception-rpicam
+    network_mode: host
+    devices:
+      - "/dev/media0:/dev/media0"
+      - "/dev/media1:/dev/media1"
+      - "/dev/media2:/dev/media2"
+      - "/dev/media3:/dev/media3"
+      - "/dev/dma_heap/linux,cma:/dev/dma_heap/linux,cma"
+      - "/dev/dma_heap/system:/dev/dma_heap/system"
+
+  # perception-rpicam:
+  #   build:
+  #     context: ./perception
+  #     dockerfile: Dockerfile.rpicam
+  #   container_name: perception-rpicam
+  #   network_mode: host
+  #   privileged: true
+  #   volumes:
+  #     - /run/udev:/run/udev:ro
+
   control-communication:
     build:
       context: ./control_communication
     container_name: control-communication
     network_mode: host
-    # devices:
-    #   - "/dev/i2c-1:/dev/i2c-1"
-      # - "/dev/cu.usbmodem21401:/dev/cu.usbmodem21401"
+    devices:
+       - "/dev/i2c-1:/dev/i2c-1"
+       # - "/dev/cu.usbmodem21401:/dev/cu.usbmodem21401"  # macOS serial; on Linux use /dev/ttyUSB0 or /dev/ttyACM0 if needed
     environment:
       PORT: 5001
-      HARDWARE_MODE: "mock"
+      HARDWARE_MODE: "i2c"
       ROBOT_MOCK_CONTROL_URL: "http://localhost:8200/api/sim-control"
       SERIAL_PORT: "/dev/cu.usbmodem21401"
       SERIAL_BAUDRATE: "115200"
@@ -182,8 +210,12 @@ services:
     #   - "3001:3000"
     network_mode: host
     environment:
+      GF_SERVER_HTTP_PORT: "3001"
       GF_SECURITY_ADMIN_USER: "admin"
       GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_LOG_MODE: "file"
       GF_LOG_FILE: "/var/log/insights-screen/insights-screen.log"
@@ -196,6 +228,17 @@ services:
     depends_on:
       - prometheus
       - loki
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+    network_mode: host
+    pid: host
+    restart: unless-stopped
+    volumes:
+      - '/:/host:ro,rslave'
 
 volumes:
   prometheus-data:

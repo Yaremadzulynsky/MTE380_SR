@@ -34,7 +34,7 @@ def main() -> None:
 
     state = PipelineState()
     if Path(args.video_path).name in {"test_run.mp4", "test_video.mp4"}:
-        state.path_mask_key = "blue"
+        state.path_mask_key = "black"
     gui = not args.no_gui
     while True:
         roi = cam.read()

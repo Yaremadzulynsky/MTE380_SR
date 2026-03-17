@@ -11,11 +11,12 @@ camera:
   width: 640
   height: 480
   backend: gstreamer
-  gstreamer_device: /dev/video0
+  gstreamer_device: /dev/video1
 
 comms:
   method: http
   zone_encoding: string
   udp_ip: 127.0.0.1
   udp_port: 8000
-  http_url: http://100.72.60.28:8000/inputs
+  # Use localhost when state machine runs on same host (e.g. full stack + sim). Use host IP if state machine is on another machine.
+  http_url: http://localhost:8000/inputs

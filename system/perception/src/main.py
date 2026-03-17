@@ -18,7 +18,7 @@ from src.pipeline import PipelineOutput, PipelineState, run_pipeline
 from src.utils.logging import log
 from src.utils.math2d import to_robot_frame_clamped
 from src.utils.timing import LoopRegulator
-from src.vision.camera import OpenCVCamera
+from src.vision.camera import OpenCVCamera, RpicamVidCamera
 from src.vision.debug_draw import draw_overlay, make_mask_preview
 from src.vision.masks import crop_roi
 
@@ -58,9 +58,11 @@ def _make_sender(method: str, cfg: AppConfig) -> Any:
 def _parse_source(source: str, cfg: AppConfig) -> int | str:
     if source == "webcam":
         return cfg.camera.webcam_index
+    if source == "rpicam":
+        return "rpicam"
     if source.startswith("video:"):
         return source.split("video:", 1)[1]
-    raise ValueError("source must be webcam or video:/path/to/file")
+    raise ValueError("source must be webcam, rpicam, or video:/path/to/file")
 
 
 def main() -> None:
@@ -84,7 +86,7 @@ def main() -> None:
     if args.fps is not None:
         cfg.fps = args.fps
 
-    # Mode: test = GUI + blue line overlay + packet logging; production = send full packet, no GUI
+    # Mode: test = GUI + line overlay + packet logging; production = send full packet, no GUI
     if args.mode == "test":
         if args.comms is None:
             cfg.comms.method = "stdout"
@@ -105,20 +107,30 @@ def main() -> None:
     regulator = LoopRegulator(target_hz=cfg.fps)
 
     state = PipelineState()
+    state.path_mask_key = "black"
+    log("path_mask_black", reason="tracking black tape")
     if isinstance(source, str) and Path(source).name in {"test_run.mp4", "test_video.mp4"}:
-        state.path_mask_key = "blue"
-        log("path_mask_blue", reason="test clip uses blue line")
+        state.path_mask_key = "black"
+        log("path_mask_black", reason="test clip uses black line")
 
-    backend = "gstreamer" if isinstance(source, str) else cfg.camera.backend
+    backend = "gstreamer" if isinstance(source, str) and source != "rpicam" else cfg.camera.backend
     try:
-        cam = OpenCVCamera(
-            source=source,
-            width=cfg.camera.width,
-            height=cfg.camera.height,
-            fps=cfg.fps,
-            backend=backend,
-            gstreamer_device=cfg.camera.gstreamer_device,
-        )
+        if source == "rpicam":
+            cam = RpicamVidCamera(
+                width=cfg.camera.width,
+                height=cfg.camera.height,
+                fps=cfg.fps,
+                camera_index=cfg.camera.webcam_index,
+            )
+        else:
+            cam = OpenCVCamera(
+                source=source,
+                width=cfg.camera.width,
+                height=cfg.camera.height,
+                fps=cfg.fps,
+                backend=backend,
+                gstreamer_device=cfg.camera.gstreamer_device,
+            )
     except RuntimeError as exc:
         raise SystemExit(f"Camera initialization failed: {exc}") from exc
 

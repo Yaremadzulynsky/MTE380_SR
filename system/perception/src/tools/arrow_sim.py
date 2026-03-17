@@ -133,9 +133,9 @@ def _make_small_mask_panel(masks: dict[str, np.ndarray], roi_shape: tuple[int, i
 
     red = prep("red", (0, 0, 255))
     green = prep("green", (0, 255, 0))
-    blue = prep("blue", (255, 0, 0))
+    black = prep("black", (128, 128, 128))
     danger = prep("danger", (180, 180, 180))
-    return np.vstack([np.hstack([red, green]), np.hstack([blue, danger])])
+    return np.vstack([np.hstack([red, green]), np.hstack([black, danger])])
 
 
 def _overlay_mask_panel(frame: np.ndarray, panel: np.ndarray) -> None:
@@ -202,8 +202,8 @@ def main() -> None:
         if isinstance(source, str):
             source = str(_resolve_video_path(source))
             if Path(source).name in {"test_video.mp4", "test_run.mp4"}:
-                # These test clips use a blue line instead of red tape.
-                state.path_mask_key = "blue"
+                # These test clips use a black line.
+                state.path_mask_key = "black"
         backend = "gstreamer" if isinstance(source, str) else args.backend
         cam = OpenCVCamera(
             source=source,

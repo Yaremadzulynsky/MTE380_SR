@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import urllib.request
 
@@ -17,12 +18,11 @@ def _send_post(url: str, body: bytes, timeout: float = 30.0) -> None:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             pass
     except Exception as e:
-        import sys
         sys.stderr.write(f"http_tx: POST failed: {e}\n")
 
 
 class HTTPSender:
-    """POST perception packets to an HTTP endpoint as red_line/blue_line schema."""
+    """POST perception packets to an HTTP endpoint as target + red_line/black_line schema."""
 
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         self.url = url.rstrip("/")
@@ -41,7 +41,8 @@ class HTTPSender:
         target_detected = bool(data.get("target_detected", False))
         target_px = data.get("target_px", 0.0)
         target_py = data.get("target_py", 0.0)
-        line_key = "blue_line" if path_mask_key == "blue" else "red_line"
+        # State machine reads red_line or black_line (prefers black_line when present).
+        line_key = "black_line" if path_mask_key == "black" else "red_line"
         payload = {
             "target": {
                 "detected": target_detected,
@@ -53,6 +54,7 @@ class HTTPSender:
             },
         }
         body = json.dumps(payload).encode("utf-8")
+        print(f"[perception] send: {body.decode('utf-8')}", file=sys.stderr)
         t = threading.Thread(
             target=_send_post,
             args=(self.url, body, self.timeout),

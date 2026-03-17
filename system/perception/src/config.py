@@ -95,6 +95,9 @@ class AppConfig:
     blue: HSVRange = field(
         default_factory=lambda: HSVRange(lo=(95, 80, 80), hi=(130, 255, 255))
     )
+    black: HSVRange = field(
+        default_factory=lambda: HSVRange(lo=(0, 0, 0), hi=(179, 255, 80))
+    )
     danger: HSVRange = field(
         default_factory=lambda: HSVRange(lo=(0, 0, 0), hi=(179, 60, 90))
     )
@@ -124,6 +127,8 @@ class AppConfig:
             cfg.green = HSVRange.from_dict(data["green"])
         if "blue" in data:
             cfg.blue = HSVRange.from_dict(data["blue"])
+        if "black" in data:
+            cfg.black = HSVRange.from_dict(data["black"])
         if "danger" in data:
             cfg.danger = HSVRange.from_dict(data["danger"])
         if "morph" in data:

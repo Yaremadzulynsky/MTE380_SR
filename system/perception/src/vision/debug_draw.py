@@ -40,14 +40,14 @@ def make_mask_preview(masks: dict[str, np.ndarray]) -> np.ndarray:
     """Create a tiled BGR preview of masks for debug view."""
     red = cv2.cvtColor(masks["red"], cv2.COLOR_GRAY2BGR)
     green = cv2.cvtColor(masks["green"], cv2.COLOR_GRAY2BGR)
-    blue = cv2.cvtColor(masks["blue"], cv2.COLOR_GRAY2BGR)
+    black = cv2.cvtColor(masks["black"], cv2.COLOR_GRAY2BGR)
     danger = cv2.cvtColor(masks["danger"], cv2.COLOR_GRAY2BGR)
     top = np.hstack([red, green])
-    bot = np.hstack([blue, danger])
+    bot = np.hstack([black, danger])
     preview = np.vstack([top, bot])
     cv2.putText(preview, "RED", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
     cv2.putText(preview, "GREEN", (red.shape[1] + 10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-    cv2.putText(preview, "BLUE", (10, red.shape[0] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+    cv2.putText(preview, "BLACK", (10, red.shape[0] + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (128, 128, 128), 2)
     cv2.putText(
         preview,
         "DANGER",

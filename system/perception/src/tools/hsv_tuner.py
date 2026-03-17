@@ -49,7 +49,7 @@ def _read_range(win: str, prefix: str) -> HSVRange:
 
 def _print_yaml(cfg: AppConfig) -> None:
     print("---")
-    for name in ["red1", "red2", "green", "blue", "danger"]:
+    for name in ["red1", "red2", "green", "blue", "black", "danger"]:
         r = getattr(cfg, name)
         print(f"{name}:")
         print(f"  lo: [{r.lo[0]}, {r.lo[1]}, {r.lo[2]}]")
@@ -86,6 +86,7 @@ def main() -> None:
     _make_range_trackbars(ctrl_win, "red2", cfg.red2)
     _make_range_trackbars(ctrl_win, "green", cfg.green)
     _make_range_trackbars(ctrl_win, "blue", cfg.blue)
+    _make_range_trackbars(ctrl_win, "black", cfg.black)
     _make_range_trackbars(ctrl_win, "danger", cfg.danger)
 
     try:
@@ -100,6 +101,7 @@ def main() -> None:
             cfg.red2 = _read_range(ctrl_win, "red2")
             cfg.green = _read_range(ctrl_win, "green")
             cfg.blue = _read_range(ctrl_win, "blue")
+            cfg.black = _read_range(ctrl_win, "black")
             cfg.danger = _read_range(ctrl_win, "danger")
 
             masks = build_masks(to_hsv(roi), cfg)
@@ -107,6 +109,7 @@ def main() -> None:
             cv2.imshow("red", masks["red"])
             cv2.imshow("green", masks["green"])
             cv2.imshow("blue", masks["blue"])
+            cv2.imshow("black", masks["black"])
             cv2.imshow("danger", masks["danger"])
 
             key = cv2.waitKey(1) & 0xFF

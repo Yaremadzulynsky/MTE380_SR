@@ -1,10 +1,12 @@
 # Perception node for Raspberry Pi 4 (arm64 / arm32v7).
 # Build on the Pi: docker build -t perception .
+# For Pi Camera in Docker use Dockerfile.rpicam (perception-rpicam service).
 # Or from x86 with buildx: docker buildx build --platform linux/arm64 -t perception .
 #
 # Uses python3-opencv from Debian (built with GStreamer support).
 # Production: tracks RED line (webcam). Test video: tracks BLUE line (test_run.mp4).
 # Set camera.backend: gstreamer in config for GStreamer capture.
+# For Pi Camera Module 2, run perception on the host (run_perception_rpicam.sh), not in Docker.
 
 FROM debian:bookworm-slim
 
@@ -23,7 +25,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     v4l-utils \
+    curl \
+    ca-certificates \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Pi Camera Module 2: do NOT install rpicam-apps in Docker (Debian vs Pi repo conflicts).
+# Run perception on the HOST when using the Pi camera - see run_perception_rpicam.sh in system/
 
 WORKDIR /app
 

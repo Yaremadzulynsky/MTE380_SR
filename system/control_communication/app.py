@@ -47,8 +47,8 @@ SERIAL_TIMEOUT_S = float((os.getenv("SERIAL_TIMEOUT_S") or "1.0").strip())
 SERIAL_WRITE_TIMEOUT_S = float((os.getenv("SERIAL_WRITE_TIMEOUT_S") or "1.0").strip())
 DEBUG = parse_env_bool("DEBUG", "0")
 MODE = parse_hardware_mode()
-SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "0")
-SERVO_MAX_DEG = parse_env_int("SERVO_MAX_DEG", "90")
+SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "-90")
+SERVO_MAX_DEG = parse_env_int("SERVO_MAX_DEG", "0")
 SERVO_DEFAULT_DEG = parse_env_int("SERVO_DEFAULT_DEG", "0")
 ROBOT_MOCK_CONTROL_URL = (
     os.getenv("ROBOT_MOCK_CONTROL_URL") or "http://localhost:8200/api/sim-control"

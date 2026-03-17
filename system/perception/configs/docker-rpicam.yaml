@@ -1,0 +1,19 @@
+# Docker config for Raspberry Pi Camera Module 2 (libcamera / rpicam-vid).
+# Use with: --config configs/docker-rpicam.yaml --source rpicam
+# Requires perception image built with USE_RPICAM=1 (see Dockerfile).
+fps: 30.0
+roi_y_start: 240
+alpha: 0.9
+show_masks: false
+
+camera:
+  source: rpicam
+  webcam_index: 0
+  width: 640
+  height: 480
+comms:
+  method: http
+  zone_encoding: string
+  udp_ip: 127.0.0.1
+  udp_port: 8000
+  http_url: http://localhost:8000/inputs
