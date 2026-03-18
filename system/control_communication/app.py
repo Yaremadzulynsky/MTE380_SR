@@ -4,6 +4,7 @@ import json
 import math
 import os
 import signal
+import sys
 import threading
 import time
 from typing import Any, Optional
@@ -16,6 +17,12 @@ try:
     import serial
 except Exception:
     serial = None
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "robot-control-system"))
+try:
+    from robot import Robot as _Robot
+except Exception:
+    _Robot = None
 
 
 def parse_env_int(name: str, default: str) -> int:
@@ -41,7 +48,7 @@ HOST = (os.getenv("HOST") or "0.0.0.0").strip()
 PORT = parse_env_int("PORT", "5001")
 I2C_BUS_NUM = parse_env_int("I2C_BUS", "1")
 I2C_ADDR = parse_env_int("I2C_ADDR", "0x08")
-SERIAL_PORT = (os.getenv("SERIAL_PORT") or "/dev/ttyUSB0").strip()
+SERIAL_PORT = (os.getenv("SERIAL_PORT") or "/dev/ttyACM0").strip()
 SERIAL_BAUDRATE = parse_env_int("SERIAL_BAUDRATE", "115200")
 SERIAL_TIMEOUT_S = float((os.getenv("SERIAL_TIMEOUT_S") or "1.0").strip())
 SERIAL_WRITE_TIMEOUT_S = float((os.getenv("SERIAL_WRITE_TIMEOUT_S") or "1.0").strip())
@@ -59,6 +66,7 @@ app = Flask(__name__)
 bus_lock = threading.Lock()
 bus: Optional[SMBus] = None
 serial_link = None
+robot = None
 last_sent: Optional[dict[str, Any]] = None
 
 
@@ -93,10 +101,21 @@ def close_serial_link() -> None:
         serial_link = None
 
 
+def close_robot() -> None:
+    global robot
+    if robot is not None:
+        try:
+            robot.stop()
+        except Exception:
+            pass
+        robot = None
+
+
 def handle_signal(signum, _frame) -> None:
     log_line("shutdown", {"signal": signum})
     close_bus()
     close_serial_link()
+    close_robot()
     raise SystemExit(0)
 
 
@@ -330,6 +349,10 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 503,
             )
 
+    if robot is not None:
+        robot.set_direction(encoded["x_input"], encoded["y_input"])
+        robot.set_speed(speed_value / 5.0)
+
     ts = now_iso()
     last_sent = {
         "updated_at": ts,
@@ -496,7 +519,16 @@ def post_control():
 
 
 def main() -> None:
-    global bus, serial_link
+    global bus, serial_link, robot
+
+    if _Robot is not None:
+        robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
+        try:
+            robot.start()
+            log_line("robot_start", {"port": SERIAL_PORT, "baudrate": SERIAL_BAUDRATE})
+        except Exception as exc:
+            log_line("robot_start_fail", {"port": SERIAL_PORT, "error": repr(exc)})
+            robot = None
 
     if MODE == "i2c":
         bus = SMBus(I2C_BUS_NUM)
@@ -533,6 +565,7 @@ def main() -> None:
 
 atexit.register(close_bus)
 atexit.register(close_serial_link)
+atexit.register(close_robot)
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
 
