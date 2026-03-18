@@ -52,20 +52,12 @@ services:
     container_name: control-communication
     network_mode: host
     devices:
-       - "/dev/i2c-1:/dev/i2c-1"
        - "/dev/ttyACM0:/dev/ttyACM0"  # Arduino Mega via USB (attach with usbipd on Windows/WSL2)
     environment:
       PORT: 5001
-      HARDWARE_MODE: "serial"
       ROBOT_MOCK_CONTROL_URL: "http://localhost:8200/api/sim-control"
       SERIAL_PORT: "/dev/ttyACM0"
       SERIAL_BAUDRATE: "115200"
-      SERIAL_TIMEOUT_S: "1.0"
-      SERIAL_WRITE_TIMEOUT_S: "1.0"
-      PID_P_DEFAULT: "0"
-      PID_I_DEFAULT: "0"
-      PID_D_DEFAULT: "0"
-      PID_SETTINGS_PATH: "/var/log/control-communication/pid-settings.json"
       LOG_PATH: "/var/log/control-communication/control-communication.log"
     volumes:
       - metrics-pipe:/var/run/metrics

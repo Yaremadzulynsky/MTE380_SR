@@ -11,13 +11,12 @@ from typing import Any, Optional
 from urllib import request as urlrequest
 
 from flask import Flask, jsonify, request
-from smbus2 import SMBus, i2c_msg
-
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "robot-control-system"))
 try:
     from robot import Robot as _Robot
-except Exception:
+except Exception as _robot_import_err:
+    print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_import_fail error={_robot_import_err!r}", flush=True)
     _Robot = None
 
 
@@ -31,25 +30,11 @@ def parse_env_bool(name: str, default: str = "0") -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
-def parse_hardware_mode() -> str:
-    raw = (os.getenv("HARDWARE_MODE") or "mock").strip().lower()
-    if raw in {"mock", "sim", "simulation"}:
-        return "mock"
-    if raw in {"serial", "uart"}:
-        return "serial"
-    return "i2c"
-
-
 HOST = (os.getenv("HOST") or "0.0.0.0").strip()
 PORT = parse_env_int("PORT", "5001")
-I2C_BUS_NUM = parse_env_int("I2C_BUS", "1")
-I2C_ADDR = parse_env_int("I2C_ADDR", "0x08")
 SERIAL_PORT = (os.getenv("SERIAL_PORT") or "/dev/ttyACM0").strip()
 SERIAL_BAUDRATE = parse_env_int("SERIAL_BAUDRATE", "115200")
-SERIAL_TIMEOUT_S = float((os.getenv("SERIAL_TIMEOUT_S") or "1.0").strip())
-SERIAL_WRITE_TIMEOUT_S = float((os.getenv("SERIAL_WRITE_TIMEOUT_S") or "1.0").strip())
 DEBUG = parse_env_bool("DEBUG", "0")
-MODE = parse_hardware_mode()
 SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "-90")
 SERVO_MAX_DEG = parse_env_int("SERVO_MAX_DEG", "0")
 SERVO_DEFAULT_DEG = parse_env_int("SERVO_DEFAULT_DEG", "0")
@@ -59,8 +44,6 @@ ROBOT_MOCK_CONTROL_URL = (
 
 app = Flask(__name__)
 
-bus_lock = threading.Lock()
-bus: Optional[SMBus] = None
 robot = None
 last_sent: Optional[dict[str, Any]] = None
 
@@ -76,16 +59,6 @@ def log_line(event: str, fields: dict[str, Any]) -> None:
     print(" ".join(parts), flush=True)
 
 
-def close_bus() -> None:
-    global bus
-    if bus is not None:
-        try:
-            bus.close()
-        except Exception:
-            pass
-        bus = None
-
-
 def close_robot() -> None:
     global robot
     if robot is not None:
@@ -98,7 +71,6 @@ def close_robot() -> None:
 
 def handle_signal(signum, _frame) -> None:
     log_line("shutdown", {"signal": signum})
-    close_bus()
     close_robot()
     raise SystemExit(0)
 
@@ -163,7 +135,6 @@ def int8_to_int8(value: float, name: str) -> tuple[Optional[int], Optional[str]]
 
 
 def int8_to_twos_complement_u8(value: int) -> int:
-    # Keep signed int8 semantics on-wire; neutral (0) stays 0.
     return value & 0xFF
 
 
@@ -254,48 +225,10 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
     }
     sim_result = post_to_simulator(sim_payload)
 
-    if MODE == "i2c":
-        try:
-            with bus_lock:
-                if bus is None:
-                    raise OSError("I2C bus is not available.")
-                msg = i2c_msg.write(I2C_ADDR, encoded["bytes"])
-                bus.i2c_rdwr(msg)
-        except Exception as exc:
-            log_line(
-                "vector_send_fail",
-                {
-                    "client": request.remote_addr,
-                    "mode": MODE,
-                    "x": encoded["x_input"],
-                    "y": encoded["y_input"],
-                    "speed": speed_value,
-                    "x_int8": encoded["x_int8"],
-                    "y_int8": encoded["y_int8"],
-                    "servo_deg": encoded["servo_deg"],
-                    "left_int8": encoded["left_int8"],
-                    "right_int8": encoded["right_int8"],
-                    "bytes": encoded["bytes"],
-                    "error": repr(exc),
-                },
-            )
-            return (
-                {
-                    "ok": False,
-                    "message": "I2C write failed.",
-                    "error": str(exc),
-                    "i2c": {
-                        "bus": I2C_BUS_NUM,
-                        "addr": f"0x{I2C_ADDR:02X}",
-                        "active": False,
-                    },
-                },
-                503,
-            )
-
     if robot is not None:
         robot.set_direction(encoded["x_input"], encoded["y_input"])
         robot.set_speed(speed_value)
+        log_line("robot_command", {"x": encoded["x_input"], "y": encoded["y_input"], "speed": speed_value})
 
     ts = now_iso()
     last_sent = {
@@ -317,7 +250,6 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
         "vector_send_ok",
         {
             "client": request.remote_addr,
-            "mode": MODE,
             "x": encoded["x_input"],
             "y": encoded["y_input"],
             "speed": speed_value,
@@ -326,7 +258,6 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "servo_deg": encoded["servo_deg"],
             "left_int8": encoded["left_int8"],
             "right_int8": encoded["right_int8"],
-            "bytes": encoded["bytes"],
             "sim_forwarded": sim_result.get("ok", False),
         },
     )
@@ -334,13 +265,6 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
     return (
         {
             "ok": True,
-            "sent": {
-                "x_int8": encoded["x_int8"],
-                "y_int8": encoded["y_int8"],
-                "left_int8": encoded["left_int8"],
-                "right_int8": encoded["right_int8"],
-                "bytes": encoded["bytes"],
-            },
             "command": {
                 "x": encoded["x_input"],
                 "y": encoded["y_input"],
@@ -350,19 +274,12 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 "right": encoded["right_int8"] / 127.0,
                 "updated_at": ts,
                 "format": encoded["format"],
-                "bytes": encoded["bytes"],
-            },
-            "i2c": {
-                "bus": I2C_BUS_NUM,
-                "addr": f"0x{I2C_ADDR:02X}",
-                "active": MODE == "i2c",
             },
             "serial": {
                 "port": SERIAL_PORT,
                 "baudrate": SERIAL_BAUDRATE,
-                "active": MODE == "serial",
+                "active": robot is not None,
             },
-            "mode": MODE,
             "simulator": sim_result,
             "ts": ts,
         },
@@ -382,13 +299,7 @@ def post_to_simulator(payload: dict[str, Any]) -> dict[str, Any]:
         with urlrequest.urlopen(req, timeout=0.25) as response:
             return {"ok": 200 <= response.status < 300, "status_code": int(response.status)}
     except Exception as exc:
-        log_line(
-            "simulator_forward_fail",
-            {
-                "url": ROBOT_MOCK_CONTROL_URL,
-                "error": repr(exc),
-            },
-        )
+        log_line("simulator_forward_fail", {"url": ROBOT_MOCK_CONTROL_URL, "error": repr(exc)})
         return {"ok": False, "error": str(exc)}
 
 
@@ -398,14 +309,9 @@ def health():
         {
             "ok": True,
             "status": "ok",
-            "mode": MODE,
-            "i2c_active": MODE == "i2c",
-            "serial_active": MODE == "serial",
-            "spi_active": False,
-            "i2c_bus": I2C_BUS_NUM,
-            "i2c_addr": f"0x{I2C_ADDR:02X}",
             "serial_port": SERIAL_PORT,
             "serial_baudrate": SERIAL_BAUDRATE,
+            "robot_active": robot is not None,
         }
     )
 
@@ -427,7 +333,6 @@ def get_control():
             "right": 0.0,
             "updated_at": None,
             "format": "normalized",
-            "bytes": [0, 0, SERVO_DEFAULT_DEG],
         }
     else:
         command = {
@@ -439,7 +344,6 @@ def get_control():
             "right": last_sent.get("right_int8", 0) / 127.0,
             "updated_at": last_sent.get("updated_at"),
             "format": last_sent.get("format", "normalized"),
-            "bytes": list(last_sent.get("bytes", [0, 0, SERVO_DEFAULT_DEG])),
         }
     return jsonify({"ok": True, "command": command})
 
@@ -463,7 +367,7 @@ def post_control():
 
 
 def main() -> None:
-    global bus, robot
+    global robot
 
     if _Robot is not None:
         robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
@@ -474,21 +378,14 @@ def main() -> None:
             log_line("robot_start_fail", {"port": SERIAL_PORT, "error": repr(exc)})
             robot = None
 
-    if MODE == "i2c":
-        bus = SMBus(I2C_BUS_NUM)
-
     log_line(
         "startup",
         {
             "host": HOST,
             "port": PORT,
-            "mode": MODE,
-            "i2c_active": MODE == "i2c",
-            "serial_active": MODE == "serial",
-            "i2c_bus": I2C_BUS_NUM,
-            "i2c_addr": f"0x{I2C_ADDR:02X}",
             "serial_port": SERIAL_PORT,
             "serial_baudrate": SERIAL_BAUDRATE,
+            "robot_active": robot is not None,
             "servo_min_deg": SERVO_MIN_DEG,
             "servo_max_deg": SERVO_MAX_DEG,
             "servo_default_deg": SERVO_DEFAULT_DEG,
@@ -498,7 +395,6 @@ def main() -> None:
     app.run(host=HOST, port=PORT, debug=DEBUG)
 
 
-atexit.register(close_bus)
 atexit.register(close_robot)
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
