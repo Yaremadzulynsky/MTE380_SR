@@ -8,7 +8,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py ./
-COPY robot-control-system/ ./robot-control-system/
+COPY robot_control_system/ ./robot_control_system/
 
 ENV PORT=5000
 EXPOSE 5000

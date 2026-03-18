@@ -4,7 +4,6 @@ import json
 import math
 import os
 import signal
-import sys
 import threading
 import time
 from typing import Any, Optional
@@ -12,9 +11,8 @@ from urllib import request as urlrequest
 
 from flask import Flask, jsonify, request
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "robot-control-system"))
 try:
-    from robot import Robot as _Robot
+    from robot_control_system.robot import Robot as _Robot
 except Exception as _robot_import_err:
     print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_import_fail error={_robot_import_err!r}", flush=True)
     _Robot = None
@@ -47,10 +45,14 @@ app = Flask(__name__)
 last_sent: Optional[dict[str, Any]] = None
 
 if _Robot is not None:
-    print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_init port={SERIAL_PORT} baudrate={SERIAL_BAUDRATE}", flush=True)
-    robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
-    robot.start()
-    print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_start port={SERIAL_PORT} baudrate={SERIAL_BAUDRATE}", flush=True)
+    try:
+        print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_init port={SERIAL_PORT} baudrate={SERIAL_BAUDRATE}", flush=True)
+        robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
+        robot.start()
+        print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_start port={SERIAL_PORT} baudrate={SERIAL_BAUDRATE}", flush=True)
+    except Exception as _robot_start_err:
+        print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_start_fail error={_robot_start_err!r}", flush=True)
+        robot = None
 else:
     robot = None
 
