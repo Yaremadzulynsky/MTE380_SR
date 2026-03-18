@@ -239,7 +239,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
 
     if robot is not None:
         robot.set_direction(encoded["x_input"], encoded["y_input"])
-        robot.set_speed(speed_value)
+        robot.set_speed(clamp(speed_value, -0.3, 0.3))
         log_line("robot_command", {"x": encoded["x_input"], "y": encoded["y_input"], "speed": speed_value})
 
     ts = now_iso()
