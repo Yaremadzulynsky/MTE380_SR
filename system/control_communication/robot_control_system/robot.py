@@ -62,22 +62,20 @@ class Robot:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_direction(self, x: float, y: float):
-        """Set heading as a relative delta from current heading.
+        """Update target heading relative to current heading.
 
-        The angle of the (x, y) vector is added to the current heading:
-            target_heading = current_heading + atan2(x, abs(y))
+        delta = atan2(x, abs(y))
+        target_heading = current_heading + delta
 
-        x=0, y=1  → no turn, go straight
-        x=1, y=0  → turn right 90°
-        x=0, y=0  → no change
+        x=0, y=1  → delta=0°, hold heading
+        x=1, y=0  → delta=+90°, turn right
+        x=0, y=0  → no update, hold heading
         """
         with self._lock:
             self._motor_override = None
-            mag = math.sqrt(x ** 2 + y ** 2)
-            if mag > 1e-6:
+            if abs(x) > 1e-6 or abs(y) > 1e-6:
                 delta = math.atan2(x, abs(y))
                 self._target_heading = self._heading_fb + delta
-            # if mag == 0, leave target_heading unchanged
 
     def set_speed(self, speed: float):
         """Set forward/backward speed. -1 = full reverse, 0 = stop, 1 = full forward."""
