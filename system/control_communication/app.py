@@ -44,8 +44,15 @@ ROBOT_MOCK_CONTROL_URL = (
 
 app = Flask(__name__)
 
-robot = None
 last_sent: Optional[dict[str, Any]] = None
+
+if _Robot is not None:
+    print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_init port={SERIAL_PORT} baudrate={SERIAL_BAUDRATE}", flush=True)
+    robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
+    robot.start()
+    print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_start port={SERIAL_PORT} baudrate={SERIAL_BAUDRATE}", flush=True)
+else:
+    robot = None
 
 
 def now_iso() -> str:
@@ -367,17 +374,6 @@ def post_control():
 
 
 def main() -> None:
-    global robot
-
-    if _Robot is not None:
-        robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
-        try:
-            robot.start()
-            log_line("robot_start", {"port": SERIAL_PORT, "baudrate": SERIAL_BAUDRATE})
-        except Exception as exc:
-            log_line("robot_start_fail", {"port": SERIAL_PORT, "error": repr(exc)})
-            robot = None
-
     log_line(
         "startup",
         {
