@@ -1,16 +1,24 @@
 # Docker config for Raspberry Pi Camera Module 2 (libcamera / rpicam-vid).
 # Use with: --config configs/docker-rpicam.yaml --source rpicam
 # Requires perception image built with USE_RPICAM=1 (see Dockerfile).
-fps: 30.0
-roi_y_start: 240
+fps: 60.0
+roi_y_start: 160
 alpha: 0.9
 show_masks: false
+
+# Speed tuning for higher FPS:
+# - Smaller ROI / resolution reduces per-frame pixel work.
+# - Cheaper morphology reduces mask cleanup cost.
+morph:
+  kernel_size: 3
+  open_iters: 1
+  close_iters: 1
 
 camera:
   source: rpicam
   webcam_index: 0
-  width: 640
-  height: 480
+  width: 480
+  height: 320
 comms:
   method: http
   zone_encoding: string

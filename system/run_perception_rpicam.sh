@@ -13,11 +13,10 @@ elif [ -d "venv" ]; then
   source venv/bin/activate
 fi
 
-# Ensure state machine URL: same host as Docker (localhost when stack runs on this Pi)
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 python3 -m src.main \
   --mode production \
   --config configs/docker-rpicam.yaml \
   --source rpicam \
-  --fps 30 \
+  --fps 60 \
   --comms http
