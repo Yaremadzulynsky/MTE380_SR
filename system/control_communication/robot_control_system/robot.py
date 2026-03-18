@@ -14,6 +14,7 @@ MAX_SPEED = 1.0
 
 HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
 
+
 # ── Wheel geometry (update these for your robot) ──────────────────────────────
 TICKS_PER_REV    = 680    # encoder ticks per full wheel revolution
 WHEEL_DIAMETER_M = 0.08  # wheel diameter in metres
@@ -44,11 +45,10 @@ class Robot:
         self._speed_pid   = SpeedPID()
 
         self._lock = threading.Lock()
-        self._dir_x = 0.0
-        self._dir_y = 0.0
-        self._speed_scale    = 1.0  # [0, 1] multiplier applied to MAX_SPEED
+        self._target_heading = 0.0  # radians — updated incrementally via set_direction
+        self._speed_scale    = 0.0  # [-1, 1] direct motor speed
         self._rotation_scale = 1.0  # [0, 1] multiplier applied to angular_z
-        self._motor_override: tuple[float, float] | None = None  # (linear_x, angular_z)
+        self._motor_override: tuple[float, float] | None = None  # (left, right)
         self._heading_fb = 0.0   # radians — from encoder odometry
         self._linear_speed = 0.0  # m/s — forward speed from encoders
 
@@ -62,24 +62,22 @@ class Robot:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_direction(self, x: float, y: float):
-        """Set normalized direction vector. Safe to call from any thread.
+        """Set heading as a relative delta from current heading.
 
-        x=0, y=1  → forward
-        x=0, y=-1 → backward
-        x=1, y=0  → rotate right in place
-        x=-1, y=0 → rotate left in place
+        The angle of the (x, y) vector is added to the current heading:
+            target_heading = current_heading + atan2(x, abs(y))
+
+        x=0, y=1  → no turn, go straight
+        x=1, y=0  → turn right 90°
+        x=0, y=0  → no change
         """
-        mag = math.sqrt(x ** 2 + y ** 2)
         with self._lock:
             self._motor_override = None
+            mag = math.sqrt(x ** 2 + y ** 2)
             if mag > 1e-6:
-                self._dir_x = x / mag
-                self._dir_y = y / mag
-            else:
-                self._dir_x = 0.0
-                self._dir_y = 0.0
-                self._heading_pid.reset()
-                self._speed_pid.reset()
+                delta = math.atan2(x, abs(y))
+                self._target_heading = self._heading_fb + delta
+            # if mag == 0, leave target_heading unchanged
 
     def set_speed(self, speed: float):
         """Set forward/backward speed. -1 = full reverse, 0 = stop, 1 = full forward."""
@@ -108,13 +106,7 @@ class Robot:
     def get_heading(self) -> tuple[float, float]:
         """Return (current_heading_deg, target_heading_deg)."""
         with self._lock:
-            current = math.degrees(self._heading_fb)
-            dx, dy = self._dir_x, self._dir_y
-        if abs(dx) < 1e-6 and abs(dy) < 1e-6:
-            target = 0.0
-        else:
-            target = math.degrees(math.atan2(dx, abs(dy)))
-        return current, target
+            return math.degrees(self._heading_fb), math.degrees(self._target_heading)
 
     def get_encoders(self) -> tuple[int, int]:
         """Return (left_ticks, right_ticks)."""
@@ -194,7 +186,7 @@ class Robot:
 
     def stop(self):
         self._running = False
-        self.set_direction(0.0, 0.0)
+        self._speed_scale = 0.0
         self._bridge.send_drive(0.0, 0.0)
         self._bridge.stop()
         log.info('Robot stopped')
@@ -225,36 +217,26 @@ class Robot:
             t0 = time.monotonic()
 
             with self._lock:
-                dx, dy         = self._dir_x, self._dir_y
+                target_heading = self._target_heading
                 speed_scale    = self._speed_scale
                 rotation_scale = self._rotation_scale
                 hdg_fb         = self._heading_fb
-                spd_fb         = self._linear_speed
                 override       = self._motor_override
 
             if override is not None:
                 self._bridge.send_drive(*override)
-            elif abs(dx) < 1e-6 and abs(dy) < 1e-6:
+            elif abs(speed_scale) < 1e-6:
                 self._heading_pid.reset()
-                self._speed_pid.reset()
                 self._bridge.send_drive(0.0, 0.0)
             else:
-                desired_heading = math.atan2(dx, abs(dy))
-                angular_z = self._heading_pid.update(desired_heading, hdg_fb, rotation_scale)
-                # angular_z = 0
-                # if abs(dy) < 1e-6:
-                #     self._speed_pid.reset()
-                #     linear_x = 0.0
-                # else:
-                #     speed_setpoint = dy * MAX_SPEED * speed_scale
-                #     linear_x = self._speed_pid.update(speed_setpoint, spd_fb)
-                linear_x = speed_scale  # direct motor command, set via set_speed()
+                angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
+                linear_x  = speed_scale
 
                 left  = max(-1.0, min(1.0, linear_x - angular_z))
                 right = max(-1.0, min(1.0, linear_x + angular_z))
                 self._bridge.send_drive(left, right)
 
-            log.debug('dir=(%.2f,%.2f) hdg_fb=%.1f°', dx, dy, math.degrees(hdg_fb))
+            log.debug('target_hdg=%.1f° hdg_fb=%.1f° speed=%.2f', math.degrees(target_heading), math.degrees(hdg_fb), speed_scale)
 
             elapsed = time.monotonic() - t0
             time.sleep(max(0.0, interval - elapsed))
