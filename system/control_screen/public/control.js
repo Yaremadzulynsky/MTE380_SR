@@ -34,6 +34,11 @@ function initialize() {
   bindEvents();
   refreshBridgeStatus(false);
   window.addEventListener('resize', updateGeometry);
+  setInterval(() => {
+    if (!state.active) {
+      sendControlCommand(true);
+    }
+  }, state.sendIntervalMs);
 }
 
 function bindEvents() {
@@ -270,14 +275,9 @@ async function sendControlCommand(force) {
     servo: state.vector.servo
   };
 
-  if (payload.speed === 0 && payload.x === 0 && payload.y === 0) {
-    elements.feedback.textContent = 'Centered. Awaiting input.';
-    if (!force) {
-      return;
-    }
-  } else {
-    elements.feedback.textContent = 'Command sent.';
-  }
+  elements.feedback.textContent = (payload.speed === 0 && payload.x === 0 && payload.y === 0)
+    ? 'Centered. Awaiting input.'
+    : 'Command sent.';
 
   const result = await requestJson('/api/control', {
     method: 'POST',
