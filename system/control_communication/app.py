@@ -13,10 +13,6 @@ from urllib import request as urlrequest
 from flask import Flask, jsonify, request
 from smbus2 import SMBus, i2c_msg
 
-try:
-    import serial
-except Exception:
-    serial = None
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "robot-control-system"))
 try:
@@ -65,7 +61,6 @@ app = Flask(__name__)
 
 bus_lock = threading.Lock()
 bus: Optional[SMBus] = None
-serial_link = None
 robot = None
 last_sent: Optional[dict[str, Any]] = None
 
@@ -91,16 +86,6 @@ def close_bus() -> None:
         bus = None
 
 
-def close_serial_link() -> None:
-    global serial_link
-    if serial_link is not None:
-        try:
-            serial_link.close()
-        except Exception:
-            pass
-        serial_link = None
-
-
 def close_robot() -> None:
     global robot
     if robot is not None:
@@ -114,7 +99,6 @@ def close_robot() -> None:
 def handle_signal(signum, _frame) -> None:
     log_line("shutdown", {"signal": signum})
     close_bus()
-    close_serial_link()
     close_robot()
     raise SystemExit(0)
 
@@ -309,46 +293,6 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 503,
             )
 
-    if MODE == "serial":
-        try:
-            with bus_lock:
-                if serial_link is None:
-                    raise OSError("Serial port is not available.")
-                # Keep byte-for-byte parity with I2C payload format.
-                serial_link.write(bytes(encoded["bytes"]))
-                serial_link.flush()
-        except Exception as exc:
-            log_line(
-                "vector_send_fail",
-                {
-                    "client": request.remote_addr,
-                    "mode": MODE,
-                    "x": encoded["x_input"],
-                    "y": encoded["y_input"],
-                    "speed": speed_value,
-                    "x_int8": encoded["x_int8"],
-                    "y_int8": encoded["y_int8"],
-                    "servo_deg": encoded["servo_deg"],
-                    "left_int8": encoded["left_int8"],
-                    "right_int8": encoded["right_int8"],
-                    "bytes": encoded["bytes"],
-                    "error": repr(exc),
-                },
-            )
-            return (
-                {
-                    "ok": False,
-                    "message": "Serial write failed.",
-                    "error": str(exc),
-                    "serial": {
-                        "port": SERIAL_PORT,
-                        "baudrate": SERIAL_BAUDRATE,
-                        "active": False,
-                    },
-                },
-                503,
-            )
-
     if robot is not None:
         robot.set_direction(encoded["x_input"], encoded["y_input"])
         robot.set_speed(speed_value / 5.0)
@@ -519,7 +463,7 @@ def post_control():
 
 
 def main() -> None:
-    global bus, serial_link, robot
+    global bus, robot
 
     if _Robot is not None:
         robot = _Robot(SERIAL_PORT, SERIAL_BAUDRATE)
@@ -532,15 +476,6 @@ def main() -> None:
 
     if MODE == "i2c":
         bus = SMBus(I2C_BUS_NUM)
-    elif MODE == "serial":
-        if serial is None:
-            raise RuntimeError("pyserial is required for HARDWARE_MODE=serial but is not installed.")
-        serial_link = serial.Serial(
-            port=SERIAL_PORT,
-            baudrate=SERIAL_BAUDRATE,
-            timeout=SERIAL_TIMEOUT_S,
-            write_timeout=SERIAL_WRITE_TIMEOUT_S,
-        )
 
     log_line(
         "startup",
@@ -564,7 +499,6 @@ def main() -> None:
 
 
 atexit.register(close_bus)
-atexit.register(close_serial_link)
 atexit.register(close_robot)
 signal.signal(signal.SIGINT, handle_signal)
 signal.signal(signal.SIGTERM, handle_signal)
