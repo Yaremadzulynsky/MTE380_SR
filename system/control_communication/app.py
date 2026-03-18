@@ -123,8 +123,8 @@ def parse_optional_speed(payload: dict[str, Any]) -> tuple[Optional[float], Opti
     speed = float(raw_value)
     if not math.isfinite(speed):
         return None, "'speed' must be finite."
-    if not (0.0 <= speed <= 5.0):
-        return None, "'speed' must be between 0 and 5."
+    if not (0.0 <= speed <= 1.0):
+        return None, "'speed' must be between 0 and 1."
     return speed, None
 
 
@@ -295,7 +295,7 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
 
     if robot is not None:
         robot.set_direction(encoded["x_input"], encoded["y_input"])
-        robot.set_speed(speed_value / 5.0)
+        robot.set_speed(speed_value)
 
     ts = now_iso()
     last_sent = {
