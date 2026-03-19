@@ -37,6 +37,7 @@ Usage
 
 import logging
 import math
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -44,6 +45,88 @@ from typing import Optional, Tuple, Union
 
 import cv2
 import numpy as np
+
+# ── Pi camera via rpicam-vid subprocess ───────────────────────────────────────
+
+_JPEG_SOI = bytes([0xFF, 0xD8])
+_JPEG_EOI = bytes([0xFF, 0xD9])
+
+
+class _RpicamVidCamera:
+    """Pi Camera via rpicam-vid subprocess (MJPEG to stdout). No Picamera2/libcamera lock."""
+
+    def __init__(self, width: int = 640, height: int = 480, fps: float = 30.0) -> None:
+        self._lock    = threading.Lock()
+        self._latest: Optional[np.ndarray] = None
+        self._stop    = False
+        self._eof     = False
+        self._buffer  = bytearray()
+
+        cmd = [
+            'rpicam-vid', '-t', '0', '-o', '-',
+            '--codec', 'mjpeg', '-n',
+            '--width', str(width), '--height', str(height),
+            '--framerate', str(int(fps)),
+        ]
+        try:
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                          stderr=subprocess.DEVNULL, bufsize=0)
+        except FileNotFoundError as e:
+            raise RuntimeError('rpicam-vid not found — install rpicam-apps') from e
+
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+
+    def _reader(self) -> None:
+        assert self._proc.stdout
+        while not self._stop:
+            chunk = self._proc.stdout.read(65536)
+            if not chunk:
+                self._eof = True
+                break
+            with self._lock:
+                self._buffer.extend(chunk)
+            self._drain()
+
+    def _drain(self) -> None:
+        while True:
+            with self._lock:
+                data = bytes(self._buffer)
+            start = data.find(_JPEG_SOI)
+            if start < 0:
+                with self._lock:
+                    self._buffer.clear()
+                break
+            end = data.find(_JPEG_EOI, start)
+            if end < 0:
+                if start > 0:
+                    with self._lock:
+                        del self._buffer[:start]
+                break
+            end += 2
+            jpeg = data[start:end]
+            with self._lock:
+                del self._buffer[:end]
+            frame = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+            if frame is not None:
+                with self._lock:
+                    self._latest = frame
+
+    def read(self) -> Optional[np.ndarray]:
+        deadline = time.perf_counter() + 2.0
+        while self._latest is None and not self._eof and time.perf_counter() < deadline:
+            time.sleep(0.005)
+        with self._lock:
+            return self._latest
+
+    def release(self) -> None:
+        self._stop = True
+        self._thread.join(timeout=1.0)
+        self._proc.terminate()
+        try:
+            self._proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
 
 log = logging.getLogger(__name__)
 
@@ -171,15 +254,9 @@ class LineDetector:
 
     def _open_camera(self) -> None:
         if self._source is None:
-            # Raspberry Pi path — picamera2 must be installed
-            from picamera2 import Picamera2  # type: ignore[import]
-            self._picam = Picamera2()
-            cfg = self._picam.create_preview_configuration(
-                main={'size': (FRAME_WIDTH, FRAME_HEIGHT), 'format': 'RGB888'}
-            )
-            self._picam.configure(cfg)
-            self._picam.start()
-            log.info('Picamera2 opened (%dx%d)', FRAME_WIDTH, FRAME_HEIGHT)
+            # Raspberry Pi path — rpicam-vid subprocess (no libcamera lock)
+            self._picam = _RpicamVidCamera(FRAME_WIDTH, FRAME_HEIGHT)
+            log.info('rpicam-vid opened (%dx%d)', FRAME_WIDTH, FRAME_HEIGHT)
         else:
             self._cap = (cv2.VideoCapture(self._source, self._backend)
                          if self._backend else cv2.VideoCapture(self._source))
@@ -193,8 +270,7 @@ class LineDetector:
     def _read_frame(self) -> Optional[np.ndarray]:
         """Return the next BGR frame, or None on failure."""
         if self._picam is not None:
-            rgb = self._picam.capture_array()            # RGB888
-            return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            return self._picam.read()
         if self._cap is not None:
             ok, frame = self._cap.read()
             return frame if ok else None
@@ -202,7 +278,7 @@ class LineDetector:
 
     def _release_camera(self) -> None:
         if self._picam is not None:
-            self._picam.stop()
+            self._picam.release()
             self._picam = None
         if self._cap is not None:
             self._cap.release()
