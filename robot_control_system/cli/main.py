@@ -360,6 +360,7 @@ def main():
 
     # Hardware commands — connect to robot over serial
     robot = _make_robot(args)
+    robot.set_speed(0.01)
     try:
         HARDWARE_COMMANDS[args.command](robot, args)
     except KeyboardInterrupt:
