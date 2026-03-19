@@ -34,6 +34,8 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - Purpose: web operations panel for robot stack lifecycle, service status, log viewing, and test actions.
 - Requires host execution with Docker CLI access (`docker`) and compose file access.
 - Enable with environment variable: `ENABLE_OPS_DASHBOARD=true`.
+- Compose file defaults to `../docker-compose.yaml` relative to `control_screen/server.js`.
+- Override compose path with `OPS_COMPOSE_FILE=/absolute/path/to/docker-compose.yaml`.
 
 ## Ops API endpoints
 - `GET /api/ops/config` returns feature flag and service groups.
@@ -50,5 +52,5 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - Services are restricted by an allowlist.
 - Commands are run with fixed compose args and sanitized service names.
 - Commands use timeout and max-output limits to avoid hanging or oversized responses.
-- On 32-bit ARM (`process.arch === "arm"`), the default ops groups automatically exclude `alloy` because compatible images may be unavailable.
+- On ARM (`process.arch === "arm"` or `process.arch === "arm64"`), the default ops groups automatically exclude `alloy` because compatible images may be unavailable.
 - To force-include `alloy` anyway, set `OPS_INCLUDE_ALLOY=true`.

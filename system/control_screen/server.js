@@ -35,13 +35,14 @@ const SERVO_MAX_DEG = Number.parseInt(process.env.SERVO_MAX_DEG || '90', 10);
 const ENABLE_OPS_DASHBOARD = String(process.env.ENABLE_OPS_DASHBOARD || '').toLowerCase() === 'true';
 const OPS_DOCKER_BIN = process.env.OPS_DOCKER_BIN || 'docker';
 const OPS_COMPOSE_FILE = process.env.OPS_COMPOSE_FILE
-  || '/home/zainm/Documents/3B/380/MTE380_SR/system/docker-compose.yaml';
+  || path.resolve(__dirname, '..', 'docker-compose.yaml');
 const OPS_COMMAND_TIMEOUT_MS = Number.parseInt(process.env.OPS_COMMAND_TIMEOUT_MS || '15000', 10);
 const OPS_MAX_OUTPUT_BYTES = Number.parseInt(process.env.OPS_MAX_OUTPUT_BYTES || '262144', 10);
 const OPS_LOG_TAIL_DEFAULT = Number.parseInt(process.env.OPS_LOG_TAIL_DEFAULT || '150', 10);
 const OPS_LOG_TAIL_MAX = Number.parseInt(process.env.OPS_LOG_TAIL_MAX || '2000', 10);
 const OPS_INCLUDE_ALLOY = String(process.env.OPS_INCLUDE_ALLOY || '').toLowerCase() === 'true';
-const OPS_SUPPORTS_ALLOY = process.arch !== 'arm' || OPS_INCLUDE_ALLOY;
+const OPS_IS_ARM = process.arch === 'arm' || process.arch === 'arm64';
+const OPS_SUPPORTS_ALLOY = !OPS_IS_ARM || OPS_INCLUDE_ALLOY;
 
 const DEFAULT_RANGE = { min: -1000, max: 1000 };
 
