@@ -74,11 +74,11 @@ class WebServer:
     host     : str
         Bind address. '0.0.0.0' makes the server reachable on the LAN.
     port     : int
-        HTTP port (default 5000).
+        HTTP port (default 8321).
     """
 
     def __init__(self, *, robot=None, detector=None, state_machine=None,
-                 host: str = '0.0.0.0', port: int = 5000):
+                 host: str = '0.0.0.0', port: int = 8321):
         self._robot         = robot
         self._detector      = detector
         self._state_machine = state_machine

@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     cam_group.add_argument('--camera',
                            help='Camera source: index, "pi", file, or URL')
 
-    parser.add_argument('--web-port', type=int, default=5000)
+    parser.add_argument('--web-port', type=int, default=8321)
     parser.add_argument('--initial-state', default='stopped',
                         choices=['stopped', 'line_follow'])
     parser.add_argument('--debug', action='store_true')

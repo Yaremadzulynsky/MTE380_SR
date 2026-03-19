@@ -12,7 +12,7 @@ Server commands (talk to a running state_machine/main.py server):
   python -m cli.main state set <name>
   python -m cli.main status
 
-  Use --server to point at a non-default host: --server http://pi.local:5000
+  Use --server to point at a non-default host: --server http://pi.local:8321
 
 Hardware commands:
   drive <left> <right>                — move both wheels by N ticks
@@ -274,8 +274,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Serial port for hardware commands (default: /dev/ttyACM0)')
     parser.add_argument('--baud', type=int, default=115200)
     # Server connection
-    parser.add_argument('--server', default='http://localhost:5000',
-                        help='Server URL for state/status commands (default: http://localhost:5000)')
+    parser.add_argument('--server', default='http://localhost:8321',
+                        help='Server URL for state/status commands (default: http://localhost:8321)')
     parser.add_argument('--debug', action='store_true')
 
     sub = parser.add_subparsers(dest='command', metavar='command')

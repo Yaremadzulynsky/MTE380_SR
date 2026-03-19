@@ -83,8 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     # Web server
     parser.add_argument('--host', default='0.0.0.0',
                         help='Bind address (default: 0.0.0.0)')
-    parser.add_argument('--web-port', type=int, default=5000,
-                        help='HTTP port (default: 5000)')
+    parser.add_argument('--web-port', type=int, default=8321,
+                        help='HTTP port (default: 8321)')
     parser.add_argument('--debug', action='store_true',
                         help='Verbose logging + annotated camera overlay')
 
