@@ -187,6 +187,22 @@ class WebServer:
             robot.set_speed(float(speed))
             return jsonify({'speed': speed})
 
+        @app.route('/api/align', methods=['POST'])
+        def align_to_line():
+            robot    = self._robot
+            detector = self._detector
+            if robot is None:
+                return jsonify({'error': 'no robot'}), 503
+            if detector is None:
+                return jsonify({'error': 'no detector'}), 503
+            result = detector.get_result()
+            if result is None:
+                return jsonify({'error': 'no line detected'}), 404
+            tx, ty = result.direction
+            robot.set_speed(0.0)
+            robot.add_direction(tx, ty)
+            return jsonify({'direction': [round(tx, 3), round(ty, 3)]})
+
         @app.route('/api/gains', methods=['GET'])
         def get_gains():
             robot = self._robot

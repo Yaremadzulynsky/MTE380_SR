@@ -406,6 +406,8 @@
           <button class="ctrl-btn" onclick="sendStop()" style="color:var(--danger);">&#9632; STOP</button>
           <button class="ctrl-btn" onclick="sendTurnLeft()"  style="color:var(--warning);">&#8592; LEFT</button>
           <button class="ctrl-btn" onclick="sendTurnRight()" style="color:var(--warning);">&#8594; RIGHT</button>
+          <button class="ctrl-btn" id="btn-align" onclick="alignToLine()" style="color:#c080ff;">&#8982; ALIGN</button>
+          <span id="align-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
 
       </div>
@@ -701,6 +703,25 @@
     const speed = parseFloat(document.getElementById('ctrl-speed').value);
     fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
     fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: -1, y: 0}) });
+  }
+
+  function alignToLine() {
+    const btn = document.getElementById('btn-align');
+    const st  = document.getElementById('align-status');
+    btn.disabled = true;
+    fetch('/api/align', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) {
+          st.textContent = d.error;
+          st.style.color = 'var(--danger)';
+        } else {
+          st.textContent = `aligned (${d.direction[0]}, ${d.direction[1]})`;
+          st.style.color = 'var(--success)';
+        }
+      })
+      .catch(() => { st.textContent = 'error'; st.style.color = 'var(--danger)'; })
+      .finally(() => { btn.disabled = false; });
   }
 
   function sendTurnRight() {
