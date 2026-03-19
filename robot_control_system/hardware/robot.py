@@ -10,7 +10,8 @@ from .speed_pid   import SpeedPID
 # ── Config ────────────────────────────────────────────────────────────────────
 
 RATE_HZ   = 20.0
-MAX_SPEED = 1.0
+MAX_SPEED     = 0.3
+MAX_ROT_SPEED = 0.3
 
 HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
 
@@ -81,7 +82,7 @@ class Robot:
     def set_speed(self, speed: float):
         """Set forward/backward speed. -1 = full reverse, 0 = stop, 1 = full forward."""
         with self._lock:
-            self._speed_scale = max(-1.0, min(1.0, speed))
+            self._speed_scale = max(-MAX_SPEED, min(MAX_SPEED, speed))
 
     def set_rotation_scale(self, scale: float):
         """Set rotation speed as a fraction of max angular output. 0 = no rotation, 1 = full."""
@@ -244,6 +245,7 @@ class Robot:
                 left, right = 0.0, 0.0
             else:
                 angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
+                angular_z = max(-MAX_ROT_SPEED, min(MAX_ROT_SPEED, angular_z))
                 linear_x  = speed_scale
                 left  = max(-1.0, min(1.0, linear_x - angular_z))
                 right = max(-1.0, min(1.0, linear_x + angular_z))
