@@ -338,6 +338,43 @@
       </div>
     </div>
 
+    <!-- PID tuner -->
+    <div class="panel">
+      <div class="panel-title">PID TUNER</div>
+      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Loop</span>
+          <label style="color:var(--text); font-size:12px;">
+            <input type="radio" name="pid-loop" value="heading" checked> Heading
+          </label>
+          <label style="color:var(--text); font-size:12px; margin-left:12px;">
+            <input type="radio" name="pid-loop" value="speed"> Speed
+          </label>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Kp</span>
+          <input id="pid-kp" type="number" step="0.01" value="2.0" style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Ki</span>
+          <input id="pid-ki" type="number" step="0.01" value="0.1" style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Kd</span>
+          <input id="pid-kd" type="number" step="0.01" value="0.0" style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="ctrl-btn" id="btn-pid-apply" onclick="applyGains()" style="color:var(--accent);">&#10003; APPLY</button>
+          <button class="ctrl-btn" onclick="loadGains()" style="color:var(--dim);">&#8635; LOAD</button>
+          <span id="pid-status" style="font-size:11px; color:var(--dim);"></span>
+        </div>
+
+      </div>
+    </div>
+
   </div><!-- /panels-col -->
 </main>
 
@@ -504,6 +541,63 @@
       setBar('bar-spd', 'hw-spd', hw.speed_scale);
     }
   }
+
+  // ── PID tuner ─────────────────────────────────────────────────────────────
+
+  function selectedLoop() {
+    return document.querySelector('input[name="pid-loop"]:checked').value;
+  }
+
+  function loadGains() {
+    fetch('/api/gains')
+      .then(r => r.json())
+      .then(d => {
+        const loop = selectedLoop();
+        const g = d[loop];
+        if (!g) return;
+        document.getElementById('pid-kp').value = g.kp;
+        document.getElementById('pid-ki').value = g.ki;
+        document.getElementById('pid-kd').value = g.kd;
+        document.getElementById('pid-status').textContent = 'loaded';
+        document.getElementById('pid-status').style.color = 'var(--success)';
+      })
+      .catch(() => {
+        document.getElementById('pid-status').textContent = 'error';
+        document.getElementById('pid-status').style.color = 'var(--danger)';
+      });
+  }
+
+  function applyGains() {
+    const pid = selectedLoop();
+    const kp  = parseFloat(document.getElementById('pid-kp').value);
+    const ki  = parseFloat(document.getElementById('pid-ki').value);
+    const kd  = parseFloat(document.getElementById('pid-kd').value);
+    const btn = document.getElementById('btn-pid-apply');
+    btn.disabled = true;
+    fetch('/api/gains', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pid, kp, ki, kd }),
+    })
+      .then(r => r.json())
+      .then(() => {
+        document.getElementById('pid-status').textContent = 'applied';
+        document.getElementById('pid-status').style.color = 'var(--success)';
+      })
+      .catch(() => {
+        document.getElementById('pid-status').textContent = 'error';
+        document.getElementById('pid-status').style.color = 'var(--danger)';
+      })
+      .finally(() => { btn.disabled = false; });
+  }
+
+  // Load gains on page load
+  window.addEventListener('load', loadGains);
+
+  // Reload gains when switching loop
+  document.querySelectorAll('input[name="pid-loop"]').forEach(r =>
+    r.addEventListener('change', loadGains)
+  );
 </script>
 
 </body>

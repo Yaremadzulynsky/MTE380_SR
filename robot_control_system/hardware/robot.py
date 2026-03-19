@@ -99,6 +99,21 @@ class Robot:
         self._speed_pid.set_gains(kp, ki, kd)
         log.info('speed PID gains → kp=%.3f ki=%.3f kd=%.3f', kp, ki, kd)
 
+    def get_gains(self) -> dict:
+        """Return current PID gains for heading and speed."""
+        return {
+            'heading': {
+                'kp': self._heading_pid._pid.kp,
+                'ki': self._heading_pid._pid.ki,
+                'kd': self._heading_pid._pid.kd,
+            },
+            'speed': {
+                'kp': self._speed_pid._pid.kp,
+                'ki': self._speed_pid._pid.ki,
+                'kd': self._speed_pid._pid.kd,
+            },
+        }
+
     def set_heading_feedback(self, radians: float):
         with self._lock:
             self._heading_fb = radians
@@ -240,9 +255,6 @@ class Robot:
 
             if override is not None:
                 left, right = override
-            elif abs(speed_scale) < 1e-6:
-                self._heading_pid.reset()
-                left, right = 0.0, 0.0
             else:
                 angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
                 angular_z = max(-MAX_ROT_SPEED, min(MAX_ROT_SPEED, angular_z))

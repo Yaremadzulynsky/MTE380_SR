@@ -162,6 +162,31 @@ class WebServer:
             sm.transition(state)
             return jsonify({'state': state})
 
+        @app.route('/api/gains', methods=['GET'])
+        def get_gains():
+            robot = self._robot
+            if robot is None:
+                return jsonify({'error': 'no robot'}), 503
+            return jsonify(robot.get_gains())
+
+        @app.route('/api/gains', methods=['POST'])
+        def set_gains():
+            robot = self._robot
+            if robot is None:
+                return jsonify({'error': 'no robot'}), 503
+            body = request.get_json(silent=True) or {}
+            pid  = body.get('pid')   # 'heading' or 'speed'
+            kp   = body.get('kp')
+            ki   = body.get('ki')
+            kd   = body.get('kd')
+            if pid not in ('heading', 'speed') or None in (kp, ki, kd):
+                return jsonify({'error': 'expected pid, kp, ki, kd'}), 400
+            if pid == 'heading':
+                robot.set_gains(float(kp), float(ki), float(kd))
+            else:
+                robot.set_speed_gains(float(kp), float(ki), float(kd))
+            return jsonify(robot.get_gains())
+
     # ── MJPEG stream ───────────────────────────────────────────────────────────
 
     def _mjpeg_stream(self):
