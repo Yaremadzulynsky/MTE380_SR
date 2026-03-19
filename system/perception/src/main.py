@@ -1,332 +1,302 @@
-"""Main perception loop for Milestone 3.3."""
-
 from __future__ import annotations
 
 import argparse
-import queue
+import json
+import platform
+import re
+import subprocess
 import threading
 import time
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
 
 import cv2
-import numpy as np
+import requests
 
-from src.comms.http_tx import HTTPSender
-from src.comms.packet import PerceptionPacket
-from src.comms.serial_tx import SerialSender
-from src.comms.udp_tx import UDPSender
 from src.config import AppConfig, load_config
-from src.debug.http_stream import DebugStreamServer
-from src.pipeline import PipelineOutput, PipelineState, run_pipeline
-from src.utils.logging import log
-from src.utils.math2d import to_robot_frame_clamped
-from src.utils.timing import LoopRegulator
-from src.vision.camera import OpenCVCamera, RpicamVidCamera
-from src.vision.debug_draw import draw_overlay, make_mask_preview
-from src.vision.masks import crop_roi
+from src.debug_stream import DebugStreamServer
+from src.pipeline import PipelineOutput, PipelineState, draw_overlay, run_pipeline
 
 
-def process_roi(
-    roi_bgr: Any,
-    state: PipelineState,
-    cfg: AppConfig,
-) -> tuple[float, float, str, float, bool, str, bool, float, float, dict[str, Any]]:
-    """
-    Single pipeline function:
-      ROI BGR -> (px, py, zone, gamma, path_detected, path_mask_key, target_detected, target_px, target_py, debug_artifacts)
-    """
-    out: PipelineOutput = run_pipeline(roi_bgr=roi_bgr, state=state, cfg=cfg)
-    return (
-        out.px, out.py, out.zone, out.gamma,
-        out.path_detected, out.path_mask_key,
-        out.target_detected, out.target_px, out.target_py,
-        out.debug_artifacts,
+def _find_macos_camera_index(pattern: str) -> int:
+    probe = pattern.strip().lower()
+    if not probe:
+        raise RuntimeError("Camera name pattern cannot be empty")
+    if platform.system() != "Darwin":
+        raise RuntimeError(f"Named camera lookup is only supported on macOS: {pattern}")
+
+    result = subprocess.run(
+        ["ffmpeg", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    listing = f"{result.stdout}\n{result.stderr}"
+    in_video = False
+    matches: list[tuple[int, str]] = []
+    for line in listing.splitlines():
+        if "AVFoundation video devices:" in line:
+            in_video = True
+            continue
+        if "AVFoundation audio devices:" in line:
+            break
+        if not in_video:
+            continue
+        found = re.search(r"\[(\d+)\]\s+(.+)$", line)
+        if not found:
+            continue
+        index = int(found.group(1))
+        name = found.group(2).strip()
+        matches.append((index, name))
+        if probe in name.lower():
+            return index
+
+    available = ", ".join(f"{index}:{name}" for index, name in matches) or "none"
+    raise RuntimeError(f"Could not find macOS camera matching '{pattern}'. Available video devices: {available}")
 
 
-@dataclass
-class FrameItem:
-    timestamp: float
-    frame: Any
-
-
-@dataclass
-class PerceptionResult:
-    timestamp: float
-    output: PipelineOutput
-    roi: Any
-
-
-def _make_sender(method: str, cfg: AppConfig) -> Any:
-    if method == "udp":
-        return UDPSender(cfg.comms.udp_ip, cfg.comms.udp_port)
-    if method == "serial":
-        return SerialSender(cfg.comms.serial_port, cfg.comms.serial_baud)
-    if method == "http":
-        if not cfg.comms.http_url:
-            raise ValueError("comms.method is 'http' but comms.http_url is not set")
-        return HTTPSender(cfg.comms.http_url)
-    if method == "stdout":
-        return None
-    raise ValueError(f"Unsupported comms method: {method}")
-
-
-def _parse_source(source: str, cfg: AppConfig) -> int | str:
+def _parse_source(source: str) -> int | str:
     if source == "webcam":
-        return cfg.camera.webcam_index
-    if source == "rpicam":
-        return "rpicam"
+        return 0
+    if source in {"iphone", "continuity", "continuity-camera"}:
+        return _find_macos_camera_index("iphone")
+    if source in {"deskview", "desk-view"}:
+        return _find_macos_camera_index("desk view")
+    if source.startswith("camera:"):
+        return _find_macos_camera_index(source.split("camera:", 1)[1])
+    if source.startswith("webcam:"):
+        return int(source.split("webcam:", 1)[1])
     if source.startswith("video:"):
         return source.split("video:", 1)[1]
-    if source.startswith("stream:"):
-        return source.split("stream:", 1)[1]
-    if source.startswith(("udp://", "tcp://", "rtsp://", "http://", "https://")):
-        return source
-    raise ValueError(
-        "source must be webcam, rpicam, video:/path/to/file, stream:<uri>, or a direct udp/tcp/rtsp/http URI"
-    )
+    if source.isdigit():
+        return int(source)
+    return source
 
 
-def _select_backend(source: int | str, cfg: AppConfig) -> str:
-    if not isinstance(source, str) or source == "rpicam":
-        return cfg.camera.backend
-    if source.startswith("udp://"):
-        return "ffmpeg"
-    if source.startswith(("tcp://", "rtsp://", "http://", "https://")):
-        return "ffmpeg"
-    return "gstreamer"
+def _open_capture(cfg: AppConfig) -> cv2.VideoCapture:
+    source = _parse_source(cfg.source)
+    if isinstance(source, str) and "://" in source:
+        cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+    elif isinstance(source, int) and platform.system() == "Darwin" and hasattr(cv2, "CAP_AVFOUNDATION"):
+        cap = cv2.VideoCapture(source, cv2.CAP_AVFOUNDATION)
+    else:
+        cap = cv2.VideoCapture(source)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cfg.width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cfg.height)
+    cap.set(cv2.CAP_PROP_FPS, cfg.fps)
+    if not cap.isOpened():
+        raise RuntimeError(f"Failed to open camera/video source: {cfg.source}")
+    return cap
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Pi perception node (Milestone 3.3)")
-    parser.add_argument("--config", default="configs/default.yaml", help="Path to YAML config")
-    parser.add_argument(
-        "--mode",
-        choices=["test", "production"],
-        default=None,
-        help="test: GUI + heading arrow + packet logging (stdout). production: full packet over UDP/serial, no GUI",
-    )
-    parser.add_argument("--source", default=None, help="webcam or video:/path/to/file")
-    parser.add_argument("--comms", choices=["udp", "serial", "stdout", "http"], default=None)
-    parser.add_argument("--fps", type=float, default=None)
-    parser.add_argument("--path-mask", choices=["red", "blue", "black"], default=None)
-    args = parser.parse_args()
+def _is_live_source(source: str) -> bool:
+    if source == "webcam" or source.startswith("webcam:") or source.isdigit():
+        return True
+    return not source.startswith("video:")
 
-    cfg_path = Path(args.config)
-    cfg = load_config(cfg_path)
+
+class LatestFrameReader:
+    def __init__(self, cap: cv2.VideoCapture):
+        self._cap = cap
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+        self._frame = None
+        self._seq = 0
+        self._closed = False
+        self._failed = False
+        self._thread = threading.Thread(target=self._run, name="perception-capture", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while True:
+            ok, frame = self._cap.read()
+            with self._cond:
+                if self._closed:
+                    return
+                if not ok or frame is None:
+                    self._failed = True
+                    self._cond.notify_all()
+                    return
+                self._frame = frame
+                self._seq += 1
+                self._cond.notify_all()
+
+    def read(self, last_seq: int, timeout_s: float = 1.0) -> tuple[int, object | None]:
+        deadline = time.time() + timeout_s
+        with self._cond:
+            while self._seq <= last_seq and not self._failed and not self._closed:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                self._cond.wait(timeout=remaining)
+            if self._seq <= last_seq:
+                return last_seq, None
+            return self._seq, self._frame.copy()
+
+    def close(self) -> None:
+        with self._cond:
+            self._closed = True
+            self._cond.notify_all()
+        self._thread.join(timeout=1.0)
+
+
+class AsyncPayloadSender:
+    def __init__(self, cfg: AppConfig):
+        self._cfg = cfg
+        self._session = requests.Session()
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+        self._payload: dict[str, object] | None = None
+        self._closed = False
+        self._thread = threading.Thread(target=self._run, name="perception-sender", daemon=True)
+        self._thread.start()
+
+    def submit(self, payload: dict[str, object]) -> None:
+        with self._cond:
+            self._payload = payload
+            self._cond.notify()
+
+    def _run(self) -> None:
+        while True:
+            with self._cond:
+                while self._payload is None and not self._closed:
+                    self._cond.wait()
+                if self._closed:
+                    return
+                payload = self._payload
+                self._payload = None
+            try:
+                self._session.post(self._cfg.output_url, json=payload, timeout=self._cfg.output.timeout_s)
+            except requests.RequestException as exc:
+                print(json.dumps({"event": "perception_send_error", "message": str(exc)}), flush=True)
+
+    def close(self) -> None:
+        with self._cond:
+            self._closed = True
+            self._cond.notify_all()
+        self._thread.join(timeout=1.0)
+        self._session.close()
+
+
+def _vector_payload(detected: bool, x: float, y: float) -> dict[str, float | bool]:
+    return {"detected": detected, "x": float(x), "y": float(y)}
+
+
+def _build_payload(output: PipelineOutput, path_mask_key: str) -> dict[str, object]:
+    line_key = f"{path_mask_key}_line"
+    line = _vector_payload(output.path_detected, output.robot_vector[0], output.robot_vector[1])
+    empty = _vector_payload(False, 0.0, 0.0)
+    return {
+        line_key: line,
+        "line_error": line,
+        "line": line,
+        "target": empty,
+        "safe_zone": empty,
+        "danger_zone": empty,
+        "path_detected": output.path_detected,
+        "path_mask_key": path_mask_key,
+        "zone": output.zone,
+        "gamma": output.gamma,
+    }
+
+
+def _send_payload(payload: dict[str, object], cfg: AppConfig, session: requests.Session | None) -> None:
+    if cfg.output.method == "none":
+        return
+    if cfg.output.method == "stdout":
+        print(json.dumps(payload), flush=True)
+        return
+    if session is None:
+        raise RuntimeError("HTTP output selected but no session is available")
+    session.post(cfg.output_url, json=payload, timeout=cfg.output.timeout_s)
+
+
+def _apply_overrides(cfg: AppConfig, args: argparse.Namespace) -> AppConfig:
     if args.source is not None:
-        cfg.camera.source = args.source
+        cfg.source = args.source
     if args.fps is not None:
         cfg.fps = args.fps
     if args.path_mask is not None:
         cfg.path_mask_key = args.path_mask
+    return cfg
 
-    # Mode: test = GUI + line overlay + packet logging; production = send full packet, no GUI
-    if args.mode == "test":
-        if args.comms is None:
-            cfg.comms.method = "stdout"
-        else:
-            cfg.comms.method = args.comms
-        gui = not getattr(args, "no_gui", False)
-    elif args.mode == "production":
-        if args.comms is not None:
-            cfg.comms.method = args.comms
-        # else: use cfg.comms.method from config (http in default/docker)
-        gui = False  # production: no GUI
-    else:
-        if args.comms is not None:
-            cfg.comms.method = args.comms
-        gui = not getattr(args, "no_gui", False)
-    source = _parse_source(cfg.camera.source, cfg)
-    sender = _make_sender(cfg.comms.method, cfg)
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Minimal perception node")
+    parser.add_argument("--config", default="configs/default.yaml")
+    parser.add_argument("--mode", choices=["test", "production"], default="production")
+    parser.add_argument("--source", default=None)
+    parser.add_argument("--fps", type=float, default=None)
+    parser.add_argument("--path-mask", choices=["red", "blue", "black"], default=None)
+    parser.add_argument("--no-gui", action="store_true")
+    args = parser.parse_args()
+
+    cfg = _apply_overrides(load_config(Path(args.config)), args)
+    if args.mode == "test" and cfg.output.method == "http":
+        cfg.output.method = "stdout"
+
+    cap = _open_capture(cfg)
+    live_source = _is_live_source(cfg.source)
+    reader = LatestFrameReader(cap) if live_source else None
+    state = PipelineState()
+    sender = AsyncPayloadSender(cfg) if cfg.output.method == "http" else None
+    gui = args.mode == "test" and not args.no_gui
+    frame_period = 1.0 / max(cfg.fps, 1.0)
     debug_stream = None
     if cfg.debug_stream.enabled:
         debug_stream = DebugStreamServer(
             host=cfg.debug_stream.host,
             port=cfg.debug_stream.port,
             jpeg_quality=cfg.debug_stream.jpeg_quality,
+            max_fps=cfg.debug_stream.max_fps,
         )
         debug_stream.start()
-    regulator = LoopRegulator(target_hz=cfg.fps)
-
-    state = PipelineState(path_mask_key=cfg.path_mask_key)
-    log("path_mask_selected", path_mask_key=state.path_mask_key)
-
-    backend = _select_backend(source, cfg)
-    try:
-        if source == "rpicam":
-            cam = RpicamVidCamera(
-                width=cfg.camera.width,
-                height=cfg.camera.height,
-                fps=cfg.fps,
-                camera_index=cfg.camera.webcam_index,
-            )
-        else:
-            cam = OpenCVCamera(
-                source=source,
-                width=cfg.camera.width,
-                height=cfg.camera.height,
-                fps=cfg.fps,
-                backend=backend,
-                gstreamer_device=cfg.camera.gstreamer_device,
-            )
-    except RuntimeError as exc:
-        raise SystemExit(f"Camera initialization failed: {exc}") from exc
-
-    mode = args.mode or "default"
-    log("perception_start", source=cfg.camera.source, fps=cfg.fps, comms=cfg.comms.method, mode=mode)
-    if debug_stream is not None:
-        log("debug_stream_start", host=cfg.debug_stream.host, port=cfg.debug_stream.port)
-
-    frame_queue: "queue.Queue[Optional[FrameItem]]" = queue.Queue(maxsize=2)
-    result_queue: "queue.Queue[Optional[PerceptionResult]]" = queue.Queue(maxsize=2)
-    stop_event = threading.Event()
-
-    def capture_loop() -> None:
-        try:
-            while not stop_event.is_set():
-                frame = cam.read()
-                if frame is None:
-                    log("stream_end_or_read_fail")
-                    break
-                ts = time.time()
-                try:
-                    frame_queue.put(FrameItem(timestamp=ts, frame=frame), timeout=0.5)
-                except queue.Full:
-                    # Drop frames to keep latency bounded.
-                    continue
-        finally:
-            try:
-                frame_queue.put_nowait(None)
-            except queue.Full:
-                pass
-
-    def worker_loop() -> None:
-        try:
-            while not stop_event.is_set():
-                try:
-                    item = frame_queue.get(timeout=0.5)
-                except queue.Empty:
-                    continue
-                if item is None:
-                    break
-
-                roi = crop_roi(item.frame, cfg.roi_y_start, cfg.roi_y_start_ratio)
-                out = run_pipeline(roi_bgr=roi, state=state, cfg=cfg)
-                try:
-                    result_queue.put(
-                        PerceptionResult(timestamp=item.timestamp, output=out, roi=roi),
-                        timeout=0.5,
-                    )
-                except queue.Full:
-                    continue
-        finally:
-            try:
-                result_queue.put_nowait(None)
-            except queue.Full:
-                pass
-
-    capture_thread = threading.Thread(target=capture_loop, name="perception_capture", daemon=True)
-    worker_thread = threading.Thread(target=worker_loop, name="perception_worker", daemon=True)
-    capture_thread.start()
-    worker_thread.start()
-
-    frame_count = 0
-    fps_window_start = time.time()
 
     try:
+        last_seq = 0
         while True:
-            try:
-                result = result_queue.get(timeout=1.0)
-            except queue.Empty:
-                if stop_event.is_set():
-                    break
-                continue
-            if result is None:
-                break
-
-            out = result.output
-            frame_count += 1
-
-            now = time.time()
-            window_dt = now - fps_window_start
-            if window_dt >= 1.0:
-                current_fps = frame_count / window_dt if window_dt > 0 else 0.0
-                log(
-                    "perception_fps",
-                    fps=current_fps,
-                    target_fps=cfg.fps,
-                    window_s=window_dt,
-                    frames=frame_count,
-                )
-                fps_window_start = now
-                frame_count = 0
-
-            # Robot frame: X+ right, Y+ forward; clamp so sqrt(px^2+py^2) <= 1 (max speed)
-            px_out, py_out = to_robot_frame_clamped(out.px, out.py)
-            pkt = PerceptionPacket(
-                px=px_out,
-                py=py_out,
-                zone=out.zone,
-                gamma=out.gamma,
-                t=result.timestamp,
-                path_detected=out.path_detected,
-                path_mask_key=out.path_mask_key,
-                target_detected=out.target_detected,
-                target_px=out.target_px,
-                target_py=out.target_py,
-            )
-            line = pkt.to_json(zone_encoding=cfg.comms.zone_encoding)
-            if sender is None:
-                print(line, flush=True)
+            started = time.time()
+            if reader is not None:
+                last_seq, frame = reader.read(last_seq, timeout_s=1.0)
+                if frame is None:
+                    continue
             else:
-                sender.send_line(line)
+                ok, frame = cap.read()
+                if not ok or frame is None:
+                    break
 
-            overlay = draw_overlay(
-                result.roi,
-                np.array([out.px, out.py], dtype=float),
-                out.zone,
-                out.gamma,
-                path_detected=out.path_detected,
-                target_detected=out.target_detected,
-                target_heading=np.array([out.target_px, out.target_py], dtype=float),
-                tangent_vector=np.asarray(
-                    out.debug_artifacts.get("tangent_vector", np.zeros(2, dtype=float)),
-                    dtype=float,
-                ),
-                probe_point=tuple(out.debug_artifacts.get("heading_debug", {}).get("probe_point", ())),
-                target_point=tuple(out.debug_artifacts.get("heading_debug", {}).get("target_point", ())),
-            )
+            output = run_pipeline(frame, state, cfg)
+            payload = _build_payload(output, cfg.path_mask_key)
+
+            if sender is not None:
+                sender.submit(payload)
+            else:
+                _send_payload(payload, cfg, None)
+
+            overlay = draw_overlay(output)
             if debug_stream is not None:
-                debug_stream.update_frame(
-                    overlay,
-                    status=(
-                        f"zone={out.zone} gamma={out.gamma:.2f} "
-                        f"path_detected={out.path_detected} target_detected={out.target_detected}"
-                    ),
-                )
+                debug_stream.update(overlay)
             if gui:
                 cv2.imshow("perception_roi", overlay)
-                if cfg.show_masks and "masks" in out.debug_artifacts:
-                    cv2.imshow("perception_masks", make_mask_preview(out.debug_artifacts["masks"]))
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord("q"):
+                cv2.imshow("perception_mask", output.mask)
+                if (cv2.waitKey(1) & 0xFF) == ord("q"):
                     break
 
-            regulator.sleep()
+            if reader is None:
+                elapsed = time.time() - started
+                remaining = frame_period - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
     finally:
-        stop_event.set()
-        capture_thread.join(timeout=1.0)
-        worker_thread.join(timeout=1.0)
-        cam.release()
+        if reader is not None:
+            reader.close()
+        cap.release()
         if sender is not None:
             sender.close()
         if debug_stream is not None:
             debug_stream.close()
-        cv2.destroyAllWindows()
-        log("perception_stop")
+        if gui:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

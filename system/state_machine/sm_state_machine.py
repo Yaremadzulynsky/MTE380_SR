@@ -147,6 +147,8 @@ class StateMachine:
         self.line_pid_sync_interval = max(float(os.getenv("LINE_PID_SYNC_INTERVAL", "0.4")), 0.05)
         self.line_pid_dt_min = 1e-3
         self.line_pid_dt_max = 0.25
+        self.line_direct_lookahead = clamp(float(os.getenv("LINE_DIRECT_LOOKAHEAD", "0.35")), 0.0, 1.5)
+        self.line_direct_max_speed = clamp(float(os.getenv("LINE_DIRECT_MAX_SPEED", "0.4")), 0.0, MAX_CONTROL_SPEED)
         self._line_pid_integral = 0.0
         self._line_pid_prev_error = 0.0
         self._line_pid_last_at = 0.0
@@ -278,6 +280,20 @@ class StateMachine:
         )
         self._last_command_at = now
         return True
+
+    def _send_line_error_command(self, *, line: Vector, context: str) -> None:
+        if not line.detected:
+            send_stop_command(context=f"{context}_stop")
+            return
+
+        forward = max(0.0, float(line.y)) + self.line_direct_lookahead
+        angle_rad = math.atan2(float(line.x), forward)
+        speed = min(math.hypot(float(line.x), forward), self.line_direct_max_speed)
+        _send_control_polar(
+            angle_rad=angle_rad,
+            speed=speed,
+            context=context,
+        )
 
     def _init_relative_turn_target(
         self,
@@ -450,25 +466,9 @@ class StateMachine:
         match self.state:
             case State.SEARCHING_DEMO:
                 if inputs.red_line.detected:
-                    x_cmd = clamp(inputs.red_line.x, -1.0, 1.0)
-                    y_cmd = clamp(inputs.red_line.y, -1.0, 1.0)
-                    clamped_magnitude = (x_cmd * x_cmd + y_cmd * y_cmd) ** 0.5
-                    if clamped_magnitude <= 1e-6:
-                        send_stop_command(context="testing_red_line_passthrough_stop")
-                        self._last_command_at = now
-                    else:
-                        speed = clamped_magnitude
-                        _send_control_command(
-                            x=x_cmd,
-                            y=y_cmd,
-                            speed=speed,
-                            servo=0, 
-                            context="line input",
-                        )
-                        self._last_command_at = now
+                    self._send_line_error_command(line=inputs.red_line, context="line_input")
+                    self._last_command_at = now
                 else:
-                    
-                    
                     send_stop_command(context="line input stop")
                     self._last_command_at = now
                 
@@ -486,18 +486,10 @@ class StateMachine:
                 
             case State.REMOTE_CONTROL:
                 if inputs.red_line.detected:
-                    x_cmd = clamp(inputs.red_line.x, -1.0, 1.0)
-                    y_cmd = clamp(inputs.red_line.y, -1.0, 1.0)
-                    magnitude = (x_cmd * x_cmd + y_cmd * y_cmd) ** 0.5
-                    if magnitude <= 1e-6:
-                        send_stop_command(context="remote_control_red_line_stop")
-                    else:
-                        _send_control_command(
-                            x=x_cmd,
-                            y=y_cmd,
-                            speed=clamp(magnitude, 0.0, MAX_CONTROL_SPEED),
-                            context="remote_control_red_line",
-                        )
+                    self._send_line_error_command(
+                        line=inputs.red_line,
+                        context="remote_control_red_line",
+                    )
                     self._last_command_at = now
                     self._last_remote_control_poll_at = now
                 else:

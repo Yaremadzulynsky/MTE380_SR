@@ -1,7 +1,7 @@
-.venv/
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
-.pytest_cache/
-recordings/
-*.mp4
+*.pyd
+.DS_Store
+

@@ -4,9 +4,28 @@ services:
       context: ./perception
     container_name: perception
     network_mode: host
-    # For UsSB webcam, map the device (e.g. /dev/video0). Not needed for Pi Camera Module 2 (rpicam).
+    command: ["python3", "-m", "src.main", "--mode", "production", "--config", "configs/docker-udp.yaml", "--source", "${PERCEPTION_SOURCE:-udp://0.0.0.0:5000}"]
+    environment:
+      PORT: 4000
+      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+      CONTROL_COMM_CONTROL_PATH: "/control"
+      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_INPUT_PATH: "/inputs"
+      LOG_PATH: "/var/log/perception/perception.log"
+    # volumes:
+    #   - service-logs:/var/log
+    # depends_on:
+    #   - control-communication
+    #   - state-machine
+
+  perception-webcam:
+    build:
+      context: ./perception
+    container_name: perception-webcam
+    network_mode: host
     devices:
-      - "/dev/video0:/dev/video1"
+      - "${PERCEPTION_VIDEO_DEVICE:-/dev/video0}:${PERCEPTION_VIDEO_DEVICE:-/dev/video0}"
+    command: ["python3", "-m", "src.main", "--mode", "production", "--config", "configs/docker-webcam.yaml", "--source", "${PERCEPTION_WEBCAM_SOURCE:-webcam}"]
     environment:
       PORT: 4000
       CONTROL_COMM_BASE_URL: "http://control-communication:5001"
@@ -123,8 +142,8 @@ services:
       PORT: "8000"
     volumes:
       - service-logs:/var/log
-    depends_on:
-      - control-communication
+    # depends_on:
+    #   - control-communication
 
   computer-vision:
     build:

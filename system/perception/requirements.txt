@@ -1,5 +1,5 @@
-opencv-python
 numpy
-pyserial
-pyyaml
+opencv-python-headless
+PyYAML
+requests
 pytest
