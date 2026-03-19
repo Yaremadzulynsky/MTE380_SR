@@ -9,6 +9,9 @@ const state = {
 const elements = {
   opsEnabled: document.getElementById('opsEnabled'),
   opsDetail: document.getElementById('opsDetail'),
+  robotFeedback: document.getElementById('robotFeedback'),
+  startRobotBtn: document.getElementById('startRobotBtn'),
+  stopRobotBtn: document.getElementById('stopRobotBtn'),
   stackFeedback: document.getElementById('stackFeedback'),
   servicesGrid: document.getElementById('servicesGrid'),
   refreshServicesBtn: document.getElementById('refreshServicesBtn'),
@@ -37,11 +40,33 @@ function bindEvents() {
   document.querySelectorAll('[data-action]').forEach((button) => {
     button.addEventListener('click', () => runStackAction(button.dataset.action));
   });
+  elements.startRobotBtn?.addEventListener('click', startRobot);
+  elements.stopRobotBtn?.addEventListener('click', stopRobot);
   elements.refreshServicesBtn?.addEventListener('click', refreshServices);
   elements.refreshLogsBtn?.addEventListener('click', refreshLogs);
   elements.toggleTailBtn?.addEventListener('click', toggleTail);
   elements.neutralControlBtn?.addEventListener('click', sendNeutralControlTest);
   elements.sampleInputBtn?.addEventListener('click', sendSampleInputTest);
+}
+
+async function startRobot() {
+  setFeedback(elements.robotFeedback, 'Sending robot start...');
+  const result = await requestJson('/api/ops/robot/start', { method: 'POST' });
+  if (!result.ok) {
+    setFeedback(elements.robotFeedback, extractError(result, 'Robot start failed.'), true);
+    return;
+  }
+  setFeedback(elements.robotFeedback, result.data?.message || 'Robot start command sent.');
+}
+
+async function stopRobot() {
+  setFeedback(elements.robotFeedback, 'Sending robot stop...');
+  const result = await requestJson('/api/ops/robot/stop', { method: 'POST' });
+  if (!result.ok) {
+    setFeedback(elements.robotFeedback, extractError(result, 'Robot stop failed.'), true);
+    return;
+  }
+  setFeedback(elements.robotFeedback, result.data?.message || 'Robot stop command sent.');
 }
 
 async function loadOpsConfig() {

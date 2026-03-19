@@ -35,6 +35,18 @@
       </nav>
 
       <section class="panel" data-animate>
+        <h2>Robot Behavior</h2>
+        <p class="hint">
+          These commands control robot behavior over HTTP (camera/state input), separate from container start/stop.
+        </p>
+        <div class="ops-actions-grid">
+          <button type="button" id="startRobotBtn">Start Robot</button>
+          <button type="button" class="ghost" id="stopRobotBtn">Stop Robot</button>
+        </div>
+        <div class="feedback" id="robotFeedback" role="status" aria-live="polite">Idle.</div>
+      </section>
+
+      <section class="panel" data-animate>
         <h2>Stack Controls</h2>
         <p class="hint">
           These actions run docker compose commands on the host. Keep this page restricted to trusted users.

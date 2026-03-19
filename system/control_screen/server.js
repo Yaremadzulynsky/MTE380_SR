@@ -40,6 +40,7 @@ const OPS_COMMAND_TIMEOUT_MS = Number.parseInt(process.env.OPS_COMMAND_TIMEOUT_M
 const OPS_MAX_OUTPUT_BYTES = Number.parseInt(process.env.OPS_MAX_OUTPUT_BYTES || '262144', 10);
 const OPS_LOG_TAIL_DEFAULT = Number.parseInt(process.env.OPS_LOG_TAIL_DEFAULT || '150', 10);
 const OPS_LOG_TAIL_MAX = Number.parseInt(process.env.OPS_LOG_TAIL_MAX || '2000', 10);
+const OPS_ROBOT_START_STATE = (process.env.OPS_ROBOT_START_STATE || 'searching').trim();
 const OPS_INCLUDE_ALLOY = String(process.env.OPS_INCLUDE_ALLOY || '').toLowerCase() === 'true';
 const OPS_IS_ARM = process.arch === 'arm' || process.arch === 'arm64';
 const OPS_SUPPORTS_ALLOY = !OPS_IS_ARM || OPS_INCLUDE_ALLOY;
@@ -598,6 +599,48 @@ app.post('/api/ops/tests/sample-input', async (req, res) => {
   });
 });
 
+app.post('/api/ops/robot/start', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const requestedState = typeof req.body?.state === 'string' && req.body.state.trim()
+    ? req.body.state.trim()
+    : OPS_ROBOT_START_STATE;
+  const stateResult = await setStateMachineState(requestedState);
+  if (stateResult.error) {
+    logInsight('ops_robot_start_error', { state: requestedState, error: stateResult.error });
+    return res.status(502).json({
+      message: `Failed to set robot state to ${requestedState}.`,
+      error: stateResult.error
+    });
+  }
+
+  logInsight('ops_robot_start_ok', { state: stateResult.state || requestedState });
+  return res.json({
+    message: `Robot start command sent (${stateResult.state || requestedState}).`,
+    state: stateResult.state || requestedState
+  });
+});
+
+app.post('/api/ops/robot/stop', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const stopResult = await sendRobotStopSignals();
+  if (!stopResult.ok) {
+    logInsight('ops_robot_stop_error', stopResult);
+    return res.status(502).json({
+      message: 'Failed to send stop commands to robot services.',
+      ...stopResult
+    });
+  }
+  logInsight('ops_robot_stop_ok', stopResult);
+  return res.json({
+    message: 'Robot stop command sent.',
+    ...stopResult
+  });
+});
+
 app.post('/api/control', async (req, res) => {
   const { x, y, speed, servo } = req.body || {};
   const errors = {};
@@ -838,6 +881,10 @@ function getControlCommHealthUrl() {
   return new URL(CONTROL_COMM_HEALTH_PATH, CONTROL_COMM_BASE_URL).toString();
 }
 
+function getControlCommControlUrl() {
+  return new URL(CONTROL_COMM_CONTROL_PATH, CONTROL_COMM_BASE_URL).toString();
+}
+
 function getControlCommLineFollowPidUrl() {
   return new URL(STATE_MACHINE_LINE_FOLLOW_PID_PATH, STATE_MACHINE_BASE_URL).toString();
 }
@@ -969,6 +1016,77 @@ async function sendRedLineInput(command) {
     return { command };
   } catch (err) {
     return { error: err.message };
+  }
+}
+
+async function sendRobotStopSignals() {
+  const inputsUrl = getStateMachineInputsUrl();
+  const controlUrl = getControlCommControlUrl();
+  const inputsPayload = {
+    black_line: { detected: false, vector: { x: 0.0, y: 0.0 } },
+    red_line: { detected: false, vector: { x: 0.0, y: 0.0 } },
+    target: { detected: false, vector: { x: 0.0, y: 0.0 } }
+  };
+  const controlPayload = { x: 0.0, y: 0.0, speed: 0.0 };
+
+  const [inputsResult, controlResult] = await Promise.all([
+    postJson(inputsUrl, inputsPayload),
+    postJson(controlUrl, controlPayload)
+  ]);
+
+  const failures = {};
+  if (!inputsResult.ok) {
+    failures.stateMachineInputs = {
+      status: inputsResult.status,
+      error: inputsResult.error,
+      detail: inputsResult.text
+    };
+  }
+  if (!controlResult.ok) {
+    failures.control = {
+      status: controlResult.status,
+      error: controlResult.error,
+      detail: controlResult.text
+    };
+  }
+
+  return {
+    ok: Object.keys(failures).length === 0,
+    failures
+  };
+}
+
+async function postJson(url, payload) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain'
+      },
+      body: JSON.stringify(payload)
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        text,
+        error: `Upstream status ${response.status}`
+      };
+    }
+    return {
+      ok: true,
+      status: response.status,
+      text
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      text: '',
+      error: err.message
+    };
   }
 }
 
