@@ -82,7 +82,7 @@ class LineFollow(State):
             bx /= length
             by /= length
 
-        robot.add_direction(-bx, by)
+        robot.add_direction(bx, by)
         robot.set_speed(FOLLOW_SPEED)
 
         log.debug(
