@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MTE 380 — Robot Debug</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --bg:       #0d0d1a;
@@ -413,6 +414,34 @@
   </div><!-- /panels-col -->
 </main>
 
+<!-- ── Charts ──────────────────────────────────────────────────────────── -->
+<div id="charts-section" style="padding:0 16px 16px; display:flex; flex-direction:column; gap:12px;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 0;">
+    <span style="font-size:10px; letter-spacing:0.18em; color:var(--dim);">LIVE GRAPHS</span>
+    <button class="ctrl-btn" onclick="clearCharts()" style="color:var(--dim); font-size:11px; padding:2px 10px;">&#10005; CLEAR</button>
+  </div>
+
+  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+
+    <div class="panel" style="flex:1; min-width:320px;">
+      <div class="panel-title">HEADING ERROR (deg)</div>
+      <div style="padding:8px;"><canvas id="chart-heading" height="120"></canvas></div>
+    </div>
+
+    <div class="panel" style="flex:1; min-width:320px;">
+      <div class="panel-title">LATERAL DISTANCE (px)</div>
+      <div style="padding:8px;"><canvas id="chart-lateral" height="120"></canvas></div>
+    </div>
+
+    <div class="panel" style="flex:1; min-width:320px;">
+      <div class="panel-title">MOTOR OUTPUTS</div>
+      <div style="padding:8px;"><canvas id="chart-motors" height="120"></canvas></div>
+    </div>
+
+  </div>
+</div>
+
 <script>
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -507,6 +536,7 @@
     if (d.state !== undefined) updateStateBadge(d.state);
     if (d.line)     updateLine(d.line);
     if (d.hardware) updateHardware(d.hardware);
+    updateCharts(d);
   }
 
   function updateLine(ln) {
@@ -651,6 +681,82 @@
     const speed = parseFloat(document.getElementById('ctrl-speed').value);
     fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
     fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: 1, y: 0}) });
+  }
+
+  // ── Charts ────────────────────────────────────────────────────────────────
+
+  const CHART_WINDOW = 200;  // number of data points to keep
+
+  const chartDefaults = {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#5a6070', font: { family: 'Courier New', size: 11 } } } },
+    scales: {
+      x: { display: false },
+      y: { ticks: { color: '#5a6070', font: { family: 'Courier New', size: 11 } },
+           grid:  { color: '#2a2a4a' } },
+    },
+  };
+
+  function makeChart(id, datasets) {
+    const ctx = document.getElementById(id).getContext('2d');
+    return new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets },
+      options: JSON.parse(JSON.stringify(chartDefaults)),
+    });
+  }
+
+  const chartHeading = makeChart('chart-heading', [
+    { label: 'error',   data: [], borderColor: '#4af0ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+  ]);
+
+  const chartLateral = makeChart('chart-lateral', [
+    { label: 'lateral px', data: [], borderColor: '#f0b030', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+  ]);
+
+  const chartMotors = makeChart('chart-motors', [
+    { label: 'left',  data: [], borderColor: '#30e88a', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+    { label: 'right', data: [], borderColor: '#f04060', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+  ]);
+
+  let _chartT = 0;
+
+  function pushChart(chart, ...values) {
+    chart.data.labels.push(_chartT++);
+    chart.data.datasets.forEach((ds, i) => ds.data.push(values[i] ?? null));
+    if (chart.data.labels.length > CHART_WINDOW) {
+      chart.data.labels.shift();
+      chart.data.datasets.forEach(ds => ds.data.shift());
+    }
+    chart.update('none');
+  }
+
+  function clearCharts() {
+    [chartHeading, chartLateral, chartMotors].forEach(c => {
+      c.data.labels = [];
+      c.data.datasets.forEach(ds => ds.data = []);
+      c.update('none');
+    });
+    _chartT = 0;
+  }
+
+  function updateCharts(d) {
+    const hdg   = d.hardware && d.hardware.heading;
+    const drive = d.hardware && d.hardware.last_drive;
+    const line  = d.line;
+
+    const headingErr = hdg ? hdg.current_deg - hdg.target_deg : null;
+    pushChart(chartHeading, headingErr);
+
+    const latPx = (line && line.found) ? line.lateral_distance_px : null;
+    pushChart(chartLateral, latPx);
+
+    pushChart(chartMotors,
+      drive ? drive.left  : null,
+      drive ? drive.right : null,
+    );
   }
 
   // Load gains on page load
