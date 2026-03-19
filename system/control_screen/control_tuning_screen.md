@@ -56,5 +56,5 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - Commands use timeout and max-output limits to avoid hanging or oversized responses.
 - On ARM (`process.arch === "arm"` or `process.arch === "arm64"`), the default ops groups automatically exclude `alloy` because compatible images may be unavailable.
 - To force-include `alloy` anyway, set `OPS_INCLUDE_ALLOY=true`.
-- `core` stack group excludes `robot-mock`.
+- `core` stack group includes only control-communication, state-machine, and control-screen.
 - Set `OPS_HOUGH_STREAM_URL` to prefill the Vision Stream URL in the Ops UI (default: `http://localhost:8090/stream.mjpg`).

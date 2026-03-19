@@ -37,7 +37,6 @@ SERVICES = [
     "state-machine",
     "control-screen",
     "computer-vision",
-    "robot-mock",
     "metrics-aggregator",
     "prometheus",
     "loki",

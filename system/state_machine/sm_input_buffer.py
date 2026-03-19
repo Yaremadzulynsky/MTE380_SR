@@ -65,7 +65,7 @@ class InputBuffer:
             payload.get("speed", payload.get("current_speed", 0.0)),
             "speed",
         )
-        # Backward compatibility: robot_mock now sends `home` instead of `line`.
+        # Backward compatibility: some legacy senders use `home` instead of `line`.
         line_payload = payload.get("line")
         if line_payload is None:
             line_payload = payload.get("home")

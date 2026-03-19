@@ -55,7 +55,6 @@ services:
        - "/dev/ttyACM0:/dev/ttyACM0"  # Arduino Mega via USB (attach with usbipd on Windows/WSL2)
     environment:
       PORT: 5001
-      ROBOT_MOCK_CONTROL_URL: "http://localhost:8200/api/sim-control"
       SERIAL_PORT: "/dev/ttyACM0"
       SERIAL_BAUDRATE: "115200"
       LOG_PATH: "/var/log/control-communication/control-communication.log"
@@ -141,23 +140,6 @@ services:
     volumes:
       - service-logs:/var/log
     # depends_on:
-      # - state-machine
-
-  robot-mock:
-    build:
-      context: ./robot_mock
-    container_name: robot-mock
-    # ports:
-    #   - "8200:8200"
-    network_mode: host
-    environment:
-      PORT: "8200"
-      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
-      STATE_MACHINE_INPUT_PATH: "/inputs"
-      STATE_MACHINE_STATES_PATH: "/states"
-      SYSTEM_POLL_INTERVAL_S: "0.1"
-    # depends_on:
-      # - control-communication
       # - state-machine
 
   prometheus:

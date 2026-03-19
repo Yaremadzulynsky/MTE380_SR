@@ -28,7 +28,6 @@ const STATE_MACHINE_STATES_PATH =
   process.env.STATE_MACHINE_STATES_PATH || '/states';
 const STATE_MACHINE_SET_STATE_PATH =
   process.env.STATE_MACHINE_SET_STATE_PATH || '/set-state';
-const ROBOT_MOCK_URL = process.env.ROBOT_MOCK_URL || 'http://localhost:8200';
 const LOG_PATH = process.env.LOG_PATH || process.env.INSIGHTS_IPC_PATH;
 const SERVO_MIN_DEG = Number.parseInt(process.env.SERVO_MIN_DEG || '0', 10);
 const SERVO_MAX_DEG = Number.parseInt(process.env.SERVO_MAX_DEG || '90', 10);
@@ -77,7 +76,6 @@ const OPS_SERVICE_ALLOWLIST = new Set([
   'metrics-aggregator',
   'state-machine',
   'computer-vision',
-  'robot-mock',
   'prometheus',
   'loki',
   'alloy',
@@ -99,7 +97,6 @@ const OPS_SERVICE_GROUPS = {
     'control-communication',
     'state-machine',
     'control-screen',
-    'robot-mock',
     'metrics-aggregator',
     'prometheus',
     'loki',
@@ -128,10 +125,6 @@ app.get('/ops', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'ops.html'));
 });
 
-app.get('/robot-mock', (req, res) => {
-  res.redirect(ROBOT_MOCK_URL);
-});
-
 app.get('/api/config', (req, res) => {
   res.json({
     ranges: pidRanges,
@@ -143,8 +136,7 @@ app.get('/api/config', (req, res) => {
         i: CONTROL_COMM_I_PATH,
         d: CONTROL_COMM_D_PATH,
         control: CONTROL_COMM_CONTROL_PATH
-      },
-      robotMockUrl: ROBOT_MOCK_URL
+      }
     },
     stateMachine: {
       baseUrl: STATE_MACHINE_BASE_URL,

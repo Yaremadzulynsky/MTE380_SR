@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run perception with Pi Camera Module 2 (rpicam-vid) on the host.
 # Use this when the rest of the stack is in Docker and you need the Pi camera.
-# Start the stack first: docker compose up robot-mock state-machine control-screen control-communication
+# Start the stack first: docker compose up state-machine control-screen control-communication
 # Then run this script on the Pi (in another terminal).
 
 set -euo pipefail

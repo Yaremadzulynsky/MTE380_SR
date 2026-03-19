@@ -39,8 +39,9 @@ DEBUG = parse_env_bool("DEBUG", "0")
 SERVO_MIN_DEG = parse_env_int("SERVO_MIN_DEG", "-90")
 SERVO_MAX_DEG = parse_env_int("SERVO_MAX_DEG", "0")
 SERVO_DEFAULT_DEG = parse_env_int("SERVO_DEFAULT_DEG", "0")
-ROBOT_MOCK_CONTROL_URL = (
-    os.getenv("ROBOT_MOCK_CONTROL_URL") or "http://localhost:8200/api/sim-control"
+SIM_CONTROL_URL = (
+    os.getenv("SIM_CONTROL_URL")
+    or ""
 ).strip()
 
 app = Flask(__name__)
@@ -301,9 +302,11 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
 
 
 def post_to_simulator(payload: dict[str, Any]) -> dict[str, Any]:
+    if not SIM_CONTROL_URL:
+        return {"ok": False, "disabled": True, "error": "simulator forwarding disabled"}
     body = json.dumps(payload).encode("utf-8")
     req = urlrequest.Request(
-        ROBOT_MOCK_CONTROL_URL,
+        SIM_CONTROL_URL,
         data=body,
         headers={"Content-Type": "application/json", "Accept": "application/json"},
         method="POST",
@@ -312,7 +315,7 @@ def post_to_simulator(payload: dict[str, Any]) -> dict[str, Any]:
         with urlrequest.urlopen(req, timeout=0.25) as response:
             return {"ok": 200 <= response.status < 300, "status_code": int(response.status)}
     except Exception as exc:
-        log_line("simulator_forward_fail", {"url": ROBOT_MOCK_CONTROL_URL, "error": repr(exc)})
+        log_line("simulator_forward_fail", {"url": SIM_CONTROL_URL, "error": repr(exc)})
         return {"ok": False, "error": str(exc)}
 
 

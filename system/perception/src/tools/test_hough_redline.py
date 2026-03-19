@@ -16,7 +16,7 @@ import numpy as np
 
 from src.config import AppConfig, load_config
 from src.pipeline import PipelineState, run_pipeline
-from src.vision.camera import OpenCVCamera
+from src.vision.camera import OpenCVCamera, RpicamVidCamera
 from src.vision.masks import crop_roi
 
 
@@ -158,6 +158,8 @@ def _compute_guidance_vectors(
 
 
 def _parse_source(raw: str, cfg: AppConfig, webcam_index: int | None = None) -> int | str:
+    if raw == "rpicam":
+        return "rpicam"
     if raw == "webcam":
         return webcam_index if webcam_index is not None else cfg.camera.webcam_index
     if raw.startswith(("http://", "https://", "rtsp://")):
@@ -167,7 +169,7 @@ def _parse_source(raw: str, cfg: AppConfig, webcam_index: int | None = None) -> 
     p = Path(raw)
     if p.exists():
         return str(p)
-    raise ValueError("source must be webcam, video:/path, http://ip:port/video, or an existing file path")
+    raise ValueError("source must be rpicam, webcam, video:/path, http://ip:port/video, or an existing file path")
 
 
 def _draw_full_overlay(
@@ -296,7 +298,7 @@ def _draw_full_overlay(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Hough red-line local visualizer")
     parser.add_argument("--config", default="configs/default.yaml")
-    parser.add_argument("--source", default="webcam", help="webcam | video:/path | /path/to/video | http://ip:port/video")
+    parser.add_argument("--source", default="webcam", help="rpicam | webcam | video:/path | /path/to/video | http://ip:port/video")
     parser.add_argument("--webcam-index", type=int, default=None, help="Override camera.webcam_index (e.g. 10 for virtual cam)")
     parser.add_argument("--fps", type=float, default=None)
     parser.add_argument("--csv", default=None, help="Optional CSV output path for metrics")
@@ -346,16 +348,24 @@ def main() -> None:
         cfg.fps = float(args.fps)
     proc_scale = max(0.25, min(1.0, float(args.proc_scale)))
     source = _parse_source(args.source, cfg, webcam_index=args.webcam_index)
-    backend = "gstreamer" if isinstance(source, str) else cfg.camera.backend
-    cam = OpenCVCamera(
-        source=source,
-        width=cfg.camera.width,
-        height=cfg.camera.height,
-        fps=cfg.fps,
-        backend=backend,
-        threaded=True,
-        gstreamer_device=cfg.camera.gstreamer_device,
-    )
+    if source == "rpicam":
+        cam = RpicamVidCamera(
+            width=cfg.camera.width,
+            height=cfg.camera.height,
+            fps=cfg.fps,
+            camera_index=cfg.camera.webcam_index,
+        )
+    else:
+        backend = "gstreamer" if isinstance(source, str) else cfg.camera.backend
+        cam = OpenCVCamera(
+            source=source,
+            width=cfg.camera.width,
+            height=cfg.camera.height,
+            fps=cfg.fps,
+            backend=backend,
+            threaded=True,
+            gstreamer_device=cfg.camera.gstreamer_device,
+        )
 
     state = PipelineState(path_mask_key="red")
     window_scale = max(0.5, float(args.window_scale))
