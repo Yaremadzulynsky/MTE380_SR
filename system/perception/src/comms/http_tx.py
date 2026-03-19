@@ -36,7 +36,7 @@ class HTTPSender:
         px = data.get("px", 0.0)
         py = data.get("py", 1.0)
         line_error_x = data.get("line_error_x", 0.0)
-        line_error_y = data.get("line_error_y", 1.0)
+        line_error_y = data.get("line_error_y", py)
         path_detected = data.get("path_detected", False)
         path_mask_key = data.get("path_mask_key", "red")
         # target.detected: True when blue circular blob (TARGET zone), False otherwise

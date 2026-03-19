@@ -47,7 +47,7 @@ def main() -> None:
             px=px_out,
             py=py_out,
             line_error_x=float(out.line_error_x),
-            line_error_y=1.0,
+            line_error_y=float(py_out),
             zone=out.zone,
             gamma=out.gamma,
             t=time.time(),
