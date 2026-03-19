@@ -1,6 +1,5 @@
-opencv-python-headless
 pyserial
 flask
 pyyaml
-# On Pi with Pi Camera Module, also install:
-# picamera2
+# opencv is installed system-wide on the Pi — venv uses --system-site-packages to access it
+# On Pi with Pi Camera Module, picamera2 is also pre-installed system-wide
