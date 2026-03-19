@@ -119,7 +119,7 @@ def _open_camera():
         except Exception as e:
             log.warning('picamera2 failed (%s), falling back to cv2', e)
 
-    cap = cv2.VideoCapture(cam_cfg['device'])
+    cap = cv2.VideoCapture(cam_cfg['device'], cv2.CAP_V4L2)  # bypass GStreamer
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  w)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
     cap.set(cv2.CAP_PROP_FPS,          fps)
@@ -127,7 +127,7 @@ def _open_camera():
     if not cap.isOpened():
         log.error('Could not open camera device %d', cam_cfg['device'])
     else:
-        log.info('Camera: cv2 device=%d %dx%d @%dfps', cam_cfg['device'], w, h, fps)
+        log.info('Camera: cv2 device=%d %dx%d @%dfps (V4L2)', cam_cfg['device'], w, h, fps)
     return cap
 
 
