@@ -1,0 +1,7 @@
+pyserial
+opencv-python-headless
+numpy
+flask
+
+# Raspberry Pi camera only — install via apt, not pip:
+#   sudo apt install -y python3-picamera2

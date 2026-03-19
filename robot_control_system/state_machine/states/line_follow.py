@@ -1,0 +1,96 @@
+"""
+state_machine/states/line_follow.py
+
+Follow the detected line using the direction vector from LineDetector.
+
+Control logic
+-------------
+Each tick:
+  1. Read the latest LineResult from the detector.
+  2. If no line is found, stop and transition to STOPPED.
+  3. Compute a blended direction:
+       - Start with the line tangent direction (always points along the line).
+       - Add a lateral correction component proportional to how far the robot
+         has drifted from the line, using a deadzone to prevent oscillation
+         when the robot is already on the line.
+  4. Pass the blended direction to robot.set_direction() and drive forward.
+"""
+
+from __future__ import annotations
+import logging
+import math
+from typing import TYPE_CHECKING, Optional
+
+from state_machine.state import State
+
+if TYPE_CHECKING:
+    from hardware.robot       import Robot
+    from vision.line_detector import LineDetector
+
+log = logging.getLogger(__name__)
+
+# ── Tuning ────────────────────────────────────────────────────────────────────
+
+# Forward speed while following the line (fraction of max, 0–1).
+FOLLOW_SPEED: float = 0.35
+
+# Lateral error below which no correction is applied (pixels).
+# Prevents hunting/oscillation when the robot is close to the line.
+DEADZONE_PX: float = 20.0
+
+# Lateral error at which the correction weight reaches 1.0 (full blend).
+# Errors beyond this are clamped to full correction.
+CORRECTION_SCALE_PX: float = 100.0
+
+
+class LineFollow(State):
+    name = 'line_follow'
+
+    def enter(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+        robot.set_speed(0.0)
+        log.info('Entered LINE_FOLLOW  speed=%.2f  deadzone=%dpx', FOLLOW_SPEED, int(DEADZONE_PX))
+
+    def tick(self, robot: 'Robot', detector: Optional['LineDetector']) -> Optional[str]:
+        if detector is None:
+            log.warning('LINE_FOLLOW: no detector — stopping')
+            return 'stopped'
+
+        result = detector.get_result()
+
+        if result is None:
+            # Line lost — stop and wait
+            robot.set_speed(0.0)
+            log.debug('LINE_FOLLOW: line lost')
+            return 'stopped'
+
+        # ── Tangent direction (from line fit) ─────────────────────────────────
+        tx, ty = result.direction   # unit vector: x=lateral, y=forward
+
+        # ── Lateral correction (with deadzone) ────────────────────────────────
+        # lateral_distance_px > 0 → line is to the right → steer right (+ x)
+        # lateral_distance_px < 0 → line is to the left  → steer left  (- x)
+        lat_px = result.lateral_distance_px
+        weight = max(0.0, abs(lat_px) - DEADZONE_PX) / CORRECTION_SCALE_PX
+        weight = min(weight, 1.0)
+        correction_x = math.copysign(weight, lat_px)
+
+        # ── Blend and normalise ───────────────────────────────────────────────
+        bx = tx + correction_x
+        by = ty
+        length = math.hypot(bx, by)
+        if length > 1e-6:
+            bx /= length
+            by /= length
+
+        robot.set_direction(bx, by)
+        robot.set_speed(FOLLOW_SPEED)
+
+        log.debug(
+            'LINE_FOLLOW: lat=%.1fpx weight=%.2f tangent=(%.2f,%.2f) cmd=(%.2f,%.2f)',
+            lat_px, weight, tx, ty, bx, by,
+        )
+        return None
+
+    def exit(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+        robot.set_speed(0.0)
+        log.info('Leaving LINE_FOLLOW')

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MTE 380 — Robot Debug</title>
+  <style>
+    :root {
+      --bg:       #0d0d1a;
+      --surface:  #14142b;
+      --border:   #2a2a4a;
+      --text:     #c8d0e0;
+      --dim:      #5a6070;
+      --accent:   #4af0ff;
+      --success:  #30e88a;
+      --warning:  #f0b030;
+      --danger:   #f04060;
+      --label-w:  130px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    header h1 {
+      font-size: 14px;
+      font-weight: normal;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+    }
+
+    #conn-badge {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      padding: 3px 10px;
+      border-radius: 3px;
+      border: 1px solid currentColor;
+      color: var(--warning);
+    }
+
+    #conn-badge.connected    { color: var(--success); }
+    #conn-badge.reconnecting { color: var(--danger);  }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    main {
+      display: flex;
+      flex: 1;
+      gap: 16px;
+      padding: 16px;
+      align-items: flex-start;
+    }
+
+    /* ── Camera column ──────────────────────────────────────── */
+    #camera-col {
+      flex-shrink: 0;
+    }
+
+    #camera-col img {
+      display: block;
+      width: 640px;
+      height: 480px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: #000;
+    }
+
+    #camera-label {
+      text-align: center;
+      padding: 5px 0;
+      font-size: 11px;
+      color: var(--dim);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Panels column ──────────────────────────────────────── */
+    #panels-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 280px;
+    }
+
+    /* ── Panel ──────────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .panel-title {
+      padding: 7px 14px;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: var(--dim);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Rows ───────────────────────────────────────────────── */
+    .row {
+      display: flex;
+      align-items: baseline;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .row:last-child { border-bottom: none; }
+
+    .row .lbl {
+      width: var(--label-w);
+      flex-shrink: 0;
+      color: var(--dim);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+
+    .row .val {
+      color: var(--text);
+      font-size: 13px;
+      white-space: pre;
+    }
+
+    .val.accent  { color: var(--accent);  }
+    .val.success { color: var(--success); }
+    .val.warning { color: var(--warning); }
+    .val.danger  { color: var(--danger);  }
+
+    /* ── Control bar ────────────────────────────────────────── */
+    #control-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #state-badge {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      padding: 3px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--dim);
+      color: var(--dim);
+      min-width: 110px;
+      text-align: center;
+    }
+
+    #state-badge.running { color: var(--success); border-color: var(--success); }
+    #state-badge.stopped { color: var(--warning); border-color: var(--warning); }
+
+    .ctrl-btn {
+      background: var(--surface);
+      border: 1px solid currentColor;
+      border-radius: 3px;
+      padding: 5px 18px;
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+    }
+
+    #btn-start { color: var(--success); }
+    #btn-stop  { color: var(--danger);  }
+
+    .ctrl-btn:disabled { opacity: 0.35; cursor: default; }
+
+  /* ── Bar chart for motors / speed ───────────────────────── */
+    .bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .bar-track {
+      position: relative;
+      height: 8px;
+      flex: 1;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.08s, left 0.08s;
+      background: var(--accent);
+    }
+
+    .bar-fill.negative { background: var(--danger); }
+
+    .bar-num {
+      width: 52px;
+      text-align: right;
+      color: var(--text);
+      flex-shrink: 0;
+    }
+
+    /* ── Gauge rows ─────────────────────────────────────────── */
+    .gauge-row {
+      display: flex;
+      align-items: center;
+      padding: 4px 14px;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .gauge-row:last-child { border-bottom: none; }
+
+    .gauge-row .lbl {
+      width: var(--label-w);
+      flex-shrink: 0;
+      color: var(--dim);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>MTE 380 &mdash; ROBOT DEBUG</h1>
+  <span id="conn-badge">&#9679; CONNECTING</span>
+</header>
+
+<div id="control-bar">
+  <span id="state-badge">&#9679; &mdash;</span>
+  <button class="ctrl-btn" id="btn-start" onclick="setState('line_follow')">&#9654; START</button>
+  <button class="ctrl-btn" id="btn-stop"  onclick="setState('stopped')">&#9632; STOP</button>
+</div>
+
+<main>
+
+  <!-- ── Camera ─────────────────────────────────────────────── -->
+  <div id="camera-col">
+    <img src="/video_feed" alt="PiCamera feed" id="camera-img">
+    <div id="camera-label">PICAMERA &nbsp;/&nbsp; LINE OVERLAY</div>
+  </div>
+
+  <!-- ── Panels ─────────────────────────────────────────────── -->
+  <div id="panels-col">
+
+    <!-- Line detection -->
+    <div class="panel">
+      <div class="panel-title">LINE DETECTION</div>
+
+      <div class="row">
+        <span class="lbl">Status</span>
+        <span class="val" id="line-status">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Angle</span>
+        <span class="val accent" id="line-angle">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Lateral (px)</span>
+        <span class="val accent" id="line-lat-px">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Lateral (m)</span>
+        <span class="val accent" id="line-lat-m">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Direction vec</span>
+        <span class="val accent" id="line-dir">&mdash;</span>
+      </div>
+    </div>
+
+    <!-- Hardware telemetry -->
+    <div class="panel">
+      <div class="panel-title">HARDWARE</div>
+
+      <div class="row">
+        <span class="lbl">Heartbeat</span>
+        <span class="val" id="hw-hb">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Heading</span>
+        <span class="val accent" id="hw-hdg">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Velocity</span>
+        <span class="val accent" id="hw-vel">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">Encoders</span>
+        <span class="val" id="hw-enc">&mdash;</span>
+      </div>
+
+      <!-- Motor L bar -->
+      <div class="gauge-row">
+        <span class="lbl">Motor L</span>
+        <div class="bar-wrap">
+          <div class="bar-track"><div class="bar-fill" id="bar-l"></div></div>
+          <span class="bar-num" id="hw-ml">&mdash;</span>
+        </div>
+      </div>
+
+      <!-- Motor R bar -->
+      <div class="gauge-row">
+        <span class="lbl">Motor R</span>
+        <div class="bar-wrap">
+          <div class="bar-track"><div class="bar-fill" id="bar-r"></div></div>
+          <span class="bar-num" id="hw-mr">&mdash;</span>
+        </div>
+      </div>
+
+      <!-- Speed scale bar -->
+      <div class="gauge-row">
+        <span class="lbl">Speed scale</span>
+        <div class="bar-wrap">
+          <div class="bar-track"><div class="bar-fill" id="bar-spd"></div></div>
+          <span class="bar-num" id="hw-spd">&mdash;</span>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panels-col -->
+</main>
+
+<script>
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function set(id, text, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (cls !== undefined) {
+      el.className = 'val ' + (cls || '');
+    }
+  }
+
+  function fmt(v, decimals, plus) {
+    if (v === null || v === undefined) return '—';
+    const s = v.toFixed(decimals);
+    return (plus && v >= 0) ? '+' + s : s;
+  }
+
+  // Draw a bipolar bar [-1, 1].  positive = from centre right; negative = from centre left.
+  function setBar(barId, numId, v) {
+    const bar = document.getElementById(barId);
+    const num = document.getElementById(numId);
+    if (!bar || !num) return;
+    const pct = Math.min(Math.abs(v), 1) * 50;   // 50% = full half
+    if (v >= 0) {
+      bar.style.left  = '50%';
+      bar.style.width = pct + '%';
+      bar.className   = 'bar-fill';
+    } else {
+      bar.style.left  = (50 - pct) + '%';
+      bar.style.width = pct + '%';
+      bar.className   = 'bar-fill negative';
+    }
+    num.textContent = fmt(v, 3, true);
+  }
+
+  // ── SSE connection ────────────────────────────────────────────────────────
+
+  const badge = document.getElementById('conn-badge');
+
+  function connect() {
+    const es = new EventSource('/events');
+
+    es.onopen = () => {
+      badge.textContent = '\u25CF CONNECTED';
+      badge.className   = 'connected';
+    };
+
+    es.onerror = () => {
+      badge.textContent = '\u25CF RECONNECTING';
+      badge.className   = 'reconnecting';
+      es.close();
+      setTimeout(connect, 2000);
+    };
+
+    es.onmessage = (e) => {
+      try { update(JSON.parse(e.data)); }
+      catch (_) {}
+    };
+  }
+
+  connect();
+
+  // ── Update handlers ───────────────────────────────────────────────────────
+
+  // ── State control ─────────────────────────────────────────────────────────
+
+  function setState(state) {
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state }),
+    }).catch(() => {});
+  }
+
+  function updateStateBadge(state) {
+    const badge = document.getElementById('state-badge');
+    if (!badge) return;
+    if (!state) {
+      badge.textContent = '\u25CF \u2014';
+      badge.className = '';
+      return;
+    }
+    const label = state.toUpperCase().replace('_', ' ');
+    badge.textContent = '\u25CF ' + label;
+    badge.className = state === 'stopped' ? 'stopped' : 'running';
+  }
+
+  // ── Update handlers ───────────────────────────────────────────────────────
+
+  function update(d) {
+    if (d.state !== undefined) updateStateBadge(d.state);
+    if (d.line)     updateLine(d.line);
+    if (d.hardware) updateHardware(d.hardware);
+  }
+
+  function updateLine(ln) {
+    if (ln.found) {
+      set('line-status', '\u25CF TRACKING', 'success');
+      set('line-angle',  fmt(ln.angle_deg, 1, true) + '\u00b0', 'accent');
+
+      // Lateral distance — colour-code by magnitude (green < 20px, yellow < 60px, red beyond)
+      const absPx  = Math.abs(ln.lateral_distance_px);
+      const latCls = absPx < 20 ? 'success' : absPx < 60 ? 'warning' : 'danger';
+      set('line-lat-px', fmt(ln.lateral_distance_px, 1, true) + ' px', latCls);
+      set('line-lat-m',
+          ln.lateral_distance_m !== null ? fmt(ln.lateral_distance_m, 4, true) + ' m' : 'n/a',
+          latCls);
+
+      set('line-dir',
+          '(' + fmt(ln.direction[0], 3, true) + ',\u2009' + fmt(ln.direction[1], 3) + ')',
+          'accent');
+    } else {
+      set('line-status',  '\u25CB NOT FOUND', 'danger');
+      set('line-angle',   '—', '');
+      set('line-lat-px',  '—', '');
+      set('line-lat-m',   '—', '');
+      set('line-dir',     '—', '');
+    }
+  }
+
+  function updateHardware(hw) {
+    // Heartbeat
+    const age = hw.heartbeat_age_s;
+    if (age === null || age === undefined) {
+      set('hw-hb', '\u25CB NO SIGNAL', 'danger');
+    } else if (age < 2) {
+      set('hw-hb', '\u25CF ' + age.toFixed(1) + 's ago', 'success');
+    } else {
+      set('hw-hb', '\u26A0 ' + age.toFixed(1) + 's ago', 'warning');
+    }
+
+    // Heading
+    const hdg = hw.heading;
+    if (hdg) {
+      const err = hdg.current_deg - hdg.target_deg;
+      set('hw-hdg',
+          fmt(hdg.current_deg, 1) + '\u00b0 \u2192 ' + fmt(hdg.target_deg, 1) + '\u00b0' +
+          '  (err ' + fmt(err, 1, true) + '\u00b0)',
+          'accent');
+    }
+
+    // Velocity
+    if (hw.linear_speed_mps !== undefined) {
+      set('hw-vel', fmt(hw.linear_speed_mps, 3) + ' m/s', 'accent');
+    }
+
+    // Encoders
+    if (hw.encoders) {
+      set('hw-enc', 'L ' + hw.encoders.left + '  R ' + hw.encoders.right, '');
+    }
+
+    // Motor bars
+    if (hw.last_drive) {
+      setBar('bar-l', 'hw-ml', hw.last_drive.left);
+      setBar('bar-r', 'hw-mr', hw.last_drive.right);
+    }
+
+    // Speed scale bar
+    if (hw.speed_scale !== undefined) {
+      setBar('bar-spd', 'hw-spd', hw.speed_scale);
+    }
+  }
+</script>
+
+</body>
+</html>
