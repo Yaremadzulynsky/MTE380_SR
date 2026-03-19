@@ -6,6 +6,15 @@ roi_y_start: 160
 alpha: 0.9
 show_masks: false
 
+# Pi camera red can look less saturated/dimmer under indoor lighting.
+# Relax HSV thresholds so red tape is still detected.
+red1:
+  lo: [0, 70, 40]
+  hi: [15, 255, 255]
+red2:
+  lo: [165, 70, 40]
+  hi: [179, 255, 255]
+
 # Speed tuning for higher FPS:
 # - Smaller ROI / resolution reduces per-frame pixel work.
 # - Cheaper morphology reduces mask cleanup cost.
@@ -13,6 +22,10 @@ morph:
   kernel_size: 3
   open_iters: 1
   close_iters: 1
+
+heading:
+  min_area: 60.0
+  use_centerline: true
 
 camera:
   source: rpicam

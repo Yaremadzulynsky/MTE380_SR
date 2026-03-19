@@ -123,11 +123,11 @@ def main() -> None:
     regulator = LoopRegulator(target_hz=cfg.fps)
 
     state = PipelineState()
-    state.path_mask_key = "black"
-    log("path_mask_black", reason="tracking black tape")
+    state.path_mask_key = "red"
+    log("path_mask_red", reason="tracking red tape")
     if isinstance(source, str) and Path(source).name in {"test_run.mp4", "test_video.mp4"}:
-        state.path_mask_key = "black"
-        log("path_mask_black", reason="test clip uses black line")
+        state.path_mask_key = "red"
+        log("path_mask_red", reason="test clip uses red line")
 
     backend = "gstreamer" if isinstance(source, str) and source != "rpicam" else cfg.camera.backend
     try:
