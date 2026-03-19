@@ -10,7 +10,7 @@ wheel:
   base_m: 0.188
 
 heading_pid:
-  kp: 0.45
+  kp: 0.4
   ki: 0.0
   kd: 0.0
   motor_deadband: 0.015
