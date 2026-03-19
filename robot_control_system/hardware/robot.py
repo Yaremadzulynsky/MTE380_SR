@@ -76,7 +76,7 @@ class Robot:
         with self._lock:
             self._motor_override = None
             if abs(x) > 1e-6 or abs(y) > 1e-6:
-                delta = math.atan2(x, abs(y))
+                delta = math.atan2(-x, abs(y))
                 self._target_heading = self._heading_fb + delta
 
     def set_speed(self, speed: float):
