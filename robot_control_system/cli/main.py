@@ -39,8 +39,8 @@ import time
 import urllib.request
 import urllib.error
 
-sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent / 'hardware'))
-from robot import Robot
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
+from hardware.robot import Robot
 
 # Commands that talk to the HTTP server instead of serial
 _SERVER_COMMANDS = {'start', 'stop', 'state', 'status'}
