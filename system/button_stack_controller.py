@@ -37,11 +37,6 @@ SERVICES = [
     "state-machine",
     "control-screen",
     "computer-vision",
-    "metrics-aggregator",
-    "prometheus",
-    "loki",
-    "alloy",
-    "grafana",
 ]
 
 GO_PIN = int(os.getenv("GO_BUTTON_PIN", "17"))
