@@ -375,6 +375,41 @@
       </div>
     </div>
 
+    <!-- Manual control -->
+    <div class="panel">
+      <div class="panel-title">MANUAL CONTROL</div>
+      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Speed</span>
+          <input id="ctrl-speed" type="number" step="0.05" value="0.0" min="-1" max="1"
+            style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Direction X</span>
+          <input id="ctrl-x" type="number" step="0.1" value="0.0" min="-1" max="1"
+            style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+          <span style="color:var(--dim); font-size:11px;">(-1=left, 1=right)</span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Direction Y</span>
+          <input id="ctrl-y" type="number" step="0.1" value="1.0" min="-1" max="1"
+            style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+          <span style="color:var(--dim); font-size:11px;">(-1=back, 1=fwd)</span>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="ctrl-btn" onclick="sendDirection()" style="color:var(--accent);">&#9654; GO</button>
+          <button class="ctrl-btn" onclick="sendStop()" style="color:var(--danger);">&#9632; STOP</button>
+          <button class="ctrl-btn" onclick="sendTurnLeft()"  style="color:var(--warning);">&#8592; LEFT</button>
+          <button class="ctrl-btn" onclick="sendTurnRight()" style="color:var(--warning);">&#8594; RIGHT</button>
+        </div>
+
+      </div>
+    </div>
+
   </div><!-- /panels-col -->
 </main>
 
@@ -589,6 +624,33 @@
         document.getElementById('pid-status').style.color = 'var(--danger)';
       })
       .finally(() => { btn.disabled = false; });
+  }
+
+  // ── Manual control ────────────────────────────────────────────────────────
+
+  function sendDirection() {
+    const x = parseFloat(document.getElementById('ctrl-x').value);
+    const y = parseFloat(document.getElementById('ctrl-y').value);
+    const speed = parseFloat(document.getElementById('ctrl-speed').value);
+    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
+    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x, y}) });
+  }
+
+  function sendStop() {
+    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed: 0}) });
+    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: 0, y: 0}) });
+  }
+
+  function sendTurnLeft()  {
+    const speed = parseFloat(document.getElementById('ctrl-speed').value);
+    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
+    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: -1, y: 0}) });
+  }
+
+  function sendTurnRight() {
+    const speed = parseFloat(document.getElementById('ctrl-speed').value);
+    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
+    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: 1, y: 0}) });
   }
 
   // Load gains on page load

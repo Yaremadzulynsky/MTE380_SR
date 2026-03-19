@@ -162,6 +162,27 @@ class WebServer:
             sm.transition(state)
             return jsonify({'state': state})
 
+        @app.route('/api/direction', methods=['POST'])
+        def set_direction():
+            robot = self._robot
+            if robot is None:
+                return jsonify({'error': 'no robot'}), 503
+            body = request.get_json(silent=True) or {}
+            x = body.get('x', 0.0)
+            y = body.get('y', 0.0)
+            robot.add_direction(float(x), float(y))
+            return jsonify({'x': x, 'y': y})
+
+        @app.route('/api/speed', methods=['POST'])
+        def set_speed():
+            robot = self._robot
+            if robot is None:
+                return jsonify({'error': 'no robot'}), 503
+            body = request.get_json(silent=True) or {}
+            speed = body.get('speed', 0.0)
+            robot.set_speed(float(speed))
+            return jsonify({'speed': speed})
+
         @app.route('/api/gains', methods=['GET'])
         def get_gains():
             robot = self._robot
