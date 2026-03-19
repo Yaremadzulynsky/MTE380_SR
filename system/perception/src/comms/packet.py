@@ -14,6 +14,15 @@ ZONE_TO_INT = {
 }
 
 
+def path_mask_to_line_key(path_mask_key: str) -> str:
+    key = str(path_mask_key).strip().lower()
+    if key == "black":
+        return "black_line"
+    if key == "blue":
+        return "blue_line"
+    return "red_line"
+
+
 @dataclass
 class PerceptionPacket:
     px: float

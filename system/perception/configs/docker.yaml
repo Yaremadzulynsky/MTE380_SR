@@ -1,8 +1,9 @@
 # Docker production config: uses GStreamer for webcam capture.
 # Extends defaults; override camera.backend for GStreamer.
 fps: 30.0
-roi_y_start: 240
+roi_y_start_ratio: 0.5
 alpha: 0.9
+path_mask_key: red
 show_masks: false
 
 camera:

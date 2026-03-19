@@ -11,12 +11,14 @@ from pathlib import Path
 from typing import Any, Optional
 
 import cv2
+import numpy as np
 
 from src.comms.http_tx import HTTPSender
 from src.comms.packet import PerceptionPacket
 from src.comms.serial_tx import SerialSender
 from src.comms.udp_tx import UDPSender
 from src.config import AppConfig, load_config
+from src.debug.http_stream import DebugStreamServer
 from src.pipeline import PipelineOutput, PipelineState, run_pipeline
 from src.utils.logging import log
 from src.utils.math2d import to_robot_frame_clamped
@@ -78,7 +80,23 @@ def _parse_source(source: str, cfg: AppConfig) -> int | str:
         return "rpicam"
     if source.startswith("video:"):
         return source.split("video:", 1)[1]
-    raise ValueError("source must be webcam, rpicam, or video:/path/to/file")
+    if source.startswith("stream:"):
+        return source.split("stream:", 1)[1]
+    if source.startswith(("udp://", "tcp://", "rtsp://", "http://", "https://")):
+        return source
+    raise ValueError(
+        "source must be webcam, rpicam, video:/path/to/file, stream:<uri>, or a direct udp/tcp/rtsp/http URI"
+    )
+
+
+def _select_backend(source: int | str, cfg: AppConfig) -> str:
+    if not isinstance(source, str) or source == "rpicam":
+        return cfg.camera.backend
+    if source.startswith("udp://"):
+        return "ffmpeg"
+    if source.startswith(("tcp://", "rtsp://", "http://", "https://")):
+        return "ffmpeg"
+    return "gstreamer"
 
 
 def main() -> None:
@@ -93,6 +111,7 @@ def main() -> None:
     parser.add_argument("--source", default=None, help="webcam or video:/path/to/file")
     parser.add_argument("--comms", choices=["udp", "serial", "stdout", "http"], default=None)
     parser.add_argument("--fps", type=float, default=None)
+    parser.add_argument("--path-mask", choices=["red", "blue", "black"], default=None)
     args = parser.parse_args()
 
     cfg_path = Path(args.config)
@@ -101,6 +120,8 @@ def main() -> None:
         cfg.camera.source = args.source
     if args.fps is not None:
         cfg.fps = args.fps
+    if args.path_mask is not None:
+        cfg.path_mask_key = args.path_mask
 
     # Mode: test = GUI + line overlay + packet logging; production = send full packet, no GUI
     if args.mode == "test":
@@ -120,16 +141,20 @@ def main() -> None:
         gui = not getattr(args, "no_gui", False)
     source = _parse_source(cfg.camera.source, cfg)
     sender = _make_sender(cfg.comms.method, cfg)
+    debug_stream = None
+    if cfg.debug_stream.enabled:
+        debug_stream = DebugStreamServer(
+            host=cfg.debug_stream.host,
+            port=cfg.debug_stream.port,
+            jpeg_quality=cfg.debug_stream.jpeg_quality,
+        )
+        debug_stream.start()
     regulator = LoopRegulator(target_hz=cfg.fps)
 
-    state = PipelineState()
-    state.path_mask_key = "red"
-    log("path_mask_red", reason="tracking red tape")
-    if isinstance(source, str) and Path(source).name in {"test_run.mp4", "test_video.mp4"}:
-        state.path_mask_key = "red"
-        log("path_mask_red", reason="test clip uses red line")
+    state = PipelineState(path_mask_key=cfg.path_mask_key)
+    log("path_mask_selected", path_mask_key=state.path_mask_key)
 
-    backend = "gstreamer" if isinstance(source, str) and source != "rpicam" else cfg.camera.backend
+    backend = _select_backend(source, cfg)
     try:
         if source == "rpicam":
             cam = RpicamVidCamera(
@@ -152,6 +177,8 @@ def main() -> None:
 
     mode = args.mode or "default"
     log("perception_start", source=cfg.camera.source, fps=cfg.fps, comms=cfg.comms.method, mode=mode)
+    if debug_stream is not None:
+        log("debug_stream_start", host=cfg.debug_stream.host, port=cfg.debug_stream.port)
 
     frame_queue: "queue.Queue[Optional[FrameItem]]" = queue.Queue(maxsize=2)
     result_queue: "queue.Queue[Optional[PerceptionResult]]" = queue.Queue(maxsize=2)
@@ -186,7 +213,7 @@ def main() -> None:
                 if item is None:
                     break
 
-                roi = crop_roi(item.frame, cfg.roi_y_start)
+                roi = crop_roi(item.frame, cfg.roi_y_start, cfg.roi_y_start_ratio)
                 out = run_pipeline(roi_bgr=roi, state=state, cfg=cfg)
                 try:
                     result_queue.put(
@@ -257,8 +284,30 @@ def main() -> None:
             else:
                 sender.send_line(line)
 
+            overlay = draw_overlay(
+                result.roi,
+                np.array([out.px, out.py], dtype=float),
+                out.zone,
+                out.gamma,
+                path_detected=out.path_detected,
+                target_detected=out.target_detected,
+                target_heading=np.array([out.target_px, out.target_py], dtype=float),
+                tangent_vector=np.asarray(
+                    out.debug_artifacts.get("tangent_vector", np.zeros(2, dtype=float)),
+                    dtype=float,
+                ),
+                probe_point=tuple(out.debug_artifacts.get("heading_debug", {}).get("probe_point", ())),
+                target_point=tuple(out.debug_artifacts.get("heading_debug", {}).get("target_point", ())),
+            )
+            if debug_stream is not None:
+                debug_stream.update_frame(
+                    overlay,
+                    status=(
+                        f"zone={out.zone} gamma={out.gamma:.2f} "
+                        f"path_detected={out.path_detected} target_detected={out.target_detected}"
+                    ),
+                )
             if gui:
-                overlay = draw_overlay(result.roi, state.p_prev, out.zone, out.gamma)
                 cv2.imshow("perception_roi", overlay)
                 if cfg.show_masks and "masks" in out.debug_artifacts:
                     cv2.imshow("perception_masks", make_mask_preview(out.debug_artifacts["masks"]))
@@ -274,6 +323,8 @@ def main() -> None:
         cam.release()
         if sender is not None:
             sender.close()
+        if debug_stream is not None:
+            debug_stream.close()
         cv2.destroyAllWindows()
         log("perception_stop")
 

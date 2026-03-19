@@ -2,8 +2,9 @@
 # Use with: --config configs/docker-rpicam.yaml --source rpicam
 # Requires perception image built with USE_RPICAM=1 (see Dockerfile).
 fps: 60.0
-roi_y_start: 160
+roi_y_start_ratio: 0.5
 alpha: 0.9
+path_mask_key: red
 show_masks: false
 
 # Pi camera red can look less saturated/dimmer under indoor lighting.
@@ -26,6 +27,10 @@ morph:
 heading:
   min_area: 60.0
   use_centerline: true
+  lookahead_y_frac: 0.72
+  forward_bias: 1.0
+  lateral_gain: 0.5
+  max_lateral_abs: 0.6
 
 camera:
   source: rpicam

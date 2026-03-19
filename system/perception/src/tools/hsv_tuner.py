@@ -94,7 +94,7 @@ def main() -> None:
             frame = cam.read()
             if frame is None:
                 break
-            roi = crop_roi(frame, cfg.roi_y_start)
+            roi = crop_roi(frame, cfg.roi_y_start, cfg.roi_y_start_ratio)
             _ = to_hsv(roi)  # Keeps this script explicit about the conversion stage.
 
             cfg.red1 = _read_range(ctrl_win, "red1")

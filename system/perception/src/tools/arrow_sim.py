@@ -183,6 +183,7 @@ def main() -> None:
     parser.add_argument("--profile", action="store_true", help="Print timing breakdowns")
     parser.add_argument("--no-masks", action="store_true")
     parser.add_argument("--save", default=None, help="Optional output mp4 path")
+    parser.add_argument("--path-mask", choices=["red", "blue", "black"], default=None)
     args = parser.parse_args()
 
     cv2.setUseOptimized(True)
@@ -191,9 +192,16 @@ def main() -> None:
     cfg = load_config(args.config)
     cfg.fps = args.fps
     cfg.camera.source = args.source
+    if args.path_mask is not None:
+        cfg.path_mask_key = args.path_mask
     show_masks = not args.no_masks
 
-    state = PipelineState()
+    state = PipelineState(path_mask_key=cfg.path_mask_key)
+    synthetic_h = crop_roi(
+        np.zeros((cfg.camera.height, cfg.camera.width, 3), dtype=np.uint8),
+        cfg.roi_y_start,
+        cfg.roi_y_start_ratio,
+    ).shape[0]
 
     use_synth = args.source == "synthetic"
     cam: Optional[OpenCVCamera] = None
@@ -201,9 +209,6 @@ def main() -> None:
         source = _parse_source(args.source, cfg)
         if isinstance(source, str):
             source = str(_resolve_video_path(source))
-            if Path(source).name in {"test_video.mp4", "test_run.mp4"}:
-                # These test clips use a black line.
-                state.path_mask_key = "black"
         backend = "gstreamer" if isinstance(source, str) else args.backend
         cam = OpenCVCamera(
             source=source,
@@ -234,12 +239,12 @@ def main() -> None:
 
             t0 = time.perf_counter()
             if use_synth:
-                roi = _synthetic_frame(cfg.camera.width, cfg.camera.height - cfg.roi_y_start, frame_idx / cfg.fps)
+                roi = _synthetic_frame(cfg.camera.width, synthetic_h, frame_idx / cfg.fps)
             else:
                 frame = cam.read() if cam is not None else None
                 if frame is None:
                     break
-                roi = crop_roi(frame, cfg.roi_y_start)
+                roi = crop_roi(frame, cfg.roi_y_start, cfg.roi_y_start_ratio)
             t1 = time.perf_counter()
 
             display_roi = roi

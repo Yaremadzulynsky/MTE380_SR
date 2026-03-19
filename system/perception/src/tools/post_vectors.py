@@ -17,6 +17,8 @@ import threading
 import time
 import urllib.request
 
+from src.comms.packet import path_mask_to_line_key
+
 
 def _send_request(url: str, body: bytes, timeout: float) -> None:
     """Send one POST in a background thread so the main loop is not blocked."""
@@ -111,8 +113,7 @@ def main() -> None:
         last_sent_px, last_sent_py = latest_px, latest_py
         request_count += 1
 
-        # State machine reads red_line or black_line (prefers black_line when present).
-        line_key = "black_line" if latest_path_mask == "black" else "red_line"
+        line_key = path_mask_to_line_key(latest_path_mask)
         payload = {
             "target": {
                 "detected": latest_target_detected,

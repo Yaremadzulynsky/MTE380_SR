@@ -7,6 +7,8 @@ import sys
 import threading
 import urllib.request
 
+from src.comms.packet import path_mask_to_line_key
+
 def _send_post(url: str, body: bytes, timeout: float = 30.0) -> None:
     req = urllib.request.Request(
         url,
@@ -22,7 +24,7 @@ def _send_post(url: str, body: bytes, timeout: float = 30.0) -> None:
 
 
 class HTTPSender:
-    """POST perception packets to an HTTP endpoint as target + red_line/black_line schema."""
+    """POST perception packets to an HTTP endpoint as target + red/blue/black line schema."""
 
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         self.url = url.rstrip("/")
@@ -41,8 +43,7 @@ class HTTPSender:
         target_detected = bool(data.get("target_detected", False))
         target_px = data.get("target_px", 0.0)
         target_py = data.get("target_py", 0.0)
-        # State machine reads red_line or black_line (prefers black_line when present).
-        line_key = "black_line" if path_mask_key == "black" else "red_line"
+        line_key = path_mask_to_line_key(path_mask_key)
         payload = {
             "target": {
                 "detected": target_detected,

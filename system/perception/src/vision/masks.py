@@ -10,9 +10,23 @@ import numpy as np
 from src.config import AppConfig, HSVRange
 
 
-def crop_roi(frame: np.ndarray, roi_y_start: int) -> np.ndarray:
+def resolve_roi_y_start(
+    frame_height: int,
+    roi_y_start: int,
+    roi_y_start_ratio: float | None = None,
+) -> int:
+    """Resolve the ROI top row from either an absolute pixel value or a height ratio."""
+    h = max(1, int(frame_height))
+    if roi_y_start_ratio is not None:
+        y = int(round(float(roi_y_start_ratio) * h))
+    else:
+        y = int(roi_y_start)
+    return max(0, min(y, h - 1))
+
+
+def crop_roi(frame: np.ndarray, roi_y_start: int, roi_y_start_ratio: float | None = None) -> np.ndarray:
     """Crop frame to region-of-interest from roi_y_start to bottom."""
-    y = max(0, min(int(roi_y_start), frame.shape[0] - 1))
+    y = resolve_roi_y_start(frame.shape[0], roi_y_start, roi_y_start_ratio)
     return frame[y:, :]
 
 

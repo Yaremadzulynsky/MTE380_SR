@@ -36,9 +36,38 @@ python -c "import cv2; info=cv2.getBuildInformation(); print('GStreamer: YES' in
 ## 4. Test Video Capture
 
 ```bash
-python -u -m src.main --source "video:$(pwd)/tests/test_run.mp4" --comms stdout --no-gui
+python -u -m src.main --config configs/test-video-blue.yaml --source "video:$(pwd)/tests/test_run.mp4" --comms stdout --no-gui
 ```
 
 ## Docker
 
 The Docker image uses `python3-opencv` from Debian apt, which is built with GStreamer. No extra steps needed when running in Docker.
+
+## UDP Stream Input
+
+Perception now accepts direct stream URIs for `camera.source`, including `udp://`, `tcp://`, `rtsp://`, `http://`, and `https://`.
+
+Example config:
+
+```yaml
+camera:
+  source: udp://0.0.0.0:5000
+  backend: gstreamer
+
+debug_stream:
+  enabled: true
+  host: 0.0.0.0
+  port: 8081
+```
+
+For a Docker container running on your laptop, publish both ports:
+
+```bash
+docker run --rm \
+  -p 5000:5000/udp \
+  -p 8081:8081 \
+  perception \
+  python3 -m src.main --mode production --config configs/docker-udp.yaml
+```
+
+Then open [http://localhost:8081](http://localhost:8081) to view the ROI overlay and predicted vector in a browser.

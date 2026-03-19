@@ -9,10 +9,34 @@ from typing import Any
 import yaml
 
 
+VALID_PATH_MASK_KEYS = ("red", "blue", "black")
+
+
 def _as_tuple3(value: list[int] | tuple[int, int, int]) -> tuple[int, int, int]:
     if len(value) != 3:
         raise ValueError("HSV bounds must have exactly 3 values")
     return int(value[0]), int(value[1]), int(value[2])
+
+
+def _as_ratio(value: Any, name: str) -> float:
+    parsed = float(value)
+    if parsed < 0.0 or parsed > 1.0:
+        raise ValueError(f"{name} must be within [0, 1]")
+    return parsed
+
+
+def _as_nonnegative(value: Any, name: str) -> float:
+    parsed = float(value)
+    if parsed < 0.0:
+        raise ValueError(f"{name} must be non-negative")
+    return parsed
+
+
+def _as_path_mask_key(value: Any) -> str:
+    key = str(value).strip().lower()
+    if key not in VALID_PATH_MASK_KEYS:
+        raise ValueError(f"path_mask_key must be one of {', '.join(VALID_PATH_MASK_KEYS)}")
+    return key
 
 
 @dataclass
@@ -36,6 +60,12 @@ class MorphConfig:
 class HeadingConfig:
     min_area: float = 150.0
     use_centerline: bool = True
+    probe_x_frac: float = 0.5
+    probe_y_frac: float = 0.9
+    lookahead_y_frac: float = 0.72
+    forward_bias: float = 1.0
+    lateral_gain: float = 0.5
+    max_lateral_abs: float = 0.6
 
 
 @dataclass
@@ -78,10 +108,20 @@ class CameraConfig:
 
 
 @dataclass
+class DebugStreamConfig:
+    enabled: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8081
+    jpeg_quality: int = 80
+
+
+@dataclass
 class AppConfig:
     fps: float = 30.0
     roi_y_start: int = 240
+    roi_y_start_ratio: float | None = None
     alpha: float = 0.9
+    path_mask_key: str = "red"
     show_masks: bool = True
     red1: HSVRange = field(
         default_factory=lambda: HSVRange(lo=(0, 120, 80), hi=(10, 255, 255))
@@ -107,6 +147,7 @@ class AppConfig:
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     comms: CommsConfig = field(default_factory=CommsConfig)
     camera: CameraConfig = field(default_factory=CameraConfig)
+    debug_stream: DebugStreamConfig = field(default_factory=DebugStreamConfig)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "AppConfig":
@@ -115,8 +156,12 @@ class AppConfig:
             cfg.fps = float(data["fps"])
         if "roi_y_start" in data:
             cfg.roi_y_start = int(data["roi_y_start"])
+        if "roi_y_start_ratio" in data:
+            cfg.roi_y_start_ratio = _as_ratio(data["roi_y_start_ratio"], "roi_y_start_ratio")
         if "alpha" in data:
             cfg.alpha = float(data["alpha"])
+        if "path_mask_key" in data:
+            cfg.path_mask_key = _as_path_mask_key(data["path_mask_key"])
         if "show_masks" in data:
             cfg.show_masks = bool(data["show_masks"])
         if "red1" in data:
@@ -134,7 +179,10 @@ class AppConfig:
         if "morph" in data:
             cfg.morph = MorphConfig(**data["morph"])
         if "heading" in data:
-            cfg.heading = HeadingConfig(**data["heading"])
+            heading_data = dict(data["heading"])
+            if "forward_y" in heading_data and "forward_bias" not in heading_data:
+                heading_data["forward_bias"] = heading_data.pop("forward_y")
+            cfg.heading = HeadingConfig(**heading_data)
         if "zones" in data:
             cfg.zones = ZoneConfig(**data["zones"])
         if "confidence" in data:
@@ -143,6 +191,15 @@ class AppConfig:
             cfg.comms = CommsConfig(**data["comms"])
         if "camera" in data:
             cfg.camera = CameraConfig(**data["camera"])
+        if "debug_stream" in data:
+            cfg.debug_stream = DebugStreamConfig(**data["debug_stream"])
+        cfg.heading.probe_x_frac = _as_ratio(cfg.heading.probe_x_frac, "heading.probe_x_frac")
+        cfg.heading.probe_y_frac = _as_ratio(cfg.heading.probe_y_frac, "heading.probe_y_frac")
+        cfg.heading.lookahead_y_frac = _as_ratio(cfg.heading.lookahead_y_frac, "heading.lookahead_y_frac")
+        cfg.heading.forward_bias = _as_ratio(cfg.heading.forward_bias, "heading.forward_bias")
+        cfg.heading.lateral_gain = _as_nonnegative(cfg.heading.lateral_gain, "heading.lateral_gain")
+        cfg.heading.max_lateral_abs = _as_ratio(cfg.heading.max_lateral_abs, "heading.max_lateral_abs")
+        cfg.path_mask_key = _as_path_mask_key(cfg.path_mask_key)
         return cfg
 
 

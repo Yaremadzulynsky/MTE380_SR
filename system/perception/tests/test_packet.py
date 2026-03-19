@@ -1,6 +1,6 @@
 import json
 
-from src.comms.packet import PerceptionPacket
+from src.comms.packet import PerceptionPacket, path_mask_to_line_key
 
 
 def test_packet_string_zone() -> None:
@@ -31,3 +31,9 @@ def test_packet_path_fields() -> None:
     d = p.to_dict()
     assert d["path_detected"] is True
     assert d["path_mask_key"] == "red"
+
+
+def test_path_mask_to_line_key_supports_blue() -> None:
+    assert path_mask_to_line_key("red") == "red_line"
+    assert path_mask_to_line_key("blue") == "blue_line"
+    assert path_mask_to_line_key("black") == "black_line"

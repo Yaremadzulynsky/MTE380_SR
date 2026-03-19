@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import cv2
 import numpy as np
@@ -37,10 +38,28 @@ def build_gstreamer_pipeline(
         )
     # Video file
     path = str(source)
+    if path.startswith("udp://"):
+        parsed = urlparse(path)
+        host = parsed.hostname or "0.0.0.0"
+        port = parsed.port or 5000
+        return (
+            f"udpsrc address={host} port={port} ! "
+            "queue max-size-buffers=1 leaky=downstream ! "
+            "tsparse ! tsdemux ! h264parse ! avdec_h264 ! "
+            "videoconvert ! video/x-raw,format=BGR ! "
+            "appsink drop=1 max-buffers=1 sync=false"
+        )
+    if path.startswith(("tcp://", "rtsp://", "http://", "https://")):
+        return (
+            f'uridecodebin uri="{path}" ! '
+            "queue max-size-buffers=1 leaky=downstream ! "
+            "videoconvert ! video/x-raw,format=BGR ! "
+            "appsink drop=1 max-buffers=1 sync=false"
+        )
     return (
         f"filesrc location={path} ! "
         "decodebin ! videoconvert ! video/x-raw,format=BGR ! "
-        "appsink drop=1 max-buffers=1"
+        "appsink drop=1 max-buffers=1 sync=false"
     )
 
 

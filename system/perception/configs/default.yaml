@@ -1,6 +1,7 @@
 fps: 30.0
-roi_y_start: 240
+roi_y_start_ratio: 0.5
 alpha: 0.9
+path_mask_key: red
 show_masks: true
 
 camera:
@@ -10,6 +11,10 @@ camera:
   height: 480
   backend: auto  # auto | gstreamer | ffmpeg
   # gstreamer_device: /dev/video0  # optional: override device for GStreamer
+  # source can also be:
+  # - video:/absolute/path/to/file.mp4
+  # - stream:udp://0.0.0.0:5000
+  # - udp://0.0.0.0:5000
 
 red1:
   lo: [0, 120, 80]
@@ -38,6 +43,10 @@ morph:
 heading:
   min_area: 150.0
   use_centerline: true
+  lookahead_y_frac: 0.72
+  forward_bias: 1.0
+  lateral_gain: 0.5
+  max_lateral_abs: 0.6
 
 zones:
   target_min_area: 300.0
@@ -61,3 +70,9 @@ comms:
   serial_port: /dev/ttyUSB0
   serial_baud: 115200
   http_url: http://100.72.60.28:8000/inputs
+
+debug_stream:
+  enabled: false
+  host: 0.0.0.0
+  port: 8081
+  jpeg_quality: 80

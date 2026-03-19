@@ -4,7 +4,7 @@
 # Or from x86 with buildx: docker buildx build --platform linux/arm64 -t perception .
 #
 # Uses python3-opencv from Debian (built with GStreamer support).
-# Production: tracks RED line (webcam). Test video: tracks BLUE line (test_run.mp4).
+# Production defaults to RED line tracking; sample replay config tracks BLUE tape.
 # Set camera.backend: gstreamer in config for GStreamer capture.
 # For Pi Camera Module 2, run perception on the host (run_perception_rpicam.sh), not in Docker.
 

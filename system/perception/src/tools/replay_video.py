@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 import time
-from pathlib import Path
 
 import cv2
+import numpy as np
 
 from src.comms.packet import PerceptionPacket
 from src.config import load_config
@@ -21,9 +21,12 @@ def main() -> None:
     parser.add_argument("video_path", help="Path to ROI video file")
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--no-gui", action="store_true")
+    parser.add_argument("--path-mask", choices=["red", "blue", "black"], default=None)
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    if args.path_mask is not None:
+        cfg.path_mask_key = args.path_mask
     cam = OpenCVCamera(
         source=args.video_path,
         width=cfg.camera.width,
@@ -32,9 +35,7 @@ def main() -> None:
         backend="gstreamer",
     )
 
-    state = PipelineState()
-    if Path(args.video_path).name in {"test_run.mp4", "test_video.mp4"}:
-        state.path_mask_key = "black"
+    state = PipelineState(path_mask_key=cfg.path_mask_key)
     gui = not args.no_gui
     while True:
         roi = cam.read()
@@ -56,7 +57,22 @@ def main() -> None:
         print(pkt.to_json(zone_encoding=cfg.comms.zone_encoding))
 
         if gui:
-            cv2.imshow("replay_roi", draw_overlay(roi, state.p_prev, zone, gamma))
+            cv2.imshow(
+                "replay_roi",
+                draw_overlay(
+                    roi,
+                    np.array([out.px, out.py], dtype=float),
+                    zone,
+                    gamma,
+                    path_detected=out.path_detected,
+                    tangent_vector=np.asarray(
+                        out.debug_artifacts.get("tangent_vector", np.zeros(2, dtype=float)),
+                        dtype=float,
+                    ),
+                    probe_point=tuple(out.debug_artifacts.get("heading_debug", {}).get("probe_point", ())),
+                    target_point=tuple(out.debug_artifacts.get("heading_debug", {}).get("target_point", ())),
+                ),
+            )
             if cfg.show_masks:
                 cv2.imshow("replay_masks", make_mask_preview(debug["masks"]))
             if (cv2.waitKey(1) & 0xFF) == ord("q"):

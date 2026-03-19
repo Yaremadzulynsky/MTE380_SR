@@ -45,7 +45,7 @@ def main() -> None:
     if frame is None:
         cam.release()
         raise SystemExit("Failed to read initial frame from source")
-    roi = crop_roi(frame, cfg.roi_y_start)
+    roi = crop_roi(frame, cfg.roi_y_start, cfg.roi_y_start_ratio)
     h, w = roi.shape[:2]
 
     out_path = Path(args.output)
@@ -63,7 +63,7 @@ def main() -> None:
         frame = cam.read()
         if frame is None:
             break
-        roi = crop_roi(frame, cfg.roi_y_start)
+        roi = crop_roi(frame, cfg.roi_y_start, cfg.roi_y_start_ratio)
         writer.write(roi)
         cv2.imshow("record_roi", roi)
         if (cv2.waitKey(1) & 0xFF) == ord("q"):
