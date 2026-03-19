@@ -85,6 +85,7 @@ class WebServer:
         self._robot         = robot
         self._detector      = detector
         self._state_machine = state_machine
+        self._state_log: list = []   # recent state transitions [(ts, state), ...]
         self._host          = host
         self._port          = port
         self._app           = Flask(__name__)
@@ -274,6 +275,7 @@ class WebServer:
                     'left':  round(info['last_drive'][0], 3),
                     'right': round(info['last_drive'][1], 3),
                 },
+                'angular_z': round(info.get('angular_z', 0.0), 3),
                 'heartbeat_age_s': (
                     round(info['heartbeat_age_s'], 2)
                     if info['heartbeat_age_s'] is not None else None
@@ -297,5 +299,17 @@ class WebServer:
                 }
             else:
                 status['line'] = {'found': False}
+
+            status['vision'] = self._detector.get_stats()
+
+        # State transition log
+        sm = self._state_machine
+        if sm is not None:
+            current = sm.current_state
+            if not self._state_log or self._state_log[-1]['state'] != current:
+                self._state_log.append({'ts': round(time.time(), 2), 'state': current})
+                if len(self._state_log) > 30:
+                    self._state_log.pop(0)
+        status['state_log'] = list(self._state_log)
 
         return status

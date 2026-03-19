@@ -211,6 +211,7 @@ class LineDetector:
         self._lock    = threading.Lock()
         self._result: Optional[LineResult] = None
         self._frame:  Optional[np.ndarray] = None   # latest BGR frame (annotated if debug=True)
+        self._detection_rate: float = 0.0
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
@@ -233,6 +234,11 @@ class LineDetector:
         """Return the most recent detection result, or None if no line was found."""
         with self._lock:
             return self._result
+
+    def get_stats(self) -> dict:
+        """Return detection statistics."""
+        with self._lock:
+            return {'detection_rate': round(self._detection_rate, 3)}
 
     def get_direction(self) -> Optional[Tuple[float, float]]:
         """Convenience wrapper — returns (x, y) direction or None."""
@@ -475,6 +481,9 @@ class LineDetector:
             log.exception('Failed to open camera')
             return
 
+        frames_total    = 0
+        frames_detected = 0
+
         while self._running:
             frame = self._read_frame()
             if frame is None:
@@ -482,10 +491,14 @@ class LineDetector:
                 time.sleep(0.05)
                 continue
 
+            frames_total += 1
             result = self._detect(frame)
+            if result is not None:
+                frames_detected += 1
             display = result.frame if (result and result.frame is not None) else frame
             with self._lock:
                 self._result = result
                 self._frame  = display
+                self._detection_rate = frames_detected / frames_total
 
         self._release_camera()

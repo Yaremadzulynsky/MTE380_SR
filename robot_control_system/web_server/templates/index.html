@@ -425,6 +425,11 @@
   <div style="display:flex; gap:12px; flex-wrap:wrap;">
 
     <div class="panel" style="flex:1; min-width:320px;">
+      <div class="panel-title">HEADING — CURRENT vs TARGET (deg)</div>
+      <div style="padding:8px;"><canvas id="chart-heading-abs" height="120"></canvas></div>
+    </div>
+
+    <div class="panel" style="flex:1; min-width:320px;">
       <div class="panel-title">HEADING ERROR (deg)</div>
       <div style="padding:8px;"><canvas id="chart-heading" height="120"></canvas></div>
     </div>
@@ -435,11 +440,32 @@
     </div>
 
     <div class="panel" style="flex:1; min-width:320px;">
+      <div class="panel-title">PID ANGULAR OUTPUT</div>
+      <div style="padding:8px;"><canvas id="chart-angular" height="120"></canvas></div>
+    </div>
+
+    <div class="panel" style="flex:1; min-width:320px;">
       <div class="panel-title">MOTOR OUTPUTS</div>
       <div style="padding:8px;"><canvas id="chart-motors" height="120"></canvas></div>
     </div>
 
   </div>
+
+  <div style="display:flex; gap:12px; flex-wrap:wrap;">
+    <div class="panel" style="flex:1; min-width:320px; max-width:480px;">
+      <div class="panel-title">STATE TRANSITIONS</div>
+      <div id="state-log" style="padding:8px 14px; font-size:11px; font-family:'Courier New',monospace; max-height:160px; overflow-y:auto;"></div>
+    </div>
+
+    <div class="panel" style="flex:1; min-width:200px; max-width:280px;">
+      <div class="panel-title">VISION STATS</div>
+      <div class="row">
+        <span class="lbl">Detection rate</span>
+        <span class="val accent" id="vision-det-rate">&mdash;</span>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -716,6 +742,10 @@
     { label: 'lateral px', data: [], borderColor: '#f0b030', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
   ]);
 
+  const chartAngular = makeChart('chart-angular', [
+    { label: 'angular_z', data: [], borderColor: '#c080ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+  ]);
+
   const chartMotors = makeChart('chart-motors', [
     { label: 'left',  data: [], borderColor: '#30e88a', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
     { label: 'right', data: [], borderColor: '#f04060', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
@@ -734,7 +764,7 @@
   }
 
   function clearCharts() {
-    [chartHeading, chartLateral, chartMotors].forEach(c => {
+    [chartHeadingAbs, chartHeading, chartLateral, chartAngular, chartMotors].forEach(c => {
       c.data.labels = [];
       c.data.datasets.forEach(ds => ds.data = []);
       c.update('none');
@@ -747,16 +777,42 @@
     const drive = d.hardware && d.hardware.last_drive;
     const line  = d.line;
 
+    pushChart(chartHeadingAbs,
+      hdg ? hdg.current_deg : null,
+      hdg ? hdg.target_deg  : null,
+    );
+
     const headingErr = hdg ? hdg.current_deg - hdg.target_deg : null;
     pushChart(chartHeading, headingErr);
 
     const latPx = (line && line.found) ? line.lateral_distance_px : null;
     pushChart(chartLateral, latPx);
 
+    pushChart(chartAngular, d.hardware ? d.hardware.angular_z : null);
+
     pushChart(chartMotors,
       drive ? drive.left  : null,
       drive ? drive.right : null,
     );
+
+    // State log
+    if (d.state_log) {
+      const el = document.getElementById('state-log');
+      if (el) {
+        el.innerHTML = d.state_log.slice().reverse().map(e => {
+          const t = new Date(e.ts * 1000).toLocaleTimeString();
+          const col = e.state === 'stopped' ? 'var(--warning)' : 'var(--success)';
+          return `<div style="color:${col}; padding:2px 0;">${t} &nbsp; ${e.state.toUpperCase()}</div>`;
+        }).join('');
+      }
+    }
+
+    // Vision stats
+    if (d.vision) {
+      const pct = (d.vision.detection_rate * 100).toFixed(1);
+      const col = d.vision.detection_rate > 0.7 ? 'success' : d.vision.detection_rate > 0.3 ? 'warning' : 'danger';
+      set('vision-det-rate', pct + '%', col);
+    }
   }
 
   // Load gains on page load

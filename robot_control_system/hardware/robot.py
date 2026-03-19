@@ -66,6 +66,7 @@ class Robot:
 
         self._last_heartbeat = 0.0
         self._last_drive: tuple[float, float] = (0.0, 0.0)
+        self._last_angular_z: float = 0.0
         self._running = False
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -209,6 +210,7 @@ class Robot:
                 'speed_scale':       self._speed_scale,
                 'linear_speed_mps':  self._linear_speed,
                 'last_drive':        self._last_drive,
+                'angular_z':         self._last_angular_z,
                 'heartbeat_age_s':   hb_age,
             }
 
@@ -271,7 +273,8 @@ class Robot:
 
             self._bridge.send_drive(left, right)
             with self._lock:
-                self._last_drive = (left, right)
+                self._last_drive    = (left, right)
+                self._last_angular_z = angular_z if override is None else 0.0
 
             log.debug('target_hdg=%.1f° hdg_fb=%.1f° speed=%.2f', math.degrees(target_heading), math.degrees(hdg_fb), speed_scale)
 
