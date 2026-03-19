@@ -70,12 +70,19 @@ class _RpicamVidCamera:
         ]
         try:
             self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                          stderr=subprocess.DEVNULL, bufsize=0)
+                                          stderr=subprocess.PIPE, bufsize=0)
         except FileNotFoundError as e:
             raise RuntimeError('rpicam-vid not found — install rpicam-apps') from e
 
+        threading.Thread(target=self._log_stderr, daemon=True).start()
+
         self._thread = threading.Thread(target=self._reader, daemon=True)
         self._thread.start()
+
+    def _log_stderr(self) -> None:
+        assert self._proc.stderr
+        for line in self._proc.stderr:
+            log.warning('rpicam-vid: %s', line.decode(errors='replace').rstrip())
 
     def _reader(self) -> None:
         assert self._proc.stdout
