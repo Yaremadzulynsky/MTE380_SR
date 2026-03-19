@@ -30,21 +30,10 @@ const STATE_MACHINE_STATES_PATH =
   process.env.STATE_MACHINE_STATES_PATH || '/states';
 const STATE_MACHINE_SET_STATE_PATH =
   process.env.STATE_MACHINE_SET_STATE_PATH || '/set-state';
-const LOG_PATH = process.env.LOG_PATH || process.env.INSIGHTS_IPC_PATH;
 const SERVO_MIN_DEG = Number.parseInt(process.env.SERVO_MIN_DEG || '0', 10);
 const SERVO_MAX_DEG = Number.parseInt(process.env.SERVO_MAX_DEG || '90', 10);
-const OPS_DOCKER_BIN = process.env.OPS_DOCKER_BIN || 'docker';
-const OPS_COMPOSE_FILE = process.env.OPS_COMPOSE_FILE
-  || path.resolve(__dirname, '..', 'docker-compose.yaml');
-const OPS_COMMAND_TIMEOUT_MS = Number.parseInt(process.env.OPS_COMMAND_TIMEOUT_MS || '15000', 10);
-const OPS_MAX_OUTPUT_BYTES = Number.parseInt(process.env.OPS_MAX_OUTPUT_BYTES || '262144', 10);
-const OPS_LOG_TAIL_DEFAULT = Number.parseInt(process.env.OPS_LOG_TAIL_DEFAULT || '150', 10);
-const OPS_LOG_TAIL_MAX = Number.parseInt(process.env.OPS_LOG_TAIL_MAX || '2000', 10);
 const OPS_ROBOT_START_STATE = (process.env.OPS_ROBOT_START_STATE || 'searching').trim();
 const OPS_HOUGH_STREAM_URL = process.env.OPS_HOUGH_STREAM_URL || 'http://localhost:8090/stream.mjpg';
-const OPS_INCLUDE_ALLOY = String(process.env.OPS_INCLUDE_ALLOY || '').toLowerCase() === 'true';
-const OPS_IS_ARM = process.arch === 'arm' || process.arch === 'arm64';
-const OPS_SUPPORTS_ALLOY = !OPS_IS_ARM || OPS_INCLUDE_ALLOY;
 const PERCEPTION_RUNNER_ENABLED = String(process.env.ENABLE_PERCEPTION_RUNNER || 'true').toLowerCase() !== 'false';
 const PERCEPTION_RUN_SCRIPT = process.env.PERCEPTION_RUN_SCRIPT
   || path.resolve(__dirname, '..', 'run_perception_rpicam.sh');
@@ -78,47 +67,6 @@ const linePidRanges = {
   deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1)
 };
 
-const OPS_SERVICE_ALLOWLIST = new Set([
-  'perception',
-  'perception-rpicam',
-  'control-communication',
-  'control-screen',
-  'metrics-aggregator',
-  'state-machine',
-  'computer-vision',
-  'prometheus',
-  'loki',
-  'alloy',
-  'grafana',
-  'node-exporter'
-]);
-
-const OPS_SERVICE_GROUPS = {
-  core: ['control-communication', 'state-machine', 'control-screen'],
-  observability: [
-    'metrics-aggregator',
-    'prometheus',
-    'loki',
-    ...(OPS_SUPPORTS_ALLOY ? ['alloy'] : []),
-    'grafana',
-    'node-exporter'
-  ],
-  full: [
-    'control-communication',
-    'state-machine',
-    'control-screen',
-    'metrics-aggregator',
-    'prometheus',
-    'loki',
-    ...(OPS_SUPPORTS_ALLOY ? ['alloy'] : []),
-    'grafana',
-    'node-exporter',
-    'computer-vision',
-    'perception'
-  ]
-};
-
-const insightsLogger = createInsightsLogger(LOG_PATH);
 const perceptionRunner = createPerceptionRunner();
 
 app.use(express.json({ limit: '32kb' }));
@@ -378,10 +326,6 @@ app.get('/api/ops/config', (req, res) => {
   res.json({
     enabled: PERCEPTION_RUNNER_ENABLED,
     perceptionRunnerEnabled: PERCEPTION_RUNNER_ENABLED,
-    composeFile: OPS_COMPOSE_FILE,
-    groups: OPS_SERVICE_GROUPS,
-    supportsAlloy: OPS_SUPPORTS_ALLOY,
-    architecture: process.arch,
     houghStreamUrl: OPS_HOUGH_STREAM_URL,
     perceptionScript: PERCEPTION_RUN_SCRIPT
   });
@@ -698,7 +642,7 @@ app.post('/api/control', async (req, res) => {
 
 app.listen(PORT, () => {
   logInsight('control_screen_started', { port: PORT });
-  logServiceLine(`Control screen running on http://localhost:${PORT}`);
+  console.log(`Control screen running on http://localhost:${PORT}`);
 });
 
 process.on('SIGINT', async () => {
@@ -752,52 +696,6 @@ function parseOptionalIntegerValue(value) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function sanitizeServiceName(rawValue) {
-  if (typeof rawValue !== 'string') {
-    return null;
-  }
-  const value = rawValue.trim();
-  if (!value) {
-    return null;
-  }
-  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(value)) {
-    return null;
-  }
-  if (!OPS_SERVICE_ALLOWLIST.has(value)) {
-    return null;
-  }
-  return value;
-}
-
-function resolveServiceSelection(payload, allowDownAll) {
-  const requestedGroup = payload?.group;
-  if (typeof requestedGroup === 'string' && requestedGroup.trim()) {
-    const group = requestedGroup.trim();
-    const services = OPS_SERVICE_GROUPS[group];
-    if (!Array.isArray(services)) {
-      return { error: `Unknown service group: ${group}` };
-    }
-    if (allowDownAll && group === 'full') {
-      return { group, services, serviceArgs: [] };
-    }
-    return { group, services, serviceArgs: services };
-  }
-
-  const rawServices = Array.isArray(payload?.services) ? payload.services : [];
-  const services = rawServices
-    .map((service) => sanitizeServiceName(service))
-    .filter(Boolean);
-  const uniqueServices = Array.from(new Set(services));
-
-  if (uniqueServices.length === 0) {
-    if (allowDownAll) {
-      return { group: 'all', services: [], serviceArgs: [] };
-    }
-    return { error: 'Provide a valid service group or service list.' };
-  }
-  return { group: 'custom', services: uniqueServices, serviceArgs: uniqueServices };
 }
 
 function collectUpdate(key, rawValue, updates, validationErrors) {
@@ -1242,149 +1140,6 @@ async function setStateMachineState(nextState) {
   }
 }
 
-async function listComposeServices() {
-  const result = await runComposeCommand(['ps', '--all', '--format', 'json']);
-  if (!result.ok) {
-    return {
-      error: result.stderr || 'docker compose ps failed.',
-      detail: result.stdout
-    };
-  }
-
-  const rows = parseComposePsRows(result.stdout);
-  const rowMap = new Map();
-  rows.forEach((row) => {
-    const service = typeof row.Service === 'string' ? row.Service : null;
-    if (service && OPS_SERVICE_ALLOWLIST.has(service)) {
-      rowMap.set(service, row);
-    }
-  });
-
-  const services = Array.from(OPS_SERVICE_ALLOWLIST).map((service) => {
-    const row = rowMap.get(service);
-    const state = row?.State || 'stopped';
-    return {
-      service,
-      state,
-      status: row?.Status || (state === 'running' ? 'Up' : 'Stopped'),
-      containerName: row?.Name || service
-    };
-  });
-
-  return {
-    services,
-    raw: rows
-  };
-}
-
-function parseComposePsRows(stdout) {
-  const text = String(stdout || '').trim();
-  if (!text) {
-    return [];
-  }
-
-  if (text.startsWith('[')) {
-    const parsed = safeJsonParse(text);
-    if (Array.isArray(parsed)) {
-      return parsed;
-    }
-  }
-
-  const rows = [];
-  for (const line of text.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const parsed = safeJsonParse(trimmed);
-    if (parsed && typeof parsed === 'object') {
-      rows.push(parsed);
-    }
-  }
-  return rows;
-}
-
-async function runComposeCommand(args, options = {}) {
-  const finalArgs = ['compose', '-f', OPS_COMPOSE_FILE, ...args];
-  return runCommand(OPS_DOCKER_BIN, finalArgs, options);
-}
-
-function runCommand(command, args, options = {}) {
-  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : OPS_COMMAND_TIMEOUT_MS;
-  const maxBytes = Number.isFinite(options.maxBytes) ? options.maxBytes : OPS_MAX_OUTPUT_BYTES;
-
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let stdoutTruncated = false;
-    let stderrTruncated = false;
-    let didTimeout = false;
-    let resolved = false;
-
-    const maybeTrim = (text, isStdout) => {
-      if (text.length <= maxBytes) {
-        return text;
-      }
-      if (isStdout) {
-        stdoutTruncated = true;
-      } else {
-        stderrTruncated = true;
-      }
-      return text.slice(text.length - maxBytes);
-    };
-
-    const timer = setTimeout(() => {
-      didTimeout = true;
-      child.kill('SIGTERM');
-    }, timeoutMs);
-
-    child.stdout.on('data', (chunk) => {
-      stdout = maybeTrim(stdout + chunk.toString(), true);
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr = maybeTrim(stderr + chunk.toString(), false);
-    });
-
-    child.on('error', (err) => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      clearTimeout(timer);
-      resolve({
-        ok: false,
-        exitCode: -1,
-        stdout,
-        stderr: `${stderr}\n${err.message}`.trim(),
-        timedOut: false,
-        stdoutTruncated,
-        stderrTruncated
-      });
-    });
-
-    child.on('close', (code) => {
-      if (resolved) {
-        return;
-      }
-      resolved = true;
-      clearTimeout(timer);
-      resolve({
-        ok: !didTimeout && code === 0,
-        exitCode: typeof code === 'number' ? code : -1,
-        stdout,
-        stderr: didTimeout ? `${stderr}\nCommand timed out.`.trim() : stderr,
-        timedOut: didTimeout,
-        stdoutTruncated,
-        stderrTruncated
-      });
-    });
-  });
-}
-
 function createPerceptionRunner() {
   let child = null;
   let startedAt = null;
@@ -1520,37 +1275,6 @@ async function readLogFileTail(logFilePath, lines) {
   }
 }
 
-function createInsightsLogger(logPath) {
-  if (!logPath) {
-    return null;
-  }
-
-  try {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    const stream = fs.createWriteStream(logPath, { flags: 'a' });
-    stream.on('error', (err) => {
-      console.warn(`Insights IPC pipe error: ${err.message}`);
-    });
-    return stream;
-  } catch (err) {
-    console.warn(`Unable to open log file: ${err.message}`);
-    return null;
-  }
-}
-
-function logServiceLine(message) {
-  const entry = {
-    ts: new Date().toISOString(),
-    event: 'service_log',
-    message
-  };
-  const line = JSON.stringify(entry);
-  console.log(line);
-  if (insightsLogger) {
-    insightsLogger.write(`${line}\n`);
-  }
-}
-
 function logInsight(event, payload) {
   const entry = {
     ts: new Date().toISOString(),
@@ -1560,8 +1284,4 @@ function logInsight(event, payload) {
 
   const line = JSON.stringify(entry);
   console.log(line);
-
-  if (insightsLogger) {
-    insightsLogger.write(`${line}\n`);
-  }
 }

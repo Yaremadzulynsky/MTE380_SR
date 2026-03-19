@@ -27,7 +27,6 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - get Integral returns I
 - get Derivative returns D
 
-- Send data and logs to insights aggregator via IPC pipe.
 
 # Ops Dashboard
 - Route: `/ops`
