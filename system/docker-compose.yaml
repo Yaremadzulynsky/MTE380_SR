@@ -70,8 +70,8 @@ services:
       context: ./control_communication
     container_name: control-communication
     network_mode: host
-    devices:
-       - "/dev/ttyACM0:/dev/ttyACM0"  # Arduino Mega via USB (attach with usbipd on Windows/WSL2)
+    # devices:
+    #    - "/dev/ttyACM0:/dev/ttyACM0"  # Arduino Mega via USB (attach with usbipd on Windows/WSL2)
     environment:
       PORT: 5001
       ROBOT_MOCK_CONTROL_URL: "http://localhost:8200/api/sim-control"
@@ -96,7 +96,8 @@ services:
       CONTROL_COMM_CONTROL_PATH: "/control"
       STATE_MACHINE_BASE_URL: "http://localhost:8000"
       STATE_MACHINE_INPUT_PATH: "/inputs"
-      STATE_MACHINE_LINE_FOLLOW_PID_PATH: "/line-follow-pid"
+      PERCEPTION_BASE_URL: "http://localhost:8081"
+      PERCEPTION_TUNING_PATH: "/tuning/perception"
       PID_P_MIN: "-1000"
       PID_P_MAX: "1000"
       PID_I_MIN: "-1000"
