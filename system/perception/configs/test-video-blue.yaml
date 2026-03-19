@@ -1,0 +1,3 @@
+path_mask_key: blue
+roi_y_start_ratio: 0.5
+show_masks: true

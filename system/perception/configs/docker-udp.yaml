@@ -1,0 +1,26 @@
+# Run perception in Docker on a laptop while the Pi streams video over UDP.
+# Exposes a browser-viewable overlay stream with the predicted vector.
+fps: 30.0
+roi_y_start_ratio: 0.333333
+alpha: 0.9
+path_mask_key: red
+show_masks: false
+
+camera:
+  source: udp://0.0.0.0:5000
+  width: 640
+  height: 480
+  backend: ffmpeg
+
+comms:
+  method: stdout
+  zone_encoding: string
+  udp_ip: 127.0.0.1
+  udp_port: 8000
+  http_url: http://host.docker.internal:8000/inputs
+
+debug_stream:
+  enabled: true
+  host: 0.0.0.0
+  port: 8081
+  jpeg_quality: 80
