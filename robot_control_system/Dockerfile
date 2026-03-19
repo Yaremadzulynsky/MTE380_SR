@@ -3,9 +3,9 @@ FROM python:3.11-slim
 # ── System dependencies ───────────────────────────────────────────────────────
 # OpenCV headless runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libglib2.0-0t64 \
+        libglib2.0-0 \
         libgl1 \
-        libsm6t64 \
+        libsm6 \
         libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
