@@ -406,7 +406,8 @@
           <button class="ctrl-btn" onclick="sendStop()" style="color:var(--danger);">&#9632; STOP</button>
           <button class="ctrl-btn" onclick="sendTurnLeft()"  style="color:var(--warning);">&#8592; LEFT</button>
           <button class="ctrl-btn" onclick="sendTurnRight()" style="color:var(--warning);">&#8594; RIGHT</button>
-          <button class="ctrl-btn" id="btn-align" onclick="alignToLine()" style="color:#c080ff;">&#8982; ALIGN</button>
+          <button class="ctrl-btn" id="btn-align" onclick="alignToLine()" style="color:#c080ff;">&#8982; ALIGN TANGENT</button>
+          <button class="ctrl-btn" id="btn-align-target" onclick="alignToTarget()" style="color:#ff80c0;">&#8982; ALIGN TARGET</button>
           <span id="align-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
 
@@ -717,6 +718,25 @@
           st.style.color = 'var(--danger)';
         } else {
           st.textContent = `aligned (${d.direction[0]}, ${d.direction[1]})`;
+          st.style.color = 'var(--success)';
+        }
+      })
+      .catch(() => { st.textContent = 'error'; st.style.color = 'var(--danger)'; })
+      .finally(() => { btn.disabled = false; });
+  }
+
+  function alignToTarget() {
+    const btn = document.getElementById('btn-align-target');
+    const st  = document.getElementById('align-status');
+    btn.disabled = true;
+    fetch('/api/align-target', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) {
+          st.textContent = d.error;
+          st.style.color = 'var(--danger)';
+        } else {
+          st.textContent = `target (${d.direction[0]}, ${d.direction[1]}) lat=${d.lateral_px}px w=${d.weight}`;
           st.style.color = 'var(--success)';
         }
       })
