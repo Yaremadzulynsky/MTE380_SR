@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Robot Ops Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape shape-a"></div>
+    <div class="bg-shape shape-b"></div>
+    <div class="bg-shape shape-c"></div>
+
+    <main class="shell">
+      <header class="hero" data-animate>
+        <div>
+          <p class="kicker">Control Screen</p>
+          <h1>Robot Ops Dashboard</h1>
+          <p class="sub">
+            Start and stop robot services, inspect logs, and send test commands from one page.
+          </p>
+        </div>
+        <div class="status-card">
+          <div class="status-label">Ops Status</div>
+          <div id="opsEnabled" class="status-value">Checking...</div>
+          <div id="opsDetail" class="status-meta">Compose: --</div>
+        </div>
+      </header>
+
+      <nav class="control-nav" data-animate>
+        <a class="nav-link" href="/pid">PID Tuning</a>
+        <a class="nav-link" href="/control">Drive Control</a>
+        <a class="nav-link active" href="/ops">Ops Dashboard</a>
+        <a class="nav-link" href="/robot-mock">Robot Mock</a>
+      </nav>
+
+      <section class="panel" data-animate>
+        <h2>Stack Controls</h2>
+        <p class="hint">
+          These actions run docker compose commands on the host. Keep this page restricted to trusted users.
+        </p>
+        <div class="ops-actions-grid">
+          <button type="button" data-action="start-core">Start Core</button>
+          <button type="button" data-action="start-full">Start Full</button>
+          <button type="button" class="ghost" data-action="stop-core">Stop Core</button>
+          <button type="button" class="ghost" data-action="down-full">Down Full</button>
+        </div>
+        <div class="feedback" id="stackFeedback" role="status" aria-live="polite">Ready.</div>
+      </section>
+
+      <section class="panel" data-animate>
+        <h2>Service Status</h2>
+        <div class="actions">
+          <button type="button" class="ghost" id="refreshServicesBtn">Refresh Services</button>
+        </div>
+        <div id="servicesGrid" class="ops-services-grid"></div>
+      </section>
+
+      <section class="panel" data-animate>
+        <h2>Log Viewer</h2>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Service</span>
+            <select id="logService"></select>
+          </label>
+          <label class="field">
+            <span class="field-label">Lines</span>
+            <input id="logLines" type="number" min="10" max="2000" step="10" value="150" />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" id="refreshLogsBtn">Refresh Logs</button>
+          <button type="button" class="ghost" id="toggleTailBtn">Start Tail</button>
+        </div>
+        <pre id="logsOutput" class="ops-log-output">Select a service to view logs.</pre>
+      </section>
+
+      <section class="panel" data-animate>
+        <h2>Test Actions</h2>
+        <div class="ops-actions-grid">
+          <button type="button" id="neutralControlBtn">Send Neutral Control</button>
+          <button type="button" class="ghost" id="sampleInputBtn">Send Sample Input</button>
+        </div>
+        <div class="feedback" id="testFeedback" role="status" aria-live="polite">Idle.</div>
+      </section>
+    </main>
+
+    <script src="ops.js" defer></script>
+  </body>
+</html>

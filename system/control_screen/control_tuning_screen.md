@@ -28,3 +28,27 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - get Derivative returns D
 
 - Send data and logs to insights aggregator via IPC pipe.
+
+# Ops Dashboard
+- Route: `/ops`
+- Purpose: web operations panel for robot stack lifecycle, service status, log viewing, and test actions.
+- Requires host execution with Docker CLI access (`docker`) and compose file access.
+- Enable with environment variable: `ENABLE_OPS_DASHBOARD=true`.
+
+## Ops API endpoints
+- `GET /api/ops/config` returns feature flag and service groups.
+- `GET /api/ops/services` returns docker compose service states.
+- `POST /api/ops/stack/up` starts selected group/services.
+- `POST /api/ops/stack/stop` stops selected group/services.
+- `POST /api/ops/stack/down` removes selected services or full project.
+- `POST /api/ops/service/restart` restarts one service.
+- `GET /api/ops/logs?service=<name>&lines=<n>` fetches recent logs.
+- `POST /api/ops/tests/neutral-control` sends a neutral input.
+- `POST /api/ops/tests/sample-input` sends a sample movement input.
+
+## Security and guardrails
+- Services are restricted by an allowlist.
+- Commands are run with fixed compose args and sanitized service names.
+- Commands use timeout and max-output limits to avoid hanging or oversized responses.
+- On 32-bit ARM (`process.arch === "arm"`), the default ops groups automatically exclude `alloy` because compatible images may be unavailable.
+- To force-include `alloy` anyway, set `OPS_INCLUDE_ALLOY=true`.

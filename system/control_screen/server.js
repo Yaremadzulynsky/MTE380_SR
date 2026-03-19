@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = Number.parseInt(process.env.PORT, 10) || 3000;
@@ -31,6 +32,16 @@ const ROBOT_MOCK_URL = process.env.ROBOT_MOCK_URL || 'http://localhost:8200';
 const LOG_PATH = process.env.LOG_PATH || process.env.INSIGHTS_IPC_PATH;
 const SERVO_MIN_DEG = Number.parseInt(process.env.SERVO_MIN_DEG || '0', 10);
 const SERVO_MAX_DEG = Number.parseInt(process.env.SERVO_MAX_DEG || '90', 10);
+const ENABLE_OPS_DASHBOARD = String(process.env.ENABLE_OPS_DASHBOARD || '').toLowerCase() === 'true';
+const OPS_DOCKER_BIN = process.env.OPS_DOCKER_BIN || 'docker';
+const OPS_COMPOSE_FILE = process.env.OPS_COMPOSE_FILE
+  || '/home/zainm/Documents/3B/380/MTE380_SR/system/docker-compose.yaml';
+const OPS_COMMAND_TIMEOUT_MS = Number.parseInt(process.env.OPS_COMMAND_TIMEOUT_MS || '15000', 10);
+const OPS_MAX_OUTPUT_BYTES = Number.parseInt(process.env.OPS_MAX_OUTPUT_BYTES || '262144', 10);
+const OPS_LOG_TAIL_DEFAULT = Number.parseInt(process.env.OPS_LOG_TAIL_DEFAULT || '150', 10);
+const OPS_LOG_TAIL_MAX = Number.parseInt(process.env.OPS_LOG_TAIL_MAX || '2000', 10);
+const OPS_INCLUDE_ALLOY = String(process.env.OPS_INCLUDE_ALLOY || '').toLowerCase() === 'true';
+const OPS_SUPPORTS_ALLOY = process.arch !== 'arm' || OPS_INCLUDE_ALLOY;
 
 const DEFAULT_RANGE = { min: -1000, max: 1000 };
 
@@ -55,6 +66,48 @@ const linePidRanges = {
   deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1)
 };
 
+const OPS_SERVICE_ALLOWLIST = new Set([
+  'perception',
+  'perception-rpicam',
+  'control-communication',
+  'control-screen',
+  'metrics-aggregator',
+  'state-machine',
+  'computer-vision',
+  'robot-mock',
+  'prometheus',
+  'loki',
+  'alloy',
+  'grafana',
+  'node-exporter'
+]);
+
+const OPS_SERVICE_GROUPS = {
+  core: ['control-communication', 'state-machine', 'control-screen', 'robot-mock'],
+  observability: [
+    'metrics-aggregator',
+    'prometheus',
+    'loki',
+    ...(OPS_SUPPORTS_ALLOY ? ['alloy'] : []),
+    'grafana',
+    'node-exporter'
+  ],
+  full: [
+    'control-communication',
+    'state-machine',
+    'control-screen',
+    'robot-mock',
+    'metrics-aggregator',
+    'prometheus',
+    'loki',
+    ...(OPS_SUPPORTS_ALLOY ? ['alloy'] : []),
+    'grafana',
+    'node-exporter',
+    'computer-vision',
+    'perception'
+  ]
+};
+
 const insightsLogger = createInsightsLogger(LOG_PATH);
 
 app.use(express.json({ limit: '32kb' }));
@@ -66,6 +119,10 @@ app.get(['/', '/pid'], (req, res) => {
 
 app.get('/control', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'control.html'));
+});
+
+app.get('/ops', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'ops.html'));
 });
 
 app.get('/robot-mock', (req, res) => {
@@ -311,6 +368,235 @@ app.post('/api/state-machine/set-state', async (req, res) => {
   return res.json(result);
 });
 
+app.get('/api/ops/config', (req, res) => {
+  res.json({
+    enabled: ENABLE_OPS_DASHBOARD,
+    composeFile: OPS_COMPOSE_FILE,
+    groups: OPS_SERVICE_GROUPS,
+    supportsAlloy: OPS_SUPPORTS_ALLOY,
+    architecture: process.arch
+  });
+});
+
+app.get('/api/ops/services', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const result = await listComposeServices();
+  if (result.error) {
+    logInsight('ops_services_error', { error: result.error, detail: result.detail });
+    return res.status(502).json({
+      message: 'Failed to query docker compose services.',
+      error: result.error,
+      detail: result.detail
+    });
+  }
+  return res.json(result);
+});
+
+app.post('/api/ops/stack/up', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const selection = resolveServiceSelection(req.body, false);
+  if (selection.error) {
+    return res.status(400).json({ message: selection.error });
+  }
+
+  const result = await runComposeCommand(['up', '-d', ...selection.services]);
+  if (!result.ok) {
+    logInsight('ops_stack_up_error', { selection, result });
+    return res.status(502).json({
+      message: 'Failed to start selected services.',
+      ...result
+    });
+  }
+  logInsight('ops_stack_up_ok', { selection, exitCode: result.exitCode });
+  return res.json({
+    message: 'Services started.',
+    services: selection.services,
+    ...result
+  });
+});
+
+app.post('/api/ops/stack/stop', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const selection = resolveServiceSelection(req.body, false);
+  if (selection.error) {
+    return res.status(400).json({ message: selection.error });
+  }
+
+  const result = await runComposeCommand(['stop', ...selection.services]);
+  if (!result.ok) {
+    logInsight('ops_stack_stop_error', { selection, result });
+    return res.status(502).json({
+      message: 'Failed to stop selected services.',
+      ...result
+    });
+  }
+  logInsight('ops_stack_stop_ok', { selection, exitCode: result.exitCode });
+  return res.json({
+    message: 'Services stopped.',
+    services: selection.services,
+    ...result
+  });
+});
+
+app.post('/api/ops/stack/down', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const selection = resolveServiceSelection(req.body, true);
+  if (selection.error) {
+    return res.status(400).json({ message: selection.error });
+  }
+
+  if (selection.serviceArgs.length === 0) {
+    const result = await runComposeCommand(['down']);
+    if (!result.ok) {
+      logInsight('ops_stack_down_error', { selection, result });
+      return res.status(502).json({
+        message: 'Failed to bring down compose project.',
+        ...result
+      });
+    }
+    logInsight('ops_stack_down_ok', { selection, exitCode: result.exitCode });
+    return res.json({
+      message: 'Compose project brought down.',
+      services: selection.services,
+      ...result
+    });
+  }
+
+  const stopResult = await runComposeCommand(['stop', ...selection.serviceArgs]);
+  if (!stopResult.ok) {
+    logInsight('ops_stack_down_error', { selection, result: stopResult });
+    return res.status(502).json({
+      message: 'Failed to stop selected services before removal.',
+      ...stopResult
+    });
+  }
+
+  const rmResult = await runComposeCommand(['rm', '-f', ...selection.serviceArgs]);
+  if (!rmResult.ok) {
+    logInsight('ops_stack_down_error', { selection, result: rmResult });
+    return res.status(502).json({
+      message: 'Failed to remove selected services.',
+      ...rmResult
+    });
+  }
+
+  logInsight('ops_stack_down_ok', { selection, exitCode: rmResult.exitCode });
+  return res.json({
+    message: 'Selected services removed.',
+    services: selection.services,
+    ...rmResult
+  });
+});
+
+app.post('/api/ops/service/restart', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const service = sanitizeServiceName(req.body?.service);
+  if (!service) {
+    return res.status(400).json({ message: 'Invalid or missing service name.' });
+  }
+
+  const result = await runComposeCommand(['restart', service]);
+  if (!result.ok) {
+    logInsight('ops_service_restart_error', { service, result });
+    return res.status(502).json({
+      message: `Failed to restart ${service}.`,
+      ...result
+    });
+  }
+  logInsight('ops_service_restart_ok', { service, exitCode: result.exitCode });
+  return res.json({
+    message: `${service} restarted.`,
+    service,
+    ...result
+  });
+});
+
+app.get('/api/ops/logs', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const service = sanitizeServiceName(req.query?.service);
+  if (!service) {
+    return res.status(400).json({ message: 'Provide a valid service query parameter.' });
+  }
+
+  const rawLines = Number.parseInt(String(req.query?.lines || OPS_LOG_TAIL_DEFAULT), 10);
+  const lines = Number.isFinite(rawLines)
+    ? Math.max(1, Math.min(rawLines, OPS_LOG_TAIL_MAX))
+    : OPS_LOG_TAIL_DEFAULT;
+
+  const result = await runComposeCommand(['logs', '--no-color', '--tail', String(lines), service], {
+    timeoutMs: OPS_COMMAND_TIMEOUT_MS * 2
+  });
+  if (!result.ok) {
+    logInsight('ops_logs_error', { service, lines, result });
+    return res.status(502).json({
+      message: `Failed to fetch logs for ${service}.`,
+      service,
+      lines,
+      ...result
+    });
+  }
+  return res.json({
+    service,
+    lines,
+    ...result
+  });
+});
+
+app.post('/api/ops/tests/neutral-control', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const result = await sendRedLineInput({ x: 0, y: 0 });
+  if (!result || result.error) {
+    logInsight('ops_neutral_test_error', { error: result?.error });
+    return res.status(502).json({
+      message: 'Failed to send neutral control test command.',
+      error: result?.error
+    });
+  }
+  return res.json({
+    message: 'Neutral control test sent.',
+    command: result.command
+  });
+});
+
+app.post('/api/ops/tests/sample-input', async (req, res) => {
+  if (!ENABLE_OPS_DASHBOARD) {
+    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  }
+  const vector = req.body?.vector || {};
+  const parsedX = Number(vector.x);
+  const parsedY = Number(vector.y);
+  const command = {
+    x: Number.isFinite(parsedX) ? clamp(parsedX, -1, 1) : 0.2,
+    y: Number.isFinite(parsedY) ? clamp(parsedY, -1, 1) : 0.8
+  };
+  const result = await sendRedLineInput(command);
+  if (!result || result.error) {
+    logInsight('ops_sample_input_error', { error: result?.error, command });
+    return res.status(502).json({
+      message: 'Failed to send sample input test command.',
+      error: result?.error
+    });
+  }
+  return res.json({
+    message: 'Sample input test sent.',
+    command: result.command
+  });
+});
+
 app.post('/api/control', async (req, res) => {
   const { x, y, speed, servo } = req.body || {};
   const errors = {};
@@ -424,6 +710,56 @@ function parseOptionalIntegerValue(value) {
     return Number.NaN;
   }
   return parsed;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function sanitizeServiceName(rawValue) {
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+  const value = rawValue.trim();
+  if (!value) {
+    return null;
+  }
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(value)) {
+    return null;
+  }
+  if (!OPS_SERVICE_ALLOWLIST.has(value)) {
+    return null;
+  }
+  return value;
+}
+
+function resolveServiceSelection(payload, allowDownAll) {
+  const requestedGroup = payload?.group;
+  if (typeof requestedGroup === 'string' && requestedGroup.trim()) {
+    const group = requestedGroup.trim();
+    const services = OPS_SERVICE_GROUPS[group];
+    if (!Array.isArray(services)) {
+      return { error: `Unknown service group: ${group}` };
+    }
+    if (allowDownAll && group === 'full') {
+      return { group, services, serviceArgs: [] };
+    }
+    return { group, services, serviceArgs: services };
+  }
+
+  const rawServices = Array.isArray(payload?.services) ? payload.services : [];
+  const services = rawServices
+    .map((service) => sanitizeServiceName(service))
+    .filter(Boolean);
+  const uniqueServices = Array.from(new Set(services));
+
+  if (uniqueServices.length === 0) {
+    if (allowDownAll) {
+      return { group: 'all', services: [], serviceArgs: [] };
+    }
+    return { error: 'Provide a valid service group or service list.' };
+  }
+  return { group: 'custom', services: uniqueServices, serviceArgs: uniqueServices };
 }
 
 function collectUpdate(key, rawValue, updates, validationErrors) {
@@ -748,6 +1084,149 @@ async function setStateMachineState(nextState) {
   } catch (err) {
     return { error: err.message };
   }
+}
+
+async function listComposeServices() {
+  const result = await runComposeCommand(['ps', '--all', '--format', 'json']);
+  if (!result.ok) {
+    return {
+      error: result.stderr || 'docker compose ps failed.',
+      detail: result.stdout
+    };
+  }
+
+  const rows = parseComposePsRows(result.stdout);
+  const rowMap = new Map();
+  rows.forEach((row) => {
+    const service = typeof row.Service === 'string' ? row.Service : null;
+    if (service && OPS_SERVICE_ALLOWLIST.has(service)) {
+      rowMap.set(service, row);
+    }
+  });
+
+  const services = Array.from(OPS_SERVICE_ALLOWLIST).map((service) => {
+    const row = rowMap.get(service);
+    const state = row?.State || 'stopped';
+    return {
+      service,
+      state,
+      status: row?.Status || (state === 'running' ? 'Up' : 'Stopped'),
+      containerName: row?.Name || service
+    };
+  });
+
+  return {
+    services,
+    raw: rows
+  };
+}
+
+function parseComposePsRows(stdout) {
+  const text = String(stdout || '').trim();
+  if (!text) {
+    return [];
+  }
+
+  if (text.startsWith('[')) {
+    const parsed = safeJsonParse(text);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  }
+
+  const rows = [];
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const parsed = safeJsonParse(trimmed);
+    if (parsed && typeof parsed === 'object') {
+      rows.push(parsed);
+    }
+  }
+  return rows;
+}
+
+async function runComposeCommand(args, options = {}) {
+  const finalArgs = ['compose', '-f', OPS_COMPOSE_FILE, ...args];
+  return runCommand(OPS_DOCKER_BIN, finalArgs, options);
+}
+
+function runCommand(command, args, options = {}) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : OPS_COMMAND_TIMEOUT_MS;
+  const maxBytes = Number.isFinite(options.maxBytes) ? options.maxBytes : OPS_MAX_OUTPUT_BYTES;
+
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+    let didTimeout = false;
+    let resolved = false;
+
+    const maybeTrim = (text, isStdout) => {
+      if (text.length <= maxBytes) {
+        return text;
+      }
+      if (isStdout) {
+        stdoutTruncated = true;
+      } else {
+        stderrTruncated = true;
+      }
+      return text.slice(text.length - maxBytes);
+    };
+
+    const timer = setTimeout(() => {
+      didTimeout = true;
+      child.kill('SIGTERM');
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk) => {
+      stdout = maybeTrim(stdout + chunk.toString(), true);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr = maybeTrim(stderr + chunk.toString(), false);
+    });
+
+    child.on('error', (err) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        exitCode: -1,
+        stdout,
+        stderr: `${stderr}\n${err.message}`.trim(),
+        timedOut: false,
+        stdoutTruncated,
+        stderrTruncated
+      });
+    });
+
+    child.on('close', (code) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      clearTimeout(timer);
+      resolve({
+        ok: !didTimeout && code === 0,
+        exitCode: typeof code === 'number' ? code : -1,
+        stdout,
+        stderr: didTimeout ? `${stderr}\nCommand timed out.`.trim() : stderr,
+        timedOut: didTimeout,
+        stdoutTruncated,
+        stderrTruncated
+      });
+    });
+  });
 }
 
 function createInsightsLogger(logPath) {

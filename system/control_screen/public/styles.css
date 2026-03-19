@@ -407,6 +407,65 @@ button.ghost {
   border-color: rgba(239, 111, 67, 0.45);
 }
 
+.ops-actions-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.ops-services-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ops-service-card {
+  background: #fffdf7;
+  border-radius: 16px;
+  padding: 14px 16px;
+  border: 1px solid #efe4d4;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ops-service-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ops-service-state {
+  font-size: 0.9rem;
+  text-transform: capitalize;
+}
+
+.ops-service-state.online {
+  color: var(--accent-2);
+}
+
+.ops-service-state.offline {
+  color: var(--accent);
+}
+
+.ops-log-output {
+  margin-top: 14px;
+  background: #1b1f24;
+  color: #d8dee9;
+  border-radius: 12px;
+  border: 1px solid #2b3139;
+  min-height: 260px;
+  max-height: 460px;
+  overflow: auto;
+  padding: 12px;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .bg-shape {
   position: absolute;
   border-radius: 999px;
