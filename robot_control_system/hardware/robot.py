@@ -10,8 +10,8 @@ from .speed_pid   import SpeedPID
 # ── Config ────────────────────────────────────────────────────────────────────
 
 RATE_HZ   = 20.0
-MAX_SPEED     = 0.3
-MAX_ROT_SPEED = 0.3
+MAX_SPEED     = 1
+MAX_ROT_SPEED = 1
 
 HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
 

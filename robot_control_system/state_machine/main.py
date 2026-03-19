@@ -15,7 +15,8 @@ import time
 
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
 
-from hardware.robot              import Robot
+from hardware.robot              import Robot, MAX_SPEED, MAX_ROT_SPEED
+import hardware.robot as _robot_module
 from vision.line_detector        import LineDetector
 from state_machine.machine       import StateMachine
 from state_machine.states        import Stopped, LineFollow
@@ -37,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     cam_group.add_argument('--camera',
                            help='Camera source: index, "pi", file, or URL')
 
+    parser.add_argument('--max-speed',     type=float, default=None,
+                        help='Override MAX_SPEED (0–1, default %.2f)' % MAX_SPEED)
+    parser.add_argument('--max-rot-speed', type=float, default=None,
+                        help='Override MAX_ROT_SPEED (0–1, default %.2f)' % MAX_ROT_SPEED)
     parser.add_argument('--web-port', type=int, default=8321)
     parser.add_argument('--initial-state', default='stopped',
                         choices=['stopped', 'line_follow'])
@@ -52,6 +57,14 @@ def main():
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     )
     log = logging.getLogger('state_machine.main')
+
+    # ── Speed overrides ───────────────────────────────────────────────────────
+    if args.max_speed is not None:
+        _robot_module.MAX_SPEED = args.max_speed
+        log.info('MAX_SPEED → %.2f', args.max_speed)
+    if args.max_rot_speed is not None:
+        _robot_module.MAX_ROT_SPEED = args.max_rot_speed
+        log.info('MAX_ROT_SPEED → %.2f', args.max_rot_speed)
 
     # ── Robot ────────────────────────────────────────────────────────────────
     robot = None
