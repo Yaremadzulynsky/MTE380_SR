@@ -31,8 +31,11 @@ def test_centered_line_stays_mostly_forward() -> None:
     out = run_pipeline(frame, PipelineState(), cfg)
     assert out.path_detected is True
     assert abs(float(out.image_vector[0])) < 0.05
-    assert abs(float(out.image_vector[1]) + 1.0) < 1e-6
-    assert float(out.robot_vector[1]) > 0.99
+    assert -0.46 < float(out.image_vector[1]) < -0.09
+    assert abs(float(out.robot_vector[0])) < 0.05
+    assert 0.09 < float(out.robot_vector[1]) < 0.46
+    assert abs(float(out.lookahead_image_vector[0])) < 0.05
+    assert float(out.lookahead_robot_vector[1]) > 0.25
 
 
 def test_curve_right_gives_modest_positive_lateral_term() -> None:
@@ -43,5 +46,7 @@ def test_curve_right_gives_modest_positive_lateral_term() -> None:
     out = run_pipeline(frame, PipelineState(), cfg)
     assert out.path_detected is True
     assert 0.05 < float(out.image_vector[0]) < 0.45
-    assert abs(float(out.image_vector[0])) < abs(float(out.image_vector[1]))
-    assert float(out.robot_vector[1]) > 0.9
+    assert 0.09 < float(out.robot_vector[1]) < 0.46
+    assert abs(float(out.image_vector[0])) < 1.0
+    assert float(out.lookahead_image_vector[0]) > 0.05
+    assert float(out.lookahead_robot_vector[1]) > 0.25

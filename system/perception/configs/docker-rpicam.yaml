@@ -1,5 +1,5 @@
 fps: 60.0
-source: webcam
+source: rpicam
 width: 480
 height: 320
 roi_y_start_ratio: 0.5
@@ -15,9 +15,26 @@ heading:
   forward_bias: 1.0
   lateral_gain: 0.5
   max_lateral_abs: 0.6
+  pid_kp: 0.5
+  pid_ki: 0.0
+  pid_kd: 0.1
+  pid_i_max: 0.6
+  pid_deadband: 0.01
+  base_speed: 0.35
+  min_speed: 0.1
+  max_speed: 0.45
+  error_slowdown: 0.25
 
 output:
   method: http
+  send_hz: 10.0
+
+debug_stream:
+  enabled: true
+  host: 0.0.0.0
+  port: 8081
+  jpeg_quality: 80
+  max_fps: 15.0
 
 hsv:
   red1:
@@ -37,4 +54,3 @@ morph:
   kernel_size: 3
   open_iters: 1
   close_iters: 1
-

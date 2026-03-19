@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from urllib.parse import urlparse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -10,7 +11,14 @@ import numpy as np
 
 
 class DebugStreamServer:
-    def __init__(self, host: str, port: int, jpeg_quality: int = 80, max_fps: float = 15.0):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        jpeg_quality: int = 80,
+        max_fps: float = 15.0,
+        tuning_api: object | None = None,
+    ):
         self._host = host
         self._port = int(port)
         self._jpeg_quality = int(jpeg_quality)
@@ -18,6 +26,7 @@ class DebugStreamServer:
         self._last_encode_at = 0.0
         self._lock = threading.Lock()
         self._frame: bytes | None = None
+        self._tuning_api = tuning_api
         self._server = ThreadingHTTPServer((self._host, self._port), self._make_handler())
         self._thread = threading.Thread(target=self._server.serve_forever, name="debug-stream", daemon=True)
 
@@ -26,7 +35,10 @@ class DebugStreamServer:
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:  # noqa: N802
-                if self.path in {"/", "/index.html"}:
+                parsed = urlparse(self.path)
+                path = parsed.path
+
+                if path in {"/", "/index.html"}:
                     body = (
                         "<html><body style='margin:0;background:#111'>"
                         "<img id='feed' src='/latest.jpg' style='width:100%;height:auto' />"
@@ -43,7 +55,7 @@ class DebugStreamServer:
                     self.wfile.write(body)
                     return
 
-                if self.path == "/health":
+                if path == "/health":
                     body = b'{"status":"ok"}'
                     self.send_response(HTTPStatus.OK)
                     self.send_header("Content-Type", "application/json")
@@ -52,7 +64,15 @@ class DebugStreamServer:
                     self.wfile.write(body)
                     return
 
-                if self.path.startswith("/latest.jpg"):
+                if path == "/tuning/perception":
+                    if parent._tuning_api is None:
+                        self.send_error(HTTPStatus.NOT_FOUND)
+                        return
+                    payload = parent._tuning_api.get_payload()
+                    parent._send_json(self, HTTPStatus.OK, payload)
+                    return
+
+                if path.startswith("/latest.jpg"):
                     frame = parent.latest_frame()
                     if frame is None:
                         self.send_error(HTTPStatus.SERVICE_UNAVAILABLE)
@@ -68,7 +88,7 @@ class DebugStreamServer:
                     self.wfile.flush()
                     return
 
-                if self.path != "/stream.mjpg":
+                if path != "/stream.mjpg":
                     self.send_error(HTTPStatus.NOT_FOUND)
                     return
 
@@ -93,6 +113,29 @@ class DebugStreamServer:
                 except (BrokenPipeError, ConnectionResetError):
                     return
 
+            def do_POST(self) -> None:  # noqa: N802
+                parsed = urlparse(self.path)
+                if parsed.path != "/tuning/perception" or parent._tuning_api is None:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    parent._send_json(self, HTTPStatus.BAD_REQUEST, {"message": "Invalid Content-Length."})
+                    return
+                raw = self.rfile.read(length) if length > 0 else b"{}"
+                try:
+                    import json
+                    payload = json.loads(raw.decode("utf-8") or "{}")
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    parent._send_json(self, HTTPStatus.BAD_REQUEST, {"message": "Payload must be valid JSON."})
+                    return
+                if not isinstance(payload, dict):
+                    parent._send_json(self, HTTPStatus.BAD_REQUEST, {"message": "Payload must be an object."})
+                    return
+                body, status = parent._tuning_api.update(payload)
+                parent._send_json(self, status, body)
+
             def log_message(self, format: str, *args: object) -> None:  # noqa: A003
                 return
 
@@ -109,6 +152,20 @@ class DebugStreamServer:
     def latest_frame(self) -> bytes | None:
         with self._lock:
             return self._frame
+
+    def _send_json(self, handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
+        import json
+
+        body = json.dumps(payload).encode("utf-8")
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        handler.send_header("Pragma", "no-cache")
+        handler.send_header("Expires", "0")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+        handler.wfile.flush()
 
     def update(self, frame_bgr: np.ndarray) -> None:
         now = time.time()

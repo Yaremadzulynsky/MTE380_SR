@@ -26,7 +26,6 @@ PERCEPTION_ARGS_PROD=(
   --config configs/docker-rpicam.yaml
   --source rpicam
   --fps 60
-  --comms http
 )
 PERCEPTION_ARGS_VIEW=(
   -m src.main
@@ -34,7 +33,6 @@ PERCEPTION_ARGS_VIEW=(
   --config configs/docker-rpicam.yaml
   --source rpicam
   --fps 60
-  --comms http
 )
 PERCEPTION_PID=""
 PERCEPTION_LOG_FILE=""

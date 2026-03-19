@@ -100,9 +100,20 @@ def _to_robot_frame_clamped(vec_image: np.ndarray) -> np.ndarray:
     return np.asarray([px, py], dtype=np.float32)
 
 
+def _normalize_geometry_vector_px(vec_px: np.ndarray, width: int, height: int) -> np.ndarray:
+    return np.asarray(
+        [
+            float(vec_px[0]) / max(width / 2.0, 1.0),
+            float(vec_px[1]) / max(height - 1, 1.0),
+        ],
+        dtype=np.float32,
+    )
+
+
 @dataclass
 class PipelineState:
-    lateral_prev: float = 0.0
+    pid_integral: float = 0.0
+    pid_prev_error: float = 0.0
 
 
 @dataclass
@@ -112,6 +123,8 @@ class PipelineOutput:
     path_detected: bool
     image_vector: np.ndarray
     robot_vector: np.ndarray
+    lookahead_image_vector: np.ndarray
+    lookahead_robot_vector: np.ndarray
     tangent_vector: np.ndarray
     zone: str
     gamma: float
@@ -132,6 +145,8 @@ def run_pipeline(frame_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) ->
             path_detected=False,
             image_vector=np.zeros(2, dtype=np.float32),
             robot_vector=np.zeros(2, dtype=np.float32),
+            lookahead_image_vector=np.zeros(2, dtype=np.float32),
+            lookahead_robot_vector=np.zeros(2, dtype=np.float32),
             tangent_vector=np.zeros(2, dtype=np.float32),
             zone="SAFE",
             gamma=0.0,
@@ -148,6 +163,8 @@ def run_pipeline(frame_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) ->
             path_detected=False,
             image_vector=np.zeros(2, dtype=np.float32),
             robot_vector=np.zeros(2, dtype=np.float32),
+            lookahead_image_vector=np.zeros(2, dtype=np.float32),
+            lookahead_robot_vector=np.zeros(2, dtype=np.float32),
             tangent_vector=np.zeros(2, dtype=np.float32),
             zone="SAFE",
             gamma=0.0,
@@ -180,18 +197,32 @@ def run_pipeline(frame_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) ->
             cfg.heading.max_lateral_abs,
         )
     )
-    lateral_filtered = float(cfg.alpha * state.lateral_prev + (1.0 - cfg.alpha) * lateral)
-    state.lateral_prev = float(np.clip(lateral_filtered, -1.0, 1.0))
-
-    image_vector = np.asarray(
-        [
-            state.lateral_prev,
-            -float(cfg.heading.forward_bias),
-        ],
-        dtype=np.float32,
+    error = 0.0 if abs(lateral) < cfg.heading.pid_deadband else lateral
+    derivative = error - state.pid_prev_error
+    state.pid_prev_error = error
+    state.pid_integral = float(
+        np.clip(
+            state.pid_integral + error,
+            -cfg.heading.pid_i_max,
+            cfg.heading.pid_i_max,
+        )
     )
-    image_vector = np.clip(image_vector, -1.0, 1.0)
-    robot_vector = _to_robot_frame_clamped(image_vector)
+    turn = (
+        cfg.heading.pid_kp * error
+        + cfg.heading.pid_ki * state.pid_integral
+        + cfg.heading.pid_kd * derivative
+    )
+    turn = float(np.clip(turn, -1.0, 1.0))
+    speed = (
+        cfg.heading.base_speed * cfg.heading.forward_bias
+        - cfg.heading.error_slowdown * abs(error)
+    )
+    speed = float(np.clip(speed, cfg.heading.min_speed, cfg.heading.max_speed))
+
+    robot_vector = np.asarray([turn, speed], dtype=np.float32)
+    image_vector = np.asarray([turn, -speed], dtype=np.float32)
+    lookahead_image_vector = np.clip(_normalize_geometry_vector_px(geometry_vector, w, h), -1.0, 1.0)
+    lookahead_robot_vector = _to_robot_frame_clamped(lookahead_image_vector)
     gamma = float(min(area / max(cfg.expected_area, 1.0), 1.0))
 
     return PipelineOutput(
@@ -200,6 +231,8 @@ def run_pipeline(frame_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) ->
         path_detected=True,
         image_vector=image_vector,
         robot_vector=robot_vector,
+        lookahead_image_vector=lookahead_image_vector,
+        lookahead_robot_vector=lookahead_robot_vector,
         tangent_vector=tangent,
         zone="PATH",
         gamma=gamma,
@@ -210,7 +243,10 @@ def run_pipeline(frame_bgr: np.ndarray, state: PipelineState, cfg: AppConfig) ->
             "lateral_target_point": lateral_target_point.tolist(),
             "geometry_vector_px": geometry_vector.tolist(),
             "raw_lateral_error": raw_lateral,
-            "lateral_error": state.lateral_prev,
+            "lateral_error": error,
+            "turn_command": turn,
+            "speed_command": speed,
+            "lookahead_image_vector": lookahead_image_vector.tolist(),
             "area": area,
         },
     )
@@ -285,7 +321,7 @@ def draw_overlay(output: PipelineOutput) -> np.ndarray:
     cv2.putText(frame, f"gamma={output.gamma:.2f}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
     cv2.putText(
         frame,
-        f"line=({float(output.image_vector[0]):.2f},{float(output.image_vector[1]):.2f})",
+        f"line=({float(output.lookahead_image_vector[0]):.2f},{float(output.lookahead_image_vector[1]):.2f})",
         (10, 76),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
@@ -294,7 +330,7 @@ def draw_overlay(output: PipelineOutput) -> np.ndarray:
     )
     cv2.putText(
         frame,
-        f"tan=({float(output.tangent_vector[0]):.2f},{float(output.tangent_vector[1]):.2f})",
+        f"ctrl=({float(output.image_vector[0]):.2f},{float(output.image_vector[1]):.2f})",
         (10, 102),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
@@ -303,8 +339,17 @@ def draw_overlay(output: PipelineOutput) -> np.ndarray:
     )
     cv2.putText(
         frame,
-        f"lat={float(output.debug.get('lateral_error', 0.0)):.2f}",
+        f"tan=({float(output.tangent_vector[0]):.2f},{float(output.tangent_vector[1]):.2f})",
         (10, 128),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (255, 255, 255),
+        2,
+    )
+    cv2.putText(
+        frame,
+        f"lat={float(output.debug.get('lateral_error', 0.0)):.2f}",
+        (10, 154),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
         (255, 255, 255),

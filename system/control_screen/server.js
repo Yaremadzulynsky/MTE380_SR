@@ -17,12 +17,14 @@ const CONTROL_COMM_HEALTH_PATH =
   process.env.CONTROL_COMM_HEALTH_PATH || '/health';
 const CONTROL_COMM_CONTROL_PATH =
   process.env.CONTROL_COMM_CONTROL_PATH || '/control';
+const PERCEPTION_BASE_URL =
+  process.env.PERCEPTION_BASE_URL || 'http://localhost:8081';
+const PERCEPTION_TUNING_PATH =
+  process.env.PERCEPTION_TUNING_PATH || '/tuning/perception';
 const STATE_MACHINE_BASE_URL =
   process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
 const STATE_MACHINE_INPUT_PATH =
   process.env.STATE_MACHINE_INPUT_PATH || '/inputs';
-const STATE_MACHINE_LINE_FOLLOW_PID_PATH =
-  process.env.STATE_MACHINE_LINE_FOLLOW_PID_PATH || '/line-follow-pid';
 const STATE_MACHINE_STATES_PATH =
   process.env.STATE_MACHINE_STATES_PATH || '/states';
 const STATE_MACHINE_SET_STATE_PATH =
@@ -40,19 +42,20 @@ const pidRanges = {
   d: buildRange(process.env.PID_D_MIN, process.env.PID_D_MAX)
 };
 
-const linePidRanges = {
-  kp: buildRange(process.env.LINE_PID_KP_MIN, process.env.LINE_PID_KP_MAX, 0, 20),
-  ki: buildRange(process.env.LINE_PID_KI_MIN, process.env.LINE_PID_KI_MAX, 0, 20),
-  kd: buildRange(process.env.LINE_PID_KD_MIN, process.env.LINE_PID_KD_MAX, 0, 20),
-  i_max: buildRange(process.env.LINE_PID_I_MAX_MIN, process.env.LINE_PID_I_MAX_MAX, 0, 20),
-  out_max: buildRange(process.env.LINE_PID_OUT_MAX_MIN, process.env.LINE_PID_OUT_MAX_MAX, 0, 20),
-  base_speed: buildRange(process.env.LINE_PID_BASE_SPEED_MIN, process.env.LINE_PID_BASE_SPEED_MAX, 0, 5),
-  min_speed: buildRange(process.env.LINE_PID_MIN_SPEED_MIN, process.env.LINE_PID_MIN_SPEED_MAX, 0, 5),
-  max_speed: buildRange(process.env.LINE_PID_MAX_SPEED_MIN, process.env.LINE_PID_MAX_SPEED_MAX, 0, 5),
-  follow_max_speed: buildRange(process.env.LINE_PID_FOLLOW_MAX_SPEED_MIN, process.env.LINE_PID_FOLLOW_MAX_SPEED_MAX, 0, 5),
-  turn_slowdown: buildRange(process.env.LINE_PID_TURN_SLOWDOWN_MIN, process.env.LINE_PID_TURN_SLOWDOWN_MAX, 0, 5),
-  error_slowdown: buildRange(process.env.LINE_PID_ERROR_SLOWDOWN_MIN, process.env.LINE_PID_ERROR_SLOWDOWN_MAX, 0, 5),
-  deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1)
+const perceptionTuningRanges = {
+  pid_kp: buildRange(process.env.LINE_PID_KP_MIN, process.env.LINE_PID_KP_MAX, 0, 20),
+  pid_ki: buildRange(process.env.LINE_PID_KI_MIN, process.env.LINE_PID_KI_MAX, 0, 20),
+  pid_kd: buildRange(process.env.LINE_PID_KD_MIN, process.env.LINE_PID_KD_MAX, 0, 20),
+  pid_i_max: buildRange(process.env.LINE_PID_I_MAX_MIN, process.env.LINE_PID_I_MAX_MAX, 0, 1),
+  pid_deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1),
+  lookahead_y_frac: buildRange(process.env.PERCEPTION_LOOKAHEAD_MIN, process.env.PERCEPTION_LOOKAHEAD_MAX, 0, 1),
+  lateral_gain: buildRange(process.env.PERCEPTION_LATERAL_GAIN_MIN, process.env.PERCEPTION_LATERAL_GAIN_MAX, 0, 5),
+  forward_bias: buildRange(process.env.PERCEPTION_FORWARD_BIAS_MIN, process.env.PERCEPTION_FORWARD_BIAS_MAX, 0, 1),
+  max_lateral_abs: buildRange(process.env.PERCEPTION_MAX_LATERAL_ABS_MIN, process.env.PERCEPTION_MAX_LATERAL_ABS_MAX, 0, 1),
+  base_speed: buildRange(process.env.LINE_PID_BASE_SPEED_MIN, process.env.LINE_PID_BASE_SPEED_MAX, 0, 1),
+  min_speed: buildRange(process.env.LINE_PID_MIN_SPEED_MIN, process.env.LINE_PID_MIN_SPEED_MAX, 0, 1),
+  max_speed: buildRange(process.env.LINE_PID_MAX_SPEED_MIN, process.env.LINE_PID_MAX_SPEED_MAX, 0, 1),
+  error_slowdown: buildRange(process.env.LINE_PID_ERROR_SLOWDOWN_MIN, process.env.LINE_PID_ERROR_SLOWDOWN_MAX, 0, 5)
 };
 
 const insightsLogger = createInsightsLogger(LOG_PATH);
@@ -75,7 +78,7 @@ app.get('/robot-mock', (req, res) => {
 app.get('/api/config', (req, res) => {
   res.json({
     ranges: pidRanges,
-    linePidRanges,
+    perceptionTuningRanges,
     controlComm: {
       baseUrl: CONTROL_COMM_BASE_URL,
       paths: {
@@ -90,9 +93,14 @@ app.get('/api/config', (req, res) => {
       baseUrl: STATE_MACHINE_BASE_URL,
       paths: {
         inputs: STATE_MACHINE_INPUT_PATH,
-        lineFollowPid: STATE_MACHINE_LINE_FOLLOW_PID_PATH,
         states: STATE_MACHINE_STATES_PATH,
         setState: STATE_MACHINE_SET_STATE_PATH
+      }
+    },
+    perception: {
+      baseUrl: PERCEPTION_BASE_URL,
+      paths: {
+        tuning: PERCEPTION_TUNING_PATH
       }
     }
   });
@@ -209,19 +217,19 @@ app.post('/api/pid', async (req, res) => {
   return res.json({ updated });
 });
 
-app.get('/api/line-follow-pid', async (req, res) => {
-  const result = await fetchLineFollowPidSettings();
+app.get('/api/perception-tuning', async (req, res) => {
+  const result = await fetchPerceptionTuningSettings();
   if (result.error) {
-    logInsight('line_follow_pid_fetch_error', { error: result.error });
+    logInsight('perception_tuning_fetch_error', { error: result.error });
     return res.status(502).json({
-      message: 'Failed to fetch line-follow PID settings.',
+      message: 'Failed to fetch perception tuning settings.',
       error: result.error
     });
   }
   return res.json(result);
 });
 
-app.post('/api/line-follow-pid', async (req, res) => {
+app.post('/api/perception-tuning', async (req, res) => {
   const payload = req.body || {};
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return res.status(400).json({ message: 'Payload must be an object.' });
@@ -230,7 +238,7 @@ app.post('/api/line-follow-pid', async (req, res) => {
   const updates = {};
   const validationErrors = {};
   for (const [key, rawValue] of Object.entries(payload)) {
-    if (!linePidRanges[key]) {
+    if (!perceptionTuningRanges[key]) {
       validationErrors[key] = 'Unknown setting.';
       continue;
     }
@@ -239,7 +247,7 @@ app.post('/api/line-follow-pid', async (req, res) => {
       validationErrors[key] = 'Value must be a finite number.';
       continue;
     }
-    const range = linePidRanges[key];
+    const range = perceptionTuningRanges[key];
     if (value < range.min || value > range.max) {
       validationErrors[key] = `Value must be between ${range.min} and ${range.max}.`;
       continue;
@@ -249,7 +257,7 @@ app.post('/api/line-follow-pid', async (req, res) => {
 
   if (Object.keys(validationErrors).length > 0) {
     return res.status(400).json({
-      message: 'Invalid line-follow PID update.',
+      message: 'Invalid perception tuning update.',
       errors: validationErrors
     });
   }
@@ -269,15 +277,18 @@ app.post('/api/line-follow-pid', async (req, res) => {
     });
   }
 
-  const result = await setLineFollowPidSettings(updates);
+  const result = await setPerceptionTuningSettings(updates);
   if (result.error) {
-    logInsight('line_follow_pid_update_error', { error: result.error, updates });
+    logInsight('perception_tuning_update_error', { error: result.error, updates });
+    if (result.data && typeof result.data === 'object') {
+      return res.status(400).json(result.data);
+    }
     return res.status(502).json({
-      message: 'Failed to update line-follow PID settings.',
+      message: 'Failed to update perception tuning settings.',
       error: result.error
     });
   }
-  logInsight('line_follow_pid_update_ok', { updates });
+  logInsight('perception_tuning_update_ok', { updates });
   return res.json(result);
 });
 
@@ -501,8 +512,8 @@ function getControlCommHealthUrl() {
   return new URL(CONTROL_COMM_HEALTH_PATH, CONTROL_COMM_BASE_URL).toString();
 }
 
-function getControlCommLineFollowPidUrl() {
-  return new URL(STATE_MACHINE_LINE_FOLLOW_PID_PATH, STATE_MACHINE_BASE_URL).toString();
+function getPerceptionTuningUrl() {
+  return new URL(PERCEPTION_TUNING_PATH, PERCEPTION_BASE_URL).toString();
 }
 
 function getStateMachineStatesUrl() {
@@ -635,8 +646,8 @@ async function sendRedLineInput(command) {
   }
 }
 
-async function fetchLineFollowPidSettings() {
-  const url = getControlCommLineFollowPidUrl();
+async function fetchPerceptionTuningSettings() {
+  const url = getPerceptionTuningUrl();
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -647,20 +658,21 @@ async function fetchLineFollowPidSettings() {
       return { error: `Upstream status ${response.status}`, detail: body };
     }
     const parsed = safeJsonParse(body);
-    if (!parsed || typeof parsed !== 'object' || !parsed.values) {
-      return { error: 'Upstream returned invalid line-follow payload.', detail: body };
+    if (!parsed || typeof parsed !== 'object' || !parsed.values || !parsed.ranges) {
+      return { error: 'Upstream returned invalid perception tuning payload.', detail: body };
     }
     return {
       values: parsed.values,
-      bounds: parsed.bounds || linePidRanges
+      ranges: parsed.ranges || perceptionTuningRanges,
+      source_config_path: parsed.source_config_path || null
     };
   } catch (err) {
     return { error: err.message };
   }
 }
 
-async function setLineFollowPidSettings(updates) {
-  const url = getControlCommLineFollowPidUrl();
+async function setPerceptionTuningSettings(updates) {
+  const url = getPerceptionTuningUrl();
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -672,7 +684,12 @@ async function setLineFollowPidSettings(updates) {
     });
     const body = await response.text();
     if (!response.ok) {
-      return { error: `Upstream status ${response.status}`, detail: body };
+      const parsedError = safeJsonParse(body);
+      return {
+        error: `Upstream status ${response.status}`,
+        detail: body,
+        data: parsedError
+      };
     }
     const parsed = safeJsonParse(body);
     if (!parsed || typeof parsed !== 'object') {
@@ -680,7 +697,9 @@ async function setLineFollowPidSettings(updates) {
     }
     return {
       values: parsed.values || updates,
-      updated: parsed.updated || updates
+      updated: parsed.updated || updates,
+      saved: parsed.saved !== false,
+      source_config_path: parsed.source_config_path || null
     };
   } catch (err) {
     return { error: err.message };

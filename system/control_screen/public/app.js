@@ -1,6 +1,6 @@
 const state = {
   ranges: null,
-  linePidRanges: null,
+  perceptionTuningRanges: null,
   fsmStates: [],
   lineLiveTimer: null,
   suppressLineLive: false,
@@ -20,6 +20,7 @@ const elements = {
   hintI: document.getElementById('hintI'),
   hintD: document.getElementById('hintD'),
   lineFeedback: document.getElementById('lineFeedback'),
+  perceptionConfigPath: document.getElementById('perceptionConfigPath'),
   lfKp: document.getElementById('lfKp'),
   lfKpRange: document.getElementById('lfKpRange'),
   lfKi: document.getElementById('lfKi'),
@@ -28,34 +29,37 @@ const elements = {
   lfKdRange: document.getElementById('lfKdRange'),
   lfIMax: document.getElementById('lfIMax'),
   lfIMaxRange: document.getElementById('lfIMaxRange'),
-  lfOutMax: document.getElementById('lfOutMax'),
-  lfOutMaxRange: document.getElementById('lfOutMaxRange'),
+  lfDeadband: document.getElementById('lfDeadband'),
+  lfDeadbandRange: document.getElementById('lfDeadbandRange'),
+  lfLookahead: document.getElementById('lfLookahead'),
+  lfLookaheadRange: document.getElementById('lfLookaheadRange'),
+  lfLateralGain: document.getElementById('lfLateralGain'),
+  lfLateralGainRange: document.getElementById('lfLateralGainRange'),
+  lfForwardBias: document.getElementById('lfForwardBias'),
+  lfForwardBiasRange: document.getElementById('lfForwardBiasRange'),
+  lfMaxLateralAbs: document.getElementById('lfMaxLateralAbs'),
+  lfMaxLateralAbsRange: document.getElementById('lfMaxLateralAbsRange'),
   lfBaseSpeed: document.getElementById('lfBaseSpeed'),
   lfBaseSpeedRange: document.getElementById('lfBaseSpeedRange'),
   lfMinSpeed: document.getElementById('lfMinSpeed'),
   lfMinSpeedRange: document.getElementById('lfMinSpeedRange'),
   lfMaxSpeed: document.getElementById('lfMaxSpeed'),
   lfMaxSpeedRange: document.getElementById('lfMaxSpeedRange'),
-  lfFollowMaxSpeed: document.getElementById('lfFollowMaxSpeed'),
-  lfFollowMaxSpeedRange: document.getElementById('lfFollowMaxSpeedRange'),
-  lfTurnSlowdown: document.getElementById('lfTurnSlowdown'),
-  lfTurnSlowdownRange: document.getElementById('lfTurnSlowdownRange'),
   lfErrorSlowdown: document.getElementById('lfErrorSlowdown'),
   lfErrorSlowdownRange: document.getElementById('lfErrorSlowdownRange'),
-  lfDeadband: document.getElementById('lfDeadband'),
-  lfDeadbandRange: document.getElementById('lfDeadbandRange'),
   hintLfKp: document.getElementById('hintLfKp'),
   hintLfKi: document.getElementById('hintLfKi'),
   hintLfKd: document.getElementById('hintLfKd'),
   hintLfIMax: document.getElementById('hintLfIMax'),
-  hintLfOutMax: document.getElementById('hintLfOutMax'),
+  hintLfDeadband: document.getElementById('hintLfDeadband'),
+  hintLfLookahead: document.getElementById('hintLfLookahead'),
+  hintLfLateralGain: document.getElementById('hintLfLateralGain'),
+  hintLfForwardBias: document.getElementById('hintLfForwardBias'),
+  hintLfMaxLateralAbs: document.getElementById('hintLfMaxLateralAbs'),
   hintLfBaseSpeed: document.getElementById('hintLfBaseSpeed'),
   hintLfMinSpeed: document.getElementById('hintLfMinSpeed'),
   hintLfMaxSpeed: document.getElementById('hintLfMaxSpeed'),
-  hintLfFollowMaxSpeed: document.getElementById('hintLfFollowMaxSpeed'),
-  hintLfTurnSlowdown: document.getElementById('hintLfTurnSlowdown'),
   hintLfErrorSlowdown: document.getElementById('hintLfErrorSlowdown'),
-  hintLfDeadband: document.getElementById('hintLfDeadband'),
   fsmStateSelect: document.getElementById('fsmStateSelect'),
   refreshStatesBtn: document.getElementById('refreshStatesBtn'),
   applyStateBtn: document.getElementById('applyStateBtn'),
@@ -67,18 +71,19 @@ const elements = {
 };
 
 const lineFields = [
-  ['kp', 'lfKp', 'lfKpRange', 'hintLfKp'],
-  ['ki', 'lfKi', 'lfKiRange', 'hintLfKi'],
-  ['kd', 'lfKd', 'lfKdRange', 'hintLfKd'],
-  ['i_max', 'lfIMax', 'lfIMaxRange', 'hintLfIMax'],
-  ['out_max', 'lfOutMax', 'lfOutMaxRange', 'hintLfOutMax'],
+  ['pid_kp', 'lfKp', 'lfKpRange', 'hintLfKp'],
+  ['pid_ki', 'lfKi', 'lfKiRange', 'hintLfKi'],
+  ['pid_kd', 'lfKd', 'lfKdRange', 'hintLfKd'],
+  ['pid_i_max', 'lfIMax', 'lfIMaxRange', 'hintLfIMax'],
+  ['pid_deadband', 'lfDeadband', 'lfDeadbandRange', 'hintLfDeadband'],
+  ['lookahead_y_frac', 'lfLookahead', 'lfLookaheadRange', 'hintLfLookahead'],
+  ['lateral_gain', 'lfLateralGain', 'lfLateralGainRange', 'hintLfLateralGain'],
+  ['forward_bias', 'lfForwardBias', 'lfForwardBiasRange', 'hintLfForwardBias'],
+  ['max_lateral_abs', 'lfMaxLateralAbs', 'lfMaxLateralAbsRange', 'hintLfMaxLateralAbs'],
   ['base_speed', 'lfBaseSpeed', 'lfBaseSpeedRange', 'hintLfBaseSpeed'],
   ['min_speed', 'lfMinSpeed', 'lfMinSpeedRange', 'hintLfMinSpeed'],
   ['max_speed', 'lfMaxSpeed', 'lfMaxSpeedRange', 'hintLfMaxSpeed'],
-  ['follow_max_speed', 'lfFollowMaxSpeed', 'lfFollowMaxSpeedRange', 'hintLfFollowMaxSpeed'],
-  ['turn_slowdown', 'lfTurnSlowdown', 'lfTurnSlowdownRange', 'hintLfTurnSlowdown'],
   ['error_slowdown', 'lfErrorSlowdown', 'lfErrorSlowdownRange', 'hintLfErrorSlowdown'],
-  ['deadband', 'lfDeadband', 'lfDeadbandRange', 'hintLfDeadband']
 ];
 
 initialize();
@@ -183,7 +188,7 @@ async function loadConfig() {
   }
 
   state.ranges = result.data.ranges || null;
-  state.linePidRanges = result.data.linePidRanges || null;
+  state.perceptionTuningRanges = result.data.perceptionTuningRanges || null;
   updateRangeHints();
 }
 
@@ -197,7 +202,7 @@ function updateRangeHints() {
   elements.hintI.textContent = formatRangeHint(ranges.i);
   elements.hintD.textContent = formatRangeHint(ranges.d);
 
-  const lineRanges = state.linePidRanges || {};
+  const lineRanges = state.perceptionTuningRanges || {};
   for (const [key, inputKey, rangeKey, hintKey] of lineFields) {
     const input = elements[inputKey];
     const range = elements[rangeKey];
@@ -246,7 +251,7 @@ async function refreshValues() {
   const [statusResult, pidResult, lineResult] = await Promise.all([
     requestJson('/api/status'),
     requestJson('/api/pid'),
-    requestJson('/api/line-follow-pid')
+    requestJson('/api/perception-tuning')
   ]);
 
   const statusPayload =
@@ -267,10 +272,15 @@ async function refreshValues() {
   fillInputs(values);
   setFeedback('Values synced.', 'success');
   if (lineResult.ok && lineResult.data && lineResult.data.values) {
+    if (lineResult.data.ranges) {
+      state.perceptionTuningRanges = lineResult.data.ranges;
+      updateRangeHints();
+    }
     fillLineInputs(lineResult.data.values);
+    updatePerceptionConfigPath(lineResult.data.source_config_path);
     setLineFeedback('Live tuning ready.', 'success');
   } else {
-    setLineFeedback('Unable to load line-follow settings.', 'error');
+    setLineFeedback('Unable to load perception tuning settings.', 'error');
   }
   setLoading(false);
 }
@@ -411,7 +421,7 @@ async function sendLineLiveUpdate() {
   state.lineLiveTimer = null;
   const payload = {};
   const errors = {};
-  const lineRanges = state.linePidRanges || {};
+  const lineRanges = state.perceptionTuningRanges || {};
 
   for (const [key, inputKey] of lineFields) {
     const input = elements[inputKey];
@@ -455,15 +465,15 @@ async function sendLineLiveUpdate() {
     return;
   }
 
-  setLineFeedback('Updating line-follow settings...', 'info');
-  const result = await requestJson('/api/line-follow-pid', {
+  setLineFeedback('Updating perception tuning...', 'info');
+  const result = await requestJson('/api/perception-tuning', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
 
   if (!result.ok) {
-    const message = result.data?.message || 'Line-follow update failed.';
+    const message = result.data?.message || 'Perception tuning update failed.';
     setLineFeedback(message, 'error');
     return;
   }
@@ -471,7 +481,8 @@ async function sendLineLiveUpdate() {
   if (result.data?.values) {
     fillLineInputs(result.data.values);
   }
-  setLineFeedback('Line-follow settings updated live.', 'success');
+  updatePerceptionConfigPath(result.data?.source_config_path);
+  setLineFeedback('Perception tuning updated live and saved to active config.', 'success');
 }
 
 async function refreshBridgeStatus(fallbackOnline) {
@@ -533,6 +544,11 @@ function setLineFeedback(message, tone) {
   } else if (tone === 'error') {
     elements.lineFeedback.classList.add('error');
   }
+}
+
+function updatePerceptionConfigPath(path) {
+  if (!elements.perceptionConfigPath) return;
+  elements.perceptionConfigPath.textContent = `Active config: ${path || '--'}`;
 }
 
 function setLoading(isLoading) {

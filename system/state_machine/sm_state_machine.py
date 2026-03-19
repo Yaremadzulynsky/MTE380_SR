@@ -15,21 +15,6 @@ SERVO_MAX_DEG = int(os.getenv("SERVO_MAX_DEG", "90"))
 SERVO_CENTER_DEG = int(os.getenv("SERVO_CENTER_DEG", "45"))
 val = 0
 
-LINE_FOLLOW_PID_BOUNDS: dict[str, tuple[float, float]] = {
-    "kp": (0.0, 20.0),
-    "ki": (0.0, 20.0),
-    "kd": (0.0, 20.0),
-    "i_max": (0.0, 20.0),
-    "out_max": (0.0, 20.0),
-    "base_speed": (0.0, 5.0),
-    "min_speed": (0.0, 5.0),
-    "max_speed": (0.0, 5.0),
-    "follow_max_speed": (0.0, 5.0),
-    "turn_slowdown": (0.0, 5.0),
-    "error_slowdown": (0.0, 5.0),
-    "deadband": (0.0, 1.0),
-}
-
 control = ControlCommClient(
     base_url=os.getenv("CONTROL_COMM_BASE_URL", "http://localhost:5001").strip(),
     state_path=os.getenv("CONTROL_COMM_STATE_PATH", "/state"),
@@ -132,27 +117,7 @@ class StateMachine:
         self.pid_relinquish_y = clamp(float(os.getenv("PID_RELINQUISH_Y", "1.0")), -1.0, 1.0)
         self.retrieved_turn_speed = clamp(float(os.getenv("RETRIEVED_TURN_SPEED", "0.35")), 0.0, 1.0)
         self.retrieved_turn_tol_rad = clamp(float(os.getenv("RETRIEVED_TURN_TOL_RAD", "0.12")), 0.01, math.pi)
-        self.line_pid_kp = float(os.getenv("LINE_PID_KP", "0.2"))
-        self.line_pid_ki = float(os.getenv("LINE_PID_KI", "0.04"))
-        self.line_pid_kd = float(os.getenv("LINE_PID_KD", "1.92"))
-        self.line_pid_i_max = abs(float(os.getenv("LINE_PID_I_MAX", "20")))
-        self.line_pid_out_max = abs(float(os.getenv("LINE_PID_OUT_MAX", "20")))
-        self.line_pid_base_speed = clamp(float(os.getenv("LINE_PID_BASE_SPEED", "0.2")), 0.0, 5.0)
-        self.line_pid_min_speed = clamp(float(os.getenv("LINE_PID_MIN_SPEED", "0.05")), 0.0, 5.0)
-        self.line_pid_max_speed = clamp(float(os.getenv("LINE_PID_MAX_SPEED", "0.3")), 0.0, 5.0)
-        self.line_pid_follow_max_speed = clamp(float(os.getenv("LINE_PID_FOLLOW_MAX_SPEED", "0.3")), 0.0, 5.0)
-        self.line_pid_turn_slowdown = abs(float(os.getenv("LINE_PID_TURN_SLOWDOWN", "5")))
-        self.line_pid_error_slowdown = abs(float(os.getenv("LINE_PID_ERROR_SLOWDOWN", "0.14")))
-        self.line_pid_deadband = abs(float(os.getenv("LINE_PID_DEADBAND", "0.01")))
-        self.line_pid_sync_interval = max(float(os.getenv("LINE_PID_SYNC_INTERVAL", "0.4")), 0.05)
-        self.line_pid_dt_min = 1e-3
-        self.line_pid_dt_max = 0.25
-        self.line_direct_lookahead = clamp(float(os.getenv("LINE_DIRECT_LOOKAHEAD", "0.35")), 0.0, 1.5)
-        self.line_direct_max_speed = clamp(float(os.getenv("LINE_DIRECT_MAX_SPEED", "0.4")), 0.0, MAX_CONTROL_SPEED)
-        self._line_pid_integral = 0.0
-        self._line_pid_prev_error = 0.0
-        self._line_pid_last_at = 0.0
-        self._line_pid_last_sync_at = 0.0
+        self.line_direct_max_speed = clamp(float(os.getenv("LINE_DIRECT_MAX_SPEED", "0.45")), 0.0, MAX_CONTROL_SPEED)
         self.find_line_speed = clamp(float(os.getenv("FIND_LINE_SPEED", "0.02")), 0.0, 1.0)
         self._find_line_phase = self.FOLLOW_LINE_PHASE_IDLE
         self._line_last_turn_sign = 1.0
@@ -203,16 +168,10 @@ class StateMachine:
         now = time.time()
         return (now - self._last_command_at) >= self.search_line_interval
 
-    def _reset_line_pid(self) -> None:
-        self._line_pid_integral = 0.0
-        self._line_pid_prev_error = 0.0
-        self._line_pid_last_at = 0.0
-
     def _reset_find_line(self) -> None:
         self._find_line_phase = self.FOLLOW_LINE_PHASE_IDLE
 
     def _begin_follow_line_scan(self) -> None:
-        self._reset_line_pid()
         self._find_line_phase = (
             self.FOLLOW_LINE_PHASE_SCAN_RIGHT if self._line_last_turn_sign >= 0.0 else self.FOLLOW_LINE_PHASE_SCAN_LEFT
         )
@@ -230,69 +189,22 @@ class StateMachine:
         self._last_command_at = now
         return False
 
-    def _step_follow_line_pid(
-        self,
-        *,
-        line: Vector,
-        now: float,
-        context: str,
-        follow_max_speed: float,
-    ) -> bool:
-        dt = now - self._line_pid_last_at if self._line_pid_last_at > 0.0 else self.tick_interval
-        dt = clamp(dt, self.line_pid_dt_min, self.line_pid_dt_max)
-        self._line_pid_last_at = now
-
-        error = line.x
-        if abs(error) < self.line_pid_deadband:
-            error = 0.0
-
-        self._line_pid_integral = clamp(
-            self._line_pid_integral + error * dt,
-            -self.line_pid_i_max,
-            self.line_pid_i_max,
-        )
-        derivative = (error - self._line_pid_prev_error) / dt
-        self._line_pid_prev_error = error
-
-        turn_raw = (
-            self.line_pid_kp * error
-            + self.line_pid_ki * self._line_pid_integral
-            + self.line_pid_kd * derivative
-        )
-        turn = clamp(turn_raw, -self.line_pid_out_max, self.line_pid_out_max)
-        angle_rad = clamp(turn, -2.5, 2.5)
-        if abs(turn) > 1e-4:
-            self._line_last_turn_sign = 1.0 if turn > 0.0 else -1.0
-
-        speed = (
-            self.line_pid_base_speed
-            - self.line_pid_turn_slowdown * abs(turn)
-            - self.line_pid_error_slowdown * abs(error)
-        )
-        speed = clamp(speed, self.line_pid_min_speed, self.line_pid_max_speed)
-        speed = min(speed, follow_max_speed)
-        speed = clamp(speed, 0.0, MAX_CONTROL_SPEED)
-
-        _send_control_polar(
-            angle_rad=angle_rad,
-            speed=speed,
-            context=context,
-        )
-        self._last_command_at = now
-        return True
-
     def _send_line_error_command(self, *, line: Vector, context: str) -> None:
         if not line.detected:
             send_stop_command(context=f"{context}_stop")
             return
 
-        forward = max(0.0, float(line.y)) + self.line_direct_lookahead
-        angle_rad = math.atan2(float(line.x), forward)
-        speed = min(math.hypot(float(line.x), forward), self.line_direct_max_speed)
-        _send_control_polar(
-            angle_rad=angle_rad,
+        x = clamp(float(line.x), -1.0, 1.0)
+        y = clamp(float(line.y), 0.0, 1.0)
+        speed = clamp(math.hypot(x, y), 0.0, self.line_direct_max_speed)
+        if abs(x) > 1e-4:
+            self._line_last_turn_sign = 1.0 if x > 0.0 else -1.0
+        _send_control_command(
+            x=x,
+            y=y,
             speed=speed,
             context=context,
+            servo=_angle_rad_to_servo_deg(math.atan2(x, max(y, 1e-6))),
         )
 
     def _init_relative_turn_target(
@@ -329,94 +241,15 @@ class StateMachine:
         )
         return False
 
-    def _sync_line_pid_from_bridge(self, *, now: float, force: bool = False) -> None:
-        # Line-follow PID values are now owned by this state-machine instance.
-        _ = now
-        _ = force
-
-    def get_line_follow_pid_settings(self) -> dict[str, float]:
-        return {
-            "kp": self.line_pid_kp,
-            "ki": self.line_pid_ki,
-            "kd": self.line_pid_kd,
-            "i_max": self.line_pid_i_max,
-            "out_max": self.line_pid_out_max,
-            "base_speed": self.line_pid_base_speed,
-            "min_speed": self.line_pid_min_speed,
-            "max_speed": self.line_pid_max_speed,
-            "follow_max_speed": self.line_pid_follow_max_speed,
-            "turn_slowdown": self.line_pid_turn_slowdown,
-            "error_slowdown": self.line_pid_error_slowdown,
-            "deadband": self.line_pid_deadband,
-        }
-
-    def apply_line_follow_pid_updates(self, payload: dict) -> tuple[dict[str, float], dict[str, str]]:
-        if not isinstance(payload, dict):
-            return {}, {"payload": "Payload must be an object."}
-
-        updates: dict[str, float] = {}
-        errors: dict[str, str] = {}
-        for key, value in payload.items():
-            bounds = LINE_FOLLOW_PID_BOUNDS.get(key)
-            if not bounds:
-                errors[key] = "Unknown setting."
-                continue
-            try:
-                parsed = float(value)
-            except (TypeError, ValueError):
-                errors[key] = "Value must be a finite number."
-                continue
-            if not math.isfinite(parsed):
-                errors[key] = "Value must be a finite number."
-                continue
-            low, high = bounds
-            if parsed < low or parsed > high:
-                errors[key] = f"Value must be between {low} and {high}."
-                continue
-            updates[key] = parsed
-
-        if errors:
-            return {}, errors
-        if not updates:
-            return {}, {"payload": "No settings to update."}
-
-        preview = self.get_line_follow_pid_settings()
-        preview.update(updates)
-        if preview["min_speed"] > preview["max_speed"]:
-            return {}, {
-                "min_speed": "min_speed must be <= max_speed.",
-                "max_speed": "max_speed must be >= min_speed.",
-            }
-
-        self.line_pid_kp = updates.get("kp", self.line_pid_kp)
-        self.line_pid_ki = updates.get("ki", self.line_pid_ki)
-        self.line_pid_kd = updates.get("kd", self.line_pid_kd)
-        self.line_pid_i_max = abs(updates.get("i_max", self.line_pid_i_max))
-        self.line_pid_out_max = abs(updates.get("out_max", self.line_pid_out_max))
-        self.line_pid_base_speed = clamp(updates.get("base_speed", self.line_pid_base_speed), 0.0, 5.0)
-        self.line_pid_min_speed = clamp(updates.get("min_speed", self.line_pid_min_speed), 0.0, 5.0)
-        self.line_pid_max_speed = clamp(updates.get("max_speed", self.line_pid_max_speed), 0.0, 5.0)
-        self.line_pid_follow_max_speed = clamp(
-            updates.get("follow_max_speed", self.line_pid_follow_max_speed),
-            0.0,
-            5.0,
-        )
-        self.line_pid_turn_slowdown = abs(updates.get("turn_slowdown", self.line_pid_turn_slowdown))
-        self.line_pid_error_slowdown = abs(updates.get("error_slowdown", self.line_pid_error_slowdown))
-        self.line_pid_deadband = abs(updates.get("deadband", self.line_pid_deadband))
-        if self.line_pid_min_speed > self.line_pid_max_speed:
-            self.line_pid_min_speed, self.line_pid_max_speed = self.line_pid_max_speed, self.line_pid_min_speed
-        return updates, {}
-
     def follow_line(
         self,
         line: Vector,
         *,
         now: float,
         context: str,
-        follow_max_speed: float,
         heading_rad: float,
     ) -> bool:
+        _ = heading_rad
         match self._find_line_phase:
             case self.FOLLOW_LINE_PHASE_SCAN_LEFT | self.FOLLOW_LINE_PHASE_SCAN_RIGHT:
                 return self._step_follow_line_scan(
@@ -430,15 +263,12 @@ class StateMachine:
                     return self._step_follow_line_scan(
                         line=line,
                         now=now,
-                        context=context,
-                    )
-                self._reset_find_line()
-                return self._step_follow_line_pid(
-                    line=line,
-                    now=now,
                     context=context,
-                    follow_max_speed=follow_max_speed,
                 )
+                self._reset_find_line()
+                self._send_line_error_command(line=line, context=context)
+                self._last_command_at = now
+                return True
             case _:
                 # Recover safely if phase was corrupted.
                 self._reset_find_line()
@@ -449,16 +279,12 @@ class StateMachine:
                         now=now,
                         context=context,
                     )
-                return self._step_follow_line_pid(
-                    line=line,
-                    now=now,
-                    context=context,
-                    follow_max_speed=follow_max_speed,
-                )
+                self._send_line_error_command(line=line, context=context)
+                self._last_command_at = now
+                return True
 
     def step(self, inputs: Inputs) -> TransitionResult | None:
         now = time.time()
-        self._sync_line_pid_from_bridge(now=now)
         next_state: State | None = None
         label: str | None = None
 
@@ -512,7 +338,6 @@ class StateMachine:
                     inputs.red_line,
                     now=now,
                     context="searching_follow_line",
-                    follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
                 )
                 if inputs.lego_detected:
@@ -527,7 +352,6 @@ class StateMachine:
                     inputs.red_line,
                     now=now,
                     context="align_retrieve_follow_line",
-                    follow_max_speed=self.line_pid_follow_max_speed*0.5,
                     heading_rad=inputs.heading_rad,
                 )
                 if inputs.aligned_for_retrieve:
@@ -572,7 +396,6 @@ class StateMachine:
                     inputs.red_line,
                     now=now,
                     context="transporting_follow_line",
-                    follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
                 )
                 if inputs.safe_zone_detected:
@@ -592,7 +415,6 @@ class StateMachine:
                     inputs.red_line,
                     now=now,
                     context="placing_follow_line",
-                    follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
                 )
                 #this should be sent from CV but just for now its for testing
@@ -609,7 +431,6 @@ class StateMachine:
                     inputs.red_line,
                     now=now,
                     context="return_home_follow_line",
-                    follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
                 )
                 # if inputs.at_home:

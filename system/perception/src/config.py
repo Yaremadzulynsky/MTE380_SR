@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +60,15 @@ class HeadingConfig:
     forward_bias: float = 1.0
     lateral_gain: float = 0.5
     max_lateral_abs: float = 0.6
+    pid_kp: float = 0.5
+    pid_ki: float = 0.0
+    pid_kd: float = 0.1
+    pid_i_max: float = 0.6
+    pid_deadband: float = 0.01
+    base_speed: float = 0.35
+    min_speed: float = 0.1
+    max_speed: float = 0.45
+    error_slowdown: float = 0.25
 
 
 @dataclass
@@ -74,6 +83,7 @@ class OutputConfig:
     method: str = "http"
     url: str = ""
     timeout_s: float = 0.5
+    send_hz: float = 10.0
 
 
 @dataclass
@@ -152,6 +162,14 @@ class AppConfig:
         cfg.heading.forward_bias = _ratio(cfg.heading.forward_bias, "heading.forward_bias")
         cfg.heading.lateral_gain = _nonnegative(cfg.heading.lateral_gain, "heading.lateral_gain")
         cfg.heading.max_lateral_abs = _ratio(cfg.heading.max_lateral_abs, "heading.max_lateral_abs")
+        cfg.heading.pid_i_max = _ratio(cfg.heading.pid_i_max, "heading.pid_i_max")
+        cfg.heading.pid_deadband = _ratio(cfg.heading.pid_deadband, "heading.pid_deadband")
+        cfg.heading.base_speed = _ratio(cfg.heading.base_speed, "heading.base_speed")
+        cfg.heading.min_speed = _ratio(cfg.heading.min_speed, "heading.min_speed")
+        cfg.heading.max_speed = _ratio(cfg.heading.max_speed, "heading.max_speed")
+        cfg.heading.error_slowdown = _nonnegative(cfg.heading.error_slowdown, "heading.error_slowdown")
+        if cfg.heading.min_speed > cfg.heading.max_speed:
+            raise ValueError("heading.min_speed must be <= heading.max_speed")
         cfg.path_mask_key = _mask_key(cfg.path_mask_key)
         return cfg
 
@@ -159,9 +177,54 @@ class AppConfig:
     def output_url(self) -> str:
         if self.output.url:
             return self.output.url
-        base = os.getenv("STATE_MACHINE_BASE_URL", "http://localhost:8000").rstrip("/")
+        base = os.getenv("STATE_MACHINE_BASE_URL", "http://state-machine:8000").rstrip("/")
         path = os.getenv("STATE_MACHINE_INPUT_PATH", "/inputs")
         return f"{base}/{path.lstrip('/')}"
+
+
+PERCEPTION_TUNING_FIELDS = (
+    "pid_kp",
+    "pid_ki",
+    "pid_kd",
+    "pid_i_max",
+    "pid_deadband",
+    "lookahead_y_frac",
+    "lateral_gain",
+    "forward_bias",
+    "max_lateral_abs",
+    "base_speed",
+    "min_speed",
+    "max_speed",
+    "error_slowdown",
+)
+
+PERCEPTION_TUNING_RANGES: dict[str, tuple[float, float]] = {
+    "pid_kp": (0.0, 20.0),
+    "pid_ki": (0.0, 20.0),
+    "pid_kd": (0.0, 20.0),
+    "pid_i_max": (0.0, 1.0),
+    "pid_deadband": (0.0, 1.0),
+    "lookahead_y_frac": (0.0, 1.0),
+    "lateral_gain": (0.0, 5.0),
+    "forward_bias": (0.0, 1.0),
+    "max_lateral_abs": (0.0, 1.0),
+    "base_speed": (0.0, 1.0),
+    "min_speed": (0.0, 1.0),
+    "max_speed": (0.0, 1.0),
+    "error_slowdown": (0.0, 5.0),
+}
+
+
+def perception_tuning_values(cfg: AppConfig) -> dict[str, float]:
+    heading_dict = asdict(cfg.heading)
+    return {key: float(heading_dict[key]) for key in PERCEPTION_TUNING_FIELDS}
+
+
+def perception_tuning_ranges() -> dict[str, dict[str, float]]:
+    return {
+        key: {"min": bounds[0], "max": bounds[1]}
+        for key, bounds in PERCEPTION_TUNING_RANGES.items()
+    }
 
 
 def load_config(path: str | Path) -> AppConfig:
