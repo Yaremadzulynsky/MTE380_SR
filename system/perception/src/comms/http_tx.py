@@ -35,6 +35,8 @@ class HTTPSender:
             return
         px = data.get("px", 0.0)
         py = data.get("py", 1.0)
+        line_error_x = data.get("line_error_x", 0.0)
+        line_error_y = data.get("line_error_y", 1.0)
         path_detected = data.get("path_detected", False)
         path_mask_key = data.get("path_mask_key", "red")
         # target.detected: True when blue circular blob (TARGET zone), False otherwise
@@ -51,6 +53,10 @@ class HTTPSender:
             line_key: {
                 "detected": bool(path_detected),
                 "vector": {"x": float(px), "y": float(py)},
+            },
+            "line_error": {
+                "detected": bool(path_detected),
+                "vector": {"x": float(line_error_x), "y": float(line_error_y)},
             },
         }
         body = json.dumps(payload).encode("utf-8")

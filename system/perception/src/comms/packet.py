@@ -21,6 +21,8 @@ class PerceptionPacket:
     zone: str
     gamma: float
     t: float
+    line_error_x: float = 0.0
+    line_error_y: float = 1.0
     path_detected: bool = False
     path_mask_key: str = "red"
     target_detected: bool = False

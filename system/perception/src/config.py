@@ -39,6 +39,32 @@ class HeadingConfig:
 
 
 @dataclass
+class HoughConfig:
+    canny_threshold1: int = 50
+    canny_threshold2: int = 150
+    rho: float = 1.0
+    theta_deg: float = 1.0
+    threshold: int = 25
+    min_line_length: int = 40
+    max_line_gap: int = 20
+    min_abs_slope: float = 0.3
+    center_weight: float = 0.2
+
+
+@dataclass
+class SmoothingConfig:
+    window_size: int = 7
+    ema_alpha_path: float = 0.8
+    ema_alpha_error: float = 0.85
+    max_error_step: float = 0.2
+    freeze_on_miss_frames: int = 3
+    segment_lock_frames: int = 3
+    segment_switch_score_margin: float = 1.2
+    segment_max_missed_frames: int = 2
+    centerline_lookahead_ratio: float = 0.35
+    centerline_ema_alpha: float = 0.8
+
+@dataclass
 class ZoneConfig:
     target_min_area: float = 300.0
     target_min_circularity: float = 0.6
@@ -103,6 +129,8 @@ class AppConfig:
     )
     morph: MorphConfig = field(default_factory=MorphConfig)
     heading: HeadingConfig = field(default_factory=HeadingConfig)
+    hough: HoughConfig = field(default_factory=HoughConfig)
+    smoothing: SmoothingConfig = field(default_factory=SmoothingConfig)
     zones: ZoneConfig = field(default_factory=ZoneConfig)
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     comms: CommsConfig = field(default_factory=CommsConfig)
@@ -135,6 +163,10 @@ class AppConfig:
             cfg.morph = MorphConfig(**data["morph"])
         if "heading" in data:
             cfg.heading = HeadingConfig(**data["heading"])
+        if "hough" in data:
+            cfg.hough = HoughConfig(**data["hough"])
+        if "smoothing" in data:
+            cfg.smoothing = SmoothingConfig(**data["smoothing"])
         if "zones" in data:
             cfg.zones = ZoneConfig(**data["zones"])
         if "confidence" in data:

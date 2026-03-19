@@ -30,14 +30,14 @@ def process_roi(
     roi_bgr: Any,
     state: PipelineState,
     cfg: AppConfig,
-) -> tuple[float, float, str, float, bool, str, bool, float, float, dict[str, Any]]:
+) -> tuple[float, float, float, str, float, bool, str, bool, float, float, dict[str, Any]]:
     """
     Single pipeline function:
-      ROI BGR -> (px, py, zone, gamma, path_detected, path_mask_key, target_detected, target_px, target_py, debug_artifacts)
+      ROI BGR -> (px, py, line_error_x, zone, gamma, path_detected, path_mask_key, target_detected, target_px, target_py, debug_artifacts)
     """
     out: PipelineOutput = run_pipeline(roi_bgr=roi_bgr, state=state, cfg=cfg)
     return (
-        out.px, out.py, out.zone, out.gamma,
+        out.px, out.py, out.line_error_x, out.zone, out.gamma,
         out.path_detected, out.path_mask_key,
         out.target_detected, out.target_px, out.target_py,
         out.debug_artifacts,
@@ -242,6 +242,8 @@ def main() -> None:
             pkt = PerceptionPacket(
                 px=px_out,
                 py=py_out,
+                line_error_x=float(out.line_error_x),
+                line_error_y=1.0,
                 zone=out.zone,
                 gamma=out.gamma,
                 t=result.timestamp,

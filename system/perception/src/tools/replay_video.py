@@ -46,6 +46,8 @@ def main() -> None:
         pkt = PerceptionPacket(
             px=px_out,
             py=py_out,
+            line_error_x=float(out.line_error_x),
+            line_error_y=1.0,
             zone=out.zone,
             gamma=out.gamma,
             t=time.time(),

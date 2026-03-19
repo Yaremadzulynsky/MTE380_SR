@@ -27,6 +27,29 @@ heading:
   min_area: 60.0
   use_centerline: true
 
+hough:
+  canny_threshold1: 50
+  canny_threshold2: 150
+  rho: 1.0
+  theta_deg: 1.0
+  threshold: 20
+  min_line_length: 30
+  max_line_gap: 25
+  min_abs_slope: 0.25
+  center_weight: 0.2
+
+smoothing:
+  window_size: 7
+  ema_alpha_path: 0.85
+  ema_alpha_error: 0.9
+  max_error_step: 0.15
+  freeze_on_miss_frames: 3
+  segment_lock_frames: 3
+  segment_switch_score_margin: 1.2
+  segment_max_missed_frames: 2
+  centerline_lookahead_ratio: 0.35
+  centerline_ema_alpha: 0.8
+
 camera:
   source: rpicam
   webcam_index: 0
