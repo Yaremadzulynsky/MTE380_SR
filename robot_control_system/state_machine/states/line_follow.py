@@ -13,7 +13,7 @@ Each tick:
        - Add a lateral correction component proportional to how far the robot
          has drifted from the line, using a deadzone to prevent oscillation
          when the robot is already on the line.
-  4. Pass the blended direction to robot.set_direction() and drive forward.
+  4. Pass the blended direction to robot.add_direction() and drive forward.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ class LineFollow(State):
             bx /= length
             by /= length
 
-        robot.set_direction(bx, by)
+        robot.add_direction(bx, by)
         robot.set_speed(FOLLOW_SPEED)
 
         log.debug(

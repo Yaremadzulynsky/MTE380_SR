@@ -5,7 +5,7 @@ Reads frames from a PiCamera (or fallback camera source) and detects a red
 line, returning a unit direction vector tangent to that line plus the true
 perpendicular lateral distance from the robot to the line.
 
-Direction vector convention — matches robot.set_direction(x, y):
+Direction vector convention — matches robot.add_direction(x, y):
   x : lateral  [-1, 1]   left = -1, right = +1
   y : forward  always 1.0 when a line is detected
 
@@ -29,7 +29,7 @@ Usage
     while True:
         result = detector.get_result()
         if result:
-            robot.set_direction(*result.direction)
+            robot.add_direction(*result.direction)
             print(result.lateral_distance_px, result.lateral_distance_m)
 
     detector.stop()
@@ -248,7 +248,7 @@ class LineDetector:
 
         # ── Heading direction vector ──────────────────────────────────────────
         # angle from vertical: atan2(vx, -vy)
-        # robot.set_direction expects a unit (x, y) in robot frame where
+        # robot.add_direction expects a unit (x, y) in robot frame where
         #   x = lateral (right +), y = forward (always 1 when following)
         angle_rad = math.atan2(vx, -vy)
         angle_deg = math.degrees(angle_rad)

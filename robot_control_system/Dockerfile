@@ -1,12 +1,14 @@
-FROM python:3.11-slim-bookworm
+FROM debian:bookworm-slim
 
 # ── System dependencies ───────────────────────────────────────────────────────
-# OpenCV headless runtime
+# python3-opencv from Debian: pre-built for ARM, no compiler needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libglib2.0-0 \
+        python3 \
+        python3-pip \
+        python3-opencv \
+        python3-numpy \
         libgl1 \
-        libsm6 \
-        libxext6 \
+        libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Picamera2 + libcamera ─────────────────────────────────────────────────────
@@ -21,13 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     2>/dev/null || true \
     && rm -rf /var/lib/apt/lists/*
 
-# Make system picamera2 / libcamera bindings visible to our Python interpreter
+# Make system opencv / picamera2 / libcamera bindings visible to Python
 ENV PYTHONPATH=/usr/lib/python3/dist-packages
 
 # ── Python dependencies ───────────────────────────────────────────────────────
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # ── Application code ──────────────────────────────────────────────────────────
 COPY . .
@@ -43,7 +45,7 @@ ENV SERIAL_PORT=/dev/ttyACM0
 ENV CAMERA=pi
 ENV WEB_PORT=5000
 
-CMD python -m state_machine.main \
+CMD python3 -m state_machine.main \
         --port    "$SERIAL_PORT" \
         --camera  "$CAMERA"     \
         --web-port "$WEB_PORT"

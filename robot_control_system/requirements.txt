@@ -1,7 +1,6 @@
 pyserial
-opencv-python-headless
-numpy
 flask
+# opencv and numpy installed via apt (python3-opencv, python3-numpy) — no ARM wheel available
 
 # Raspberry Pi camera only — install via apt, not pip:
 #   sudo apt install -y python3-picamera2

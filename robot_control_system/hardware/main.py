@@ -14,7 +14,7 @@ Two PID loops run at RATE_HZ and write /cmd to the Arduino via SerialBridge:
     output    : linear_x
 
 Direction input:
-  Call robot.set_direction(x, y) from any thread.
+  Call robot.add_direction(x, y) from any thread.
   x : lateral  [-1, 1]   (left = -1, right = +1)
   y : forward  [-1, 1]   (back  = -1, fwd   = +1)
 
@@ -155,7 +155,7 @@ def main():
                         continue
                     robot.set_rotation_scale(float(parts[1]))
                 elif len(parts) == 2:
-                    robot.set_direction(float(parts[0]), float(parts[1]))
+                    robot.add_direction(float(parts[0]), float(parts[1]))
                 else:
                     print('Expected: x y  or  speed/rotation <0-1>')
             except ValueError:

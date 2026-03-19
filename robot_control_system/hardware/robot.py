@@ -45,7 +45,7 @@ class Robot:
         self._speed_pid   = SpeedPID()
 
         self._lock = threading.Lock()
-        self._target_heading = 0.0  # radians — updated incrementally via set_direction
+        self._target_heading = 0.0  # radians — updated incrementally via add_direction
         self._speed_scale    = 0.0  # [-1, 1] direct motor speed
         self._rotation_scale = 1.0  # [0, 1] multiplier applied to angular_z
         self._motor_override: tuple[float, float] | None = None  # (left, right)
@@ -62,7 +62,7 @@ class Robot:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def set_direction(self, x: float, y: float):
+    def add_direction(self, x: float, y: float):
         """Update target heading relative to current heading.
 
         delta = atan2(x, abs(y))

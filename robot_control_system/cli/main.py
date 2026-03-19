@@ -227,7 +227,7 @@ def cmd_servo(robot: Robot, args):
 
 
 def cmd_direction(robot: Robot, args):
-    robot.set_direction(args.x, args.y)
+    robot.add_direction(args.x, args.y)
 
 
 def cmd_speed(robot: Robot, args):
