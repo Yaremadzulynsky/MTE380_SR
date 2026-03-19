@@ -173,6 +173,98 @@ class Robot:
     def set_claw(self, angle: float):
         self._bridge.send_claw(angle)
 
+    def turn_by_degrees(
+        self,
+        degrees: float,
+        speed: float = 0.35,
+        tolerance_deg: float = 3.0,
+        timeout: float = 8.0,
+        settle_time_s: float = 0.2,
+    ) -> dict:
+        """Turn robot by requested degrees and validate using encoder-derived heading feedback."""
+        def _wrap_pi(angle: float) -> float:
+            return (angle + math.pi) % (2.0 * math.pi) - math.pi
+
+        req_deg = float(degrees)
+        req_rad = math.radians(req_deg)
+        cmd_speed = max(0.1, min(1.0, abs(float(speed))))
+        tol_rad = math.radians(max(0.5, abs(float(tolerance_deg))))
+        timeout_s = max(0.5, float(timeout))
+        settle_s = max(0.05, float(settle_time_s))
+
+        with self._lock:
+            start_heading = float(self._heading_fb)
+            start_target = float(self._target_heading)
+            start_left = int(self._enc_left)
+            start_right = int(self._enc_right)
+            target_heading = _wrap_pi(start_heading + req_rad)
+            self._target_heading = target_heading
+            self._speed_scale = 0.0
+            self._rotation_scale = 1.0
+
+        start_time = time.monotonic()
+        within_since = None
+        last_err = None
+
+        try:
+            while time.monotonic() - start_time < timeout_s:
+                with self._lock:
+                    current_heading = float(self._heading_fb)
+                err = _wrap_pi(target_heading - current_heading)
+                last_err = err
+
+                if abs(err) <= tol_rad:
+                    if within_since is None:
+                        within_since = time.monotonic()
+                    elif time.monotonic() - within_since >= settle_s:
+                        break
+                else:
+                    within_since = None
+
+                # Proportional angular command with saturation; sign comes from heading error.
+                ang_cmd = max(-cmd_speed, min(cmd_speed, 1.2 * err))
+                left = _apply_deadband(-ang_cmd)
+                right = _apply_deadband(ang_cmd)
+                with self._lock:
+                    self._motor_override = (left, right)
+                time.sleep(0.02)
+        finally:
+            with self._lock:
+                self._motor_override = None
+                end_heading = float(self._heading_fb)
+                end_left = int(self._enc_left)
+                end_right = int(self._enc_right)
+                self._target_heading = start_target
+                self._speed_scale = 0.0
+            self._bridge.send_drive(0.0, 0.0)
+
+        achieved_rad = _wrap_pi(end_heading - start_heading)
+        achieved_deg = math.degrees(achieved_rad)
+        error_deg = req_deg - achieved_deg
+        success = abs(error_deg) <= max(abs(tolerance_deg), 3.0)
+
+        return {
+            "requested_degrees": req_deg,
+            "achieved_degrees": achieved_deg,
+            "error_degrees": error_deg,
+            "tolerance_degrees": max(abs(tolerance_deg), 3.0),
+            "timed_out": (time.monotonic() - start_time) >= timeout_s and not success,
+            "success": success,
+            "heading": {
+                "start_degrees": math.degrees(start_heading),
+                "end_degrees": math.degrees(end_heading),
+            },
+            "encoders": {
+                "start_left": start_left,
+                "start_right": start_right,
+                "end_left": end_left,
+                "end_right": end_right,
+                "delta_left": end_left - start_left,
+                "delta_right": end_right - start_right,
+            },
+            "last_error_degrees": math.degrees(last_err) if last_err is not None else None,
+        }
+
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self):

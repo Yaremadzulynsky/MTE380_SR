@@ -493,6 +493,26 @@ button.ghost {
   background: #0f141a;
 }
 
+#visionStreamFrame {
+  border: 0;
+}
+
+.ops-pre {
+  margin-top: 12px;
+  padding: 12px;
+  background: #1b1f24;
+  border-radius: 12px;
+  border: 1px solid #2b3139;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .bg-shape {
   position: absolute;
   border-radius: 999px;

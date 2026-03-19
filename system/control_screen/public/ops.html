@@ -15,15 +15,16 @@
       <header class="hero" data-animate>
         <div>
           <p class="kicker">Control Screen</p>
-          <h1>Robot Ops Dashboard</h1>
+          <h1>Perception Ops</h1>
           <p class="sub">
-            Start and stop robot services, inspect logs, and send test commands from one page.
+            Start/stop perception, watch logs, and send robot commands from one page.
           </p>
         </div>
         <div class="status-card">
-          <div class="status-label">Ops Status</div>
+          <div class="status-label">Runner Status</div>
           <div id="opsEnabled" class="status-value">Checking...</div>
-          <div id="opsDetail" class="status-meta">Compose: --</div>
+          <div id="opsDetail" class="status-meta">Script: --</div>
+          <div id="runnerMeta" class="status-meta">PID: --</div>
         </div>
       </header>
 
@@ -34,62 +35,23 @@
       </nav>
 
       <section class="panel" data-animate>
-        <h2>Robot Behavior</h2>
+        <h2>Quick Actions</h2>
         <p class="hint">
-          These commands control robot behavior over HTTP (camera/state input), separate from container start/stop.
+          This controls <code>run_perception_rpicam.sh</code> only. Docker containers are managed separately.
         </p>
         <div class="ops-actions-grid">
-          <button type="button" id="startRobotBtn">Start Robot</button>
-          <button type="button" class="ghost" id="stopRobotBtn">Stop Robot</button>
-        </div>
-        <div class="feedback" id="robotFeedback" role="status" aria-live="polite">Idle.</div>
-      </section>
-
-      <section class="panel" data-animate>
-        <h2>Vision Stream</h2>
-        <p class="hint">
-          Live MJPEG feed from Pi Hough overlay output.
-        </p>
-        <div class="field-grid">
-          <label class="field">
-            <span class="field-label">Stream URL</span>
-            <input id="streamUrlInput" type="text" value="" />
-          </label>
-        </div>
-        <div class="actions">
-          <button type="button" id="openStreamBtn">Open Stream</button>
-          <button type="button" class="ghost" id="reloadStreamBtn">Reload Stream</button>
-        </div>
-        <img id="visionStreamImg" class="ops-stream" alt="Hough overlay stream" />
-      </section>
-
-      <section class="panel" data-animate>
-        <h2>Stack Controls</h2>
-        <p class="hint">
-          These actions run docker compose commands on the host. Keep this page restricted to trusted users.
-        </p>
-        <div class="ops-actions-grid">
-          <button type="button" data-action="start-core">Start Core</button>
-          <button type="button" class="ghost" data-action="stop-core">Stop Core</button>
+          <button type="button" data-action="start-perception">Start Perception</button>
+          <button type="button" class="ghost" data-action="stop-perception">Stop Perception</button>
+          <button type="button" class="ghost" data-action="restart-perception">Restart Perception</button>
+          <button type="button" class="ghost" id="refreshServicesBtn">Refresh Status</button>
         </div>
         <div class="feedback" id="stackFeedback" role="status" aria-live="polite">Ready.</div>
       </section>
 
       <section class="panel" data-animate>
-        <h2>Service Status</h2>
-        <div class="actions">
-          <button type="button" class="ghost" id="refreshServicesBtn">Refresh Services</button>
-        </div>
-        <div id="servicesGrid" class="ops-services-grid"></div>
-      </section>
-
-      <section class="panel" data-animate>
         <h2>Log Viewer</h2>
+        <p class="hint">Live tail of perception runner output.</p>
         <div class="field-grid">
-          <label class="field">
-            <span class="field-label">Service</span>
-            <select id="logService"></select>
-          </label>
           <label class="field">
             <span class="field-label">Lines</span>
             <input id="logLines" type="number" min="10" max="2000" step="10" value="150" />
@@ -97,18 +59,73 @@
         </div>
         <div class="actions">
           <button type="button" id="refreshLogsBtn">Refresh Logs</button>
-          <button type="button" class="ghost" id="toggleTailBtn">Start Tail</button>
+          <button type="button" class="ghost" id="toggleTailBtn">Tail: Off</button>
         </div>
-        <pre id="logsOutput" class="ops-log-output">Select a service to view logs.</pre>
+        <pre id="logsOutput" class="ops-log-output">Perception logs will appear here.</pre>
       </section>
 
       <section class="panel" data-animate>
-        <h2>Test Actions</h2>
+        <h2>Robot Commands</h2>
+        <p class="hint">Optional HTTP commands (independent from perception start/stop).</p>
         <div class="ops-actions-grid">
-          <button type="button" id="neutralControlBtn">Send Neutral Control</button>
-          <button type="button" class="ghost" id="sampleInputBtn">Send Sample Input</button>
+          <button type="button" id="startRobotBtn">Start Robot</button>
+          <button type="button" class="ghost" id="stopRobotBtn">Stop Robot</button>
+          <button type="button" class="ghost" id="neutralControlBtn">Neutral Command</button>
+          <button type="button" class="ghost" id="sampleInputBtn">Sample Command</button>
         </div>
+        <div class="feedback" id="robotFeedback" role="status" aria-live="polite">Idle.</div>
         <div class="feedback" id="testFeedback" role="status" aria-live="polite">Idle.</div>
+      </section>
+
+      <section class="panel" data-animate>
+        <h2>Turn Tests (Encoder Validation)</h2>
+        <p class="hint">
+          Runs a turn test using encoder-based heading validation. At the end of each test, robot stop is sent automatically.
+        </p>
+        <div class="ops-actions-grid">
+          <button type="button" class="ghost" data-turn-test="45">Turn 45°</button>
+          <button type="button" class="ghost" data-turn-test="90">Turn 90°</button>
+          <button type="button" class="ghost" data-turn-test="180">Turn 180°</button>
+          <button type="button" class="ghost" data-turn-test="270">Turn 270°</button>
+          <button type="button" class="ghost" data-turn-test="360">Turn 360°</button>
+        </div>
+        <div class="feedback" id="turnTestFeedback" role="status" aria-live="polite">Idle.</div>
+      </section>
+
+      <section class="panel" data-animate>
+        <h2>Vision Stream</h2>
+        <p class="hint">
+          MJPEG (legacy) or H.264 via MediaMTX WebRTC page. Use the preset buttons to fill common URLs.
+        </p>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Viewer</span>
+            <select id="streamViewerMode">
+              <option value="mjpeg">MJPEG (image)</option>
+              <option value="embed">Web / WebRTC (iframe)</option>
+              <option value="rtsp">RTSP URL (copy / external player)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Stream URL</span>
+            <input id="streamUrlInput" type="text" value="" />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" class="ghost" id="streamPresetMjpegBtn">Use MJPEG Default</button>
+          <button type="button" class="ghost" id="streamPresetWebrtcBtn">Use WebRTC Default</button>
+          <button type="button" id="openStreamBtn">Open Stream</button>
+          <button type="button" class="ghost" id="reloadStreamBtn">Reload Stream</button>
+          <button type="button" class="ghost" id="copyStreamUrlBtn">Copy URL</button>
+        </div>
+        <img id="visionStreamImg" class="ops-stream" alt="Hough overlay stream" />
+        <iframe
+          id="visionStreamFrame"
+          class="ops-stream hidden"
+          title="Vision WebRTC or web player"
+        ></iframe>
+        <p id="visionRtspHint" class="hint hidden">Open this RTSP URL in VLC or ffplay (browsers cannot play RTSP directly).</p>
+        <pre id="visionRtspUrl" class="ops-pre hidden"></pre>
       </section>
     </main>
 

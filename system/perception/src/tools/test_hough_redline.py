@@ -5,6 +5,9 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import queue
+import shutil
+import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,7 +19,7 @@ import numpy as np
 
 from src.config import AppConfig, load_config
 from src.pipeline import PipelineState, run_pipeline
-from src.vision.camera import OpenCVCamera, RpicamVidCamera
+from src.vision.camera import OpenCVCamera
 from src.vision.masks import crop_roi
 
 
@@ -86,6 +89,152 @@ class _MjpegHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args: Any) -> None:
         _ = (fmt, args)
+
+
+def _ensure_even_bgr(frame_bgr: Any) -> Any:
+    """yuv420p / most encoders need even width and height."""
+    h, w = int(frame_bgr.shape[0]), int(frame_bgr.shape[1])
+    t = frame_bgr
+    if w % 2 == 1:
+        t = t[:, : w - 1, :]
+    if h % 2 == 1:
+        t = t[: h - 1, :, :]
+    return t
+
+
+class _H264FfmpegWriter:
+    """
+    Pipes BGR frames into ffmpeg, producing MPEG-TS over UDP or H.264 over RTSP.
+
+    Use UDP for low-latency viewing with:
+      ffplay -fflags nobuffer -flags low_delay -framedrop 'udp://0.0.0.0:5004?localaddr=<laptop-lan>'
+      VLC: open network stream udp://@:5004
+
+    For RTSP (e.g. MediaMTX / WebRTC in browser), publish to:
+      rtsp://127.0.0.1:8554/hough
+    then open the MediaMTX web player at http://<pi>:8889/hough .
+    """
+
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        fps: float,
+        *,
+        udp_dest: str | None = None,
+        rtsp_url: str | None = None,
+        encoder: str = "libx264",
+        bitrate: str = "2500k",
+    ) -> None:
+        if not shutil.which("ffmpeg"):
+            raise RuntimeError("ffmpeg not found in PATH (required for --h264-udp / --h264-rtsp-url)")
+        if bool(udp_dest) == bool(rtsp_url):
+            raise ValueError("Specify exactly one of udp_dest or rtsp_url")
+        self._w = int(width)
+        self._h = int(height)
+        self._fps = max(1.0, min(120.0, float(fps)))
+        self._encoder = encoder
+        self._bitrate = bitrate
+
+        cmd: list[str] = [
+            "ffmpeg",
+            "-loglevel",
+            "warning",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "-s",
+            f"{self._w}x{self._h}",
+            "-r",
+            f"{self._fps:.3f}",
+            "-i",
+            "-",
+            "-an",
+        ]
+        if encoder == "libx264":
+            cmd += [
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-tune",
+                "zerolatency",
+                "-pix_fmt",
+                "yuv420p",
+                "-g",
+                str(max(2, int(round(self._fps * 2)))),
+                "-keyint_min",
+                str(max(1, int(round(self._fps)))),
+                "-bf",
+                "0",
+                "-sc_threshold",
+                "0",
+            ]
+        elif encoder == "h264_v4l2m2m":
+            cmd += ["-c:v", "h264_v4l2m2m", "-b:v", str(bitrate), "-pix_fmt", "yuv420p"]
+        else:
+            cmd += ["-c:v", str(encoder), "-b:v", str(bitrate), "-pix_fmt", "yuv420p"]
+
+        if udp_dest:
+            # dest is host:port — ffmpeg sends MPEG-TS UDP packets to that address
+            cmd += ["-f", "mpegts", f"udp://{udp_dest}?pkt_size=1316"]
+        else:
+            cmd += ["-f", "rtsp", "-rtsp_transport", "tcp", str(rtsp_url)]
+
+        self._proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self._q: queue.Queue[bytes] = queue.Queue(maxsize=2)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run_writer, daemon=True)
+        self._thread.start()
+
+    def _run_writer(self) -> None:
+        assert self._proc.stdin is not None
+        while not self._stop.is_set():
+            try:
+                chunk = self._q.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            try:
+                self._proc.stdin.write(chunk)
+            except (BrokenPipeError, ValueError):
+                break
+
+    def write_bgr(self, frame_bgr: Any) -> None:
+        f = _ensure_even_bgr(frame_bgr)
+        if f.shape[1] != self._w or f.shape[0] != self._h:
+            raise ValueError(f"Frame size {f.shape[1]}x{f.shape[0]} != expected {self._w}x{self._h}")
+        data = np.ascontiguousarray(f).tobytes()
+        try:
+            self._q.put_nowait(data)
+        except queue.Full:
+            try:
+                _ = self._q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._q.put_nowait(data)
+            except queue.Full:
+                pass
+
+    def close(self) -> None:
+        self._stop.set()
+        self._thread.join(timeout=1.0)
+        if self._proc.stdin:
+            try:
+                self._proc.stdin.close()
+            except (BrokenPipeError, ValueError):
+                pass
+        try:
+            self._proc.wait(timeout=3.0)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -158,8 +307,6 @@ def _compute_guidance_vectors(
 
 
 def _parse_source(raw: str, cfg: AppConfig, webcam_index: int | None = None) -> int | str:
-    if raw == "rpicam":
-        return "rpicam"
     if raw == "webcam":
         return webcam_index if webcam_index is not None else cfg.camera.webcam_index
     if raw.startswith(("http://", "https://", "rtsp://")):
@@ -169,7 +316,7 @@ def _parse_source(raw: str, cfg: AppConfig, webcam_index: int | None = None) -> 
     p = Path(raw)
     if p.exists():
         return str(p)
-    raise ValueError("source must be rpicam, webcam, video:/path, http://ip:port/video, or an existing file path")
+    raise ValueError("source must be webcam, video:/path, http://ip:port/video, or an existing file path")
 
 
 def _draw_full_overlay(
@@ -298,7 +445,7 @@ def _draw_full_overlay(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Hough red-line local visualizer")
     parser.add_argument("--config", default="configs/default.yaml")
-    parser.add_argument("--source", default="webcam", help="rpicam | webcam | video:/path | /path/to/video | http://ip:port/video")
+    parser.add_argument("--source", default="webcam", help="webcam | video:/path | /path/to/video | http://ip:port/video")
     parser.add_argument("--webcam-index", type=int, default=None, help="Override camera.webcam_index (e.g. 10 for virtual cam)")
     parser.add_argument("--fps", type=float, default=None)
     parser.add_argument("--csv", default=None, help="Optional CSV output path for metrics")
@@ -340,6 +487,37 @@ def main() -> None:
         default="0.0.0.0",
         help="Bind host for MJPEG stream server.",
     )
+    h264 = parser.add_mutually_exclusive_group()
+    h264.add_argument(
+        "--h264-udp",
+        default=None,
+        metavar="HOST:PORT",
+        help="Low-latency MPEG-TS over UDP (H.264). Set HOST to viewer IP (e.g. laptop Tailscale). "
+        "View: ffplay -fflags nobuffer udp://0.0.0.0:PORT?localaddr=<viewer-ip>",
+    )
+    h264.add_argument(
+        "--h264-rtsp-url",
+        default=None,
+        metavar="URL",
+        help="Publish H.264 to RTSP (TCP), e.g. rtsp://127.0.0.1:8554/hough with MediaMTX. "
+        "Browser: open http://<pi>:8889/hough",
+    )
+    parser.add_argument(
+        "--h264-fps",
+        type=float,
+        default=None,
+        help="Nominal FPS for encoder (default: config fps, clamped).",
+    )
+    parser.add_argument(
+        "--h264-encoder",
+        default="libx264",
+        help="Video codec for ffmpeg: libx264 (CPU) or h264_v4l2m2m (Pi hardware).",
+    )
+    parser.add_argument(
+        "--h264-bitrate",
+        default="2500k",
+        help="Bitrate for hardware encoder (e.g. h264_v4l2m2m).",
+    )
     args = parser.parse_args()
 
     cv2.setUseOptimized(True)
@@ -348,24 +526,16 @@ def main() -> None:
         cfg.fps = float(args.fps)
     proc_scale = max(0.25, min(1.0, float(args.proc_scale)))
     source = _parse_source(args.source, cfg, webcam_index=args.webcam_index)
-    if source == "rpicam":
-        cam = RpicamVidCamera(
-            width=cfg.camera.width,
-            height=cfg.camera.height,
-            fps=cfg.fps,
-            camera_index=cfg.camera.webcam_index,
-        )
-    else:
-        backend = "gstreamer" if isinstance(source, str) else cfg.camera.backend
-        cam = OpenCVCamera(
-            source=source,
-            width=cfg.camera.width,
-            height=cfg.camera.height,
-            fps=cfg.fps,
-            backend=backend,
-            threaded=True,
-            gstreamer_device=cfg.camera.gstreamer_device,
-        )
+    backend = "gstreamer" if isinstance(source, str) else cfg.camera.backend
+    cam = OpenCVCamera(
+        source=source,
+        width=cfg.camera.width,
+        height=cfg.camera.height,
+        fps=cfg.fps,
+        backend=backend,
+        threaded=True,
+        gstreamer_device=cfg.camera.gstreamer_device,
+    )
 
     state = PipelineState(path_mask_key="red")
     window_scale = max(0.5, float(args.window_scale))
@@ -387,6 +557,7 @@ def main() -> None:
     frame_store: _FrameStore | None = None
     mjpeg_server: ThreadingHTTPServer | None = None
     mjpeg_thread: threading.Thread | None = None
+    h264_writer: _H264FfmpegWriter | None = None
     if int(args.mjpeg_port) > 0:
         frame_store = _FrameStore()
         mjpeg_server = ThreadingHTTPServer((str(args.mjpeg_host), int(args.mjpeg_port)), _MjpegHandler)
@@ -394,6 +565,12 @@ def main() -> None:
         mjpeg_thread = threading.Thread(target=mjpeg_server.serve_forever, daemon=True)
         mjpeg_thread.start()
         print(f"[hough_test] stream_url=http://{args.mjpeg_host}:{args.mjpeg_port}/stream.mjpg")
+    if args.h264_udp:
+        print(
+            "[hough_test] H.264 UDP: encoder starts on first frame; view with ffplay/VLC (see script docstring)."
+        )
+    if args.h264_rtsp_url:
+        print(f"[hough_test] H.264 RTSP publish target: {args.h264_rtsp_url}")
 
     csv_file = None
     csv_writer = None
@@ -511,6 +688,32 @@ def main() -> None:
                 )
             else:
                 overlay_show = overlay
+
+            if (args.h264_udp or args.h264_rtsp_url) and h264_writer is None:
+                eo = _ensure_even_bgr(overlay_show)
+                hfps = (
+                    float(args.h264_fps)
+                    if args.h264_fps is not None
+                    else max(1.0, min(60.0, float(cfg.fps or 15.0)))
+                )
+                h264_writer = _H264FfmpegWriter(
+                    eo.shape[1],
+                    eo.shape[0],
+                    hfps,
+                    udp_dest=args.h264_udp,
+                    rtsp_url=args.h264_rtsp_url,
+                    encoder=str(args.h264_encoder),
+                    bitrate=str(args.h264_bitrate),
+                )
+                if args.h264_udp:
+                    print(f"[hough_test] H.264 MPEG-TS → udp://{args.h264_udp} at {eo.shape[1]}x{eo.shape[0]} @ {hfps} fps")
+
+            if h264_writer is not None:
+                try:
+                    h264_writer.write_bgr(overlay_show)
+                except ValueError as exc:
+                    print(f"[hough_test] H.264 frame error: {exc}")
+
             if frame_store is not None:
                 frame_store.update_bgr(overlay_show)
             if display_enabled:
@@ -543,6 +746,8 @@ def main() -> None:
                     )
     finally:
         cam.release()
+        if h264_writer is not None:
+            h264_writer.close()
         if csv_file is not None:
             csv_file.close()
         if mjpeg_server is not None:

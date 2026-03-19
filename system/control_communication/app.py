@@ -332,6 +332,34 @@ def health():
     )
 
 
+@app.get("/telemetry")
+def telemetry():
+    heading_current = 0.0
+    heading_target = 0.0
+    enc_left = 0
+    enc_right = 0
+    if robot is not None:
+        try:
+            heading_current, heading_target = robot.get_heading()
+            enc_left, enc_right = robot.get_encoders()
+        except Exception as exc:
+            return jsonify({"ok": False, "message": f"Telemetry unavailable: {exc}"}), 500
+    return jsonify(
+        {
+            "ok": True,
+            "robot_active": robot is not None,
+            "heading": {
+                "current_degrees": heading_current,
+                "target_degrees": heading_target,
+            },
+            "encoders": {
+                "left_ticks": enc_left,
+                "right_ticks": enc_right,
+            },
+        }
+    )
+
+
 @app.get("/last")
 def get_last():
     return jsonify({"ok": True, "last": last_sent})
@@ -380,6 +408,51 @@ def post_vector():
 @app.post("/control")
 def post_control():
     return post_vector()
+
+
+@app.post("/turn-test")
+def post_turn_test():
+    if robot is None:
+        return jsonify({"ok": False, "message": "Robot is not active."}), 503
+    if not request.is_json:
+        return jsonify({"ok": False, "message": "Expected JSON payload."}), 400
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "message": "JSON payload must be an object."}), 400
+
+    raw_degrees = payload.get("degrees")
+    if isinstance(raw_degrees, bool) or not isinstance(raw_degrees, (int, float)):
+        return jsonify({"ok": False, "message": "'degrees' must be numeric."}), 400
+    degrees = float(raw_degrees)
+    if not math.isfinite(degrees) or abs(degrees) > 720.0:
+        return jsonify({"ok": False, "message": "'degrees' must be finite and within [-720, 720]."}), 400
+
+    speed = float(payload.get("speed", 0.35))
+    tolerance_deg = float(payload.get("tolerance_deg", 5.0))
+    timeout_s = float(payload.get("timeout_s", 10.0))
+    settle_s = float(payload.get("settle_s", 0.2))
+
+    try:
+        result = robot.turn_by_degrees(
+            degrees=degrees,
+            speed=speed,
+            tolerance_deg=tolerance_deg,
+            timeout=timeout_s,
+            settle_time_s=settle_s,
+        )
+        log_line(
+            "turn_test",
+            {
+                "requested_deg": degrees,
+                "achieved_deg": round(result.get("achieved_degrees", 0.0), 3),
+                "error_deg": round(result.get("error_degrees", 0.0), 3),
+                "success": result.get("success", False),
+            },
+        )
+        return jsonify({"ok": True, "result": result})
+    except Exception as exc:
+        log_line("turn_test_fail", {"error": repr(exc), "requested_deg": degrees})
+        return jsonify({"ok": False, "message": f"Turn test failed: {exc}"}), 500
 
 
 def main() -> None:

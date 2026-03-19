@@ -217,6 +217,18 @@ services:
     volumes:
       - '/:/host:ro,rslave'
 
+  # Optional: RTSP ingest + WebRTC/HLS/Low-Latency HLS player for Hough H.264 (--h264-rtsp-url).
+  # Start: docker compose --profile mediamtx up -d mediamtx
+  # Publish from Pi: --h264-rtsp-url rtsp://127.0.0.1:8554/hough
+  # Browser on laptop: http://<pi-tailscale>:8889/hough
+  mediamtx:
+    profiles:
+      - mediamtx
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    network_mode: host
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
   grafana-data:

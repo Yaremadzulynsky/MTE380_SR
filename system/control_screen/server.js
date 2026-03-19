@@ -18,6 +18,8 @@ const CONTROL_COMM_HEALTH_PATH =
   process.env.CONTROL_COMM_HEALTH_PATH || '/health';
 const CONTROL_COMM_CONTROL_PATH =
   process.env.CONTROL_COMM_CONTROL_PATH || '/control';
+const CONTROL_COMM_TURN_TEST_PATH =
+  process.env.CONTROL_COMM_TURN_TEST_PATH || '/turn-test';
 const STATE_MACHINE_BASE_URL =
   process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
 const STATE_MACHINE_INPUT_PATH =
@@ -31,7 +33,6 @@ const STATE_MACHINE_SET_STATE_PATH =
 const LOG_PATH = process.env.LOG_PATH || process.env.INSIGHTS_IPC_PATH;
 const SERVO_MIN_DEG = Number.parseInt(process.env.SERVO_MIN_DEG || '0', 10);
 const SERVO_MAX_DEG = Number.parseInt(process.env.SERVO_MAX_DEG || '90', 10);
-const ENABLE_OPS_DASHBOARD = String(process.env.ENABLE_OPS_DASHBOARD || '').toLowerCase() === 'true';
 const OPS_DOCKER_BIN = process.env.OPS_DOCKER_BIN || 'docker';
 const OPS_COMPOSE_FILE = process.env.OPS_COMPOSE_FILE
   || path.resolve(__dirname, '..', 'docker-compose.yaml');
@@ -44,6 +45,15 @@ const OPS_HOUGH_STREAM_URL = process.env.OPS_HOUGH_STREAM_URL || 'http://localho
 const OPS_INCLUDE_ALLOY = String(process.env.OPS_INCLUDE_ALLOY || '').toLowerCase() === 'true';
 const OPS_IS_ARM = process.arch === 'arm' || process.arch === 'arm64';
 const OPS_SUPPORTS_ALLOY = !OPS_IS_ARM || OPS_INCLUDE_ALLOY;
+const PERCEPTION_RUNNER_ENABLED = String(process.env.ENABLE_PERCEPTION_RUNNER || 'true').toLowerCase() !== 'false';
+const PERCEPTION_RUN_SCRIPT = process.env.PERCEPTION_RUN_SCRIPT
+  || path.resolve(__dirname, '..', 'run_perception_rpicam.sh');
+const PERCEPTION_RUN_CWD = process.env.PERCEPTION_RUN_CWD || path.resolve(__dirname, '..');
+const PERCEPTION_LOG_FILE = process.env.PERCEPTION_LOG_FILE
+  || path.resolve(__dirname, '..', 'perception', 'logs', 'control-screen-perception.log');
+const PERCEPTION_LOG_TAIL_DEFAULT = Number.parseInt(process.env.PERCEPTION_LOG_TAIL_DEFAULT || '200', 10);
+const PERCEPTION_LOG_TAIL_MAX = Number.parseInt(process.env.PERCEPTION_LOG_TAIL_MAX || '4000', 10);
+const PERCEPTION_STOP_TIMEOUT_MS = Number.parseInt(process.env.PERCEPTION_STOP_TIMEOUT_MS || '3500', 10);
 
 const DEFAULT_RANGE = { min: -1000, max: 1000 };
 
@@ -109,6 +119,7 @@ const OPS_SERVICE_GROUPS = {
 };
 
 const insightsLogger = createInsightsLogger(LOG_PATH);
+const perceptionRunner = createPerceptionRunner();
 
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -365,194 +376,143 @@ app.post('/api/state-machine/set-state', async (req, res) => {
 
 app.get('/api/ops/config', (req, res) => {
   res.json({
-    enabled: ENABLE_OPS_DASHBOARD,
+    enabled: PERCEPTION_RUNNER_ENABLED,
+    perceptionRunnerEnabled: PERCEPTION_RUNNER_ENABLED,
     composeFile: OPS_COMPOSE_FILE,
     groups: OPS_SERVICE_GROUPS,
     supportsAlloy: OPS_SUPPORTS_ALLOY,
     architecture: process.arch,
-    houghStreamUrl: OPS_HOUGH_STREAM_URL
+    houghStreamUrl: OPS_HOUGH_STREAM_URL,
+    perceptionScript: PERCEPTION_RUN_SCRIPT
   });
 });
 
 app.get('/api/ops/services', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
-  }
-  const result = await listComposeServices();
-  if (result.error) {
-    logInsight('ops_services_error', { error: result.error, detail: result.detail });
-    return res.status(502).json({
-      message: 'Failed to query docker compose services.',
-      error: result.error,
-      detail: result.detail
-    });
-  }
-  return res.json(result);
+  const status = perceptionRunner.status();
+  return res.json({
+    services: [
+      {
+        service: 'perception-runner',
+        state: status.running ? 'running' : 'stopped',
+        status: status.running ? 'Up' : 'Stopped',
+        pid: status.pid || null
+      }
+    ]
+  });
 });
 
 app.post('/api/ops/stack/up', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
-  const selection = resolveServiceSelection(req.body, false);
-  if (selection.error) {
-    return res.status(400).json({ message: selection.error });
-  }
-
-  const result = await runComposeCommand(['up', '-d', ...selection.services]);
+  const result = perceptionRunner.start();
   if (!result.ok) {
-    logInsight('ops_stack_up_error', { selection, result });
-    return res.status(502).json({
-      message: 'Failed to start selected services.',
-      ...result
+    return res.status(409).json({
+      message: result.error || 'Perception is already running.'
     });
   }
-  logInsight('ops_stack_up_ok', { selection, exitCode: result.exitCode });
+  logInsight('perception_runner_start_ok', { pid: result.pid });
   return res.json({
-    message: 'Services started.',
-    services: selection.services,
-    ...result
+    message: 'Perception runner started.',
+    pid: result.pid
   });
 });
 
 app.post('/api/ops/stack/stop', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
-  const selection = resolveServiceSelection(req.body, false);
-  if (selection.error) {
-    return res.status(400).json({ message: selection.error });
-  }
-
-  const result = await runComposeCommand(['stop', ...selection.services]);
+  const result = await perceptionRunner.stop();
   if (!result.ok) {
-    logInsight('ops_stack_stop_error', { selection, result });
+    logInsight('perception_runner_stop_error', result);
     return res.status(502).json({
-      message: 'Failed to stop selected services.',
+      message: 'Failed to stop perception runner.',
       ...result
     });
   }
-  logInsight('ops_stack_stop_ok', { selection, exitCode: result.exitCode });
+  logInsight('perception_runner_stop_ok', result);
   return res.json({
-    message: 'Services stopped.',
-    services: selection.services,
+    message: 'Perception runner stopped.',
     ...result
   });
 });
 
 app.post('/api/ops/stack/down', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
-  const selection = resolveServiceSelection(req.body, true);
-  if (selection.error) {
-    return res.status(400).json({ message: selection.error });
-  }
-
-  if (selection.serviceArgs.length === 0) {
-    const result = await runComposeCommand(['down']);
-    if (!result.ok) {
-      logInsight('ops_stack_down_error', { selection, result });
-      return res.status(502).json({
-        message: 'Failed to bring down compose project.',
-        ...result
-      });
-    }
-    logInsight('ops_stack_down_ok', { selection, exitCode: result.exitCode });
-    return res.json({
-      message: 'Compose project brought down.',
-      services: selection.services,
-      ...result
-    });
-  }
-
-  const stopResult = await runComposeCommand(['stop', ...selection.serviceArgs]);
-  if (!stopResult.ok) {
-    logInsight('ops_stack_down_error', { selection, result: stopResult });
-    return res.status(502).json({
-      message: 'Failed to stop selected services before removal.',
-      ...stopResult
-    });
-  }
-
-  const rmResult = await runComposeCommand(['rm', '-f', ...selection.serviceArgs]);
-  if (!rmResult.ok) {
-    logInsight('ops_stack_down_error', { selection, result: rmResult });
-    return res.status(502).json({
-      message: 'Failed to remove selected services.',
-      ...rmResult
-    });
-  }
-
-  logInsight('ops_stack_down_ok', { selection, exitCode: rmResult.exitCode });
-  return res.json({
-    message: 'Selected services removed.',
-    services: selection.services,
-    ...rmResult
-  });
-});
-
-app.post('/api/ops/service/restart', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
-  }
-  const service = sanitizeServiceName(req.body?.service);
-  if (!service) {
-    return res.status(400).json({ message: 'Invalid or missing service name.' });
-  }
-
-  const result = await runComposeCommand(['restart', service]);
+  const result = await perceptionRunner.stop();
   if (!result.ok) {
-    logInsight('ops_service_restart_error', { service, result });
     return res.status(502).json({
-      message: `Failed to restart ${service}.`,
+      message: 'Failed to stop perception runner.',
       ...result
     });
   }
-  logInsight('ops_service_restart_ok', { service, exitCode: result.exitCode });
   return res.json({
-    message: `${service} restarted.`,
-    service,
+    message: 'Perception runner stopped.',
     ...result
   });
 });
 
-app.get('/api/ops/logs', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+app.post('/api/ops/service/restart', async (req, res) => {
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
-  const service = sanitizeServiceName(req.query?.service);
-  if (!service) {
-    return res.status(400).json({ message: 'Provide a valid service query parameter.' });
+  const service = String(req.body?.service || '').trim();
+  if (service && service !== 'perception-runner') {
+    return res.status(400).json({ message: 'Only perception-runner restart is supported.' });
   }
-
-  const rawLines = Number.parseInt(String(req.query?.lines || OPS_LOG_TAIL_DEFAULT), 10);
-  const lines = Number.isFinite(rawLines)
-    ? Math.max(1, Math.min(rawLines, OPS_LOG_TAIL_MAX))
-    : OPS_LOG_TAIL_DEFAULT;
-
-  const result = await runComposeCommand(['logs', '--no-color', '--tail', String(lines), service], {
-    timeoutMs: OPS_COMMAND_TIMEOUT_MS * 2
-  });
-  if (!result.ok) {
-    logInsight('ops_logs_error', { service, lines, result });
+  const stopResult = await perceptionRunner.stop();
+  if (!stopResult.ok) {
     return res.status(502).json({
-      message: `Failed to fetch logs for ${service}.`,
-      service,
-      lines,
-      ...result
+      message: 'Failed to stop perception runner before restart.',
+      ...stopResult
+    });
+  }
+  const startResult = perceptionRunner.start();
+  if (!startResult.ok) {
+    return res.status(502).json({
+      message: 'Failed to restart perception runner.',
+      error: startResult.error
     });
   }
   return res.json({
-    service,
+    message: 'perception-runner restarted.',
+    pid: startResult.pid
+  });
+});
+
+app.get('/api/ops/logs', async (req, res) => {
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
+  }
+  const service = typeof req.query?.service === 'string' ? req.query.service.trim() : 'perception-runner';
+  if (service !== 'perception-runner' && service !== 'perception') {
+    return res.status(400).json({ message: 'Only perception-runner logs are available on this page.' });
+  }
+
+  const rawLines = Number.parseInt(String(req.query?.lines || PERCEPTION_LOG_TAIL_DEFAULT), 10);
+  const lines = Number.isFinite(rawLines)
+    ? Math.max(1, Math.min(rawLines, PERCEPTION_LOG_TAIL_MAX))
+    : PERCEPTION_LOG_TAIL_DEFAULT;
+  const result = await perceptionRunner.readLogs(lines);
+  return res.json({
+    service: 'perception-runner',
     lines,
     ...result
   });
 });
 
+app.get('/api/ops/perception/status', (req, res) => {
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
+  }
+  return res.json(perceptionRunner.status());
+});
+
 app.post('/api/ops/tests/neutral-control', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
   const result = await sendRedLineInput({ x: 0, y: 0 });
   if (!result || result.error) {
@@ -569,8 +529,8 @@ app.post('/api/ops/tests/neutral-control', async (req, res) => {
 });
 
 app.post('/api/ops/tests/sample-input', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
   const vector = req.body?.vector || {};
   const parsedX = Number(vector.x);
@@ -593,9 +553,40 @@ app.post('/api/ops/tests/sample-input', async (req, res) => {
   });
 });
 
+app.post('/api/ops/tests/turn', async (req, res) => {
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
+  }
+  const requestedDegrees = Number(req.body?.degrees);
+  if (!Number.isFinite(requestedDegrees)) {
+    return res.status(400).json({ message: "'degrees' must be numeric." });
+  }
+  const degrees = clamp(requestedDegrees, -720, 720);
+  const turnResult = await runTurnTest(degrees);
+  if (!turnResult.ok) {
+    return res.status(502).json({
+      message: 'Turn test failed.',
+      error: turnResult.error,
+      detail: turnResult.detail
+    });
+  }
+
+  const stopResult = await sendRobotStopSignals();
+  const stopStatus = stopResult.ok ? 'ok' : 'failed';
+  if (!stopResult.ok) {
+    logInsight('ops_turn_test_stop_error', { stopResult, degrees });
+  }
+
+  return res.json({
+    message: `Turn ${degrees}° completed. Auto-stop ${stopStatus}.`,
+    turn: turnResult.result,
+    stop: stopResult
+  });
+});
+
 app.post('/api/ops/robot/start', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
   const requestedState = typeof req.body?.state === 'string' && req.body.state.trim()
     ? req.body.state.trim()
@@ -617,8 +608,8 @@ app.post('/api/ops/robot/start', async (req, res) => {
 });
 
 app.post('/api/ops/robot/stop', async (req, res) => {
-  if (!ENABLE_OPS_DASHBOARD) {
-    return res.status(403).json({ message: 'Ops dashboard commands are disabled.' });
+  if (!PERCEPTION_RUNNER_ENABLED) {
+    return res.status(403).json({ message: 'Perception runner controls are disabled.' });
   }
   const stopResult = await sendRobotStopSignals();
   if (!stopResult.ok) {
@@ -708,6 +699,15 @@ app.post('/api/control', async (req, res) => {
 app.listen(PORT, () => {
   logInsight('control_screen_started', { port: PORT });
   logServiceLine(`Control screen running on http://localhost:${PORT}`);
+});
+
+process.on('SIGINT', async () => {
+  await perceptionRunner.stop();
+  process.exit(0);
+});
+process.on('SIGTERM', async () => {
+  await perceptionRunner.stop();
+  process.exit(0);
 });
 
 function buildRange(minValue, maxValue, fallbackMin = DEFAULT_RANGE.min, fallbackMax = DEFAULT_RANGE.max) {
@@ -879,6 +879,10 @@ function getControlCommControlUrl() {
   return new URL(CONTROL_COMM_CONTROL_PATH, CONTROL_COMM_BASE_URL).toString();
 }
 
+function getControlCommTurnTestUrl() {
+  return new URL(CONTROL_COMM_TURN_TEST_PATH, CONTROL_COMM_BASE_URL).toString();
+}
+
 function getControlCommLineFollowPidUrl() {
   return new URL(STATE_MACHINE_LINE_FOLLOW_PID_PATH, STATE_MACHINE_BASE_URL).toString();
 }
@@ -1048,6 +1052,45 @@ async function sendRobotStopSignals() {
     ok: Object.keys(failures).length === 0,
     failures
   };
+}
+
+async function runTurnTest(degrees) {
+  const url = getControlCommTurnTestUrl();
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/plain'
+      },
+      body: JSON.stringify({ degrees })
+    });
+    const bodyText = await response.text();
+    const body = safeJsonParse(bodyText);
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: `Upstream status ${response.status}`,
+        detail: body || bodyText
+      };
+    }
+    if (!body || body.ok !== true || !body.result) {
+      return {
+        ok: false,
+        error: 'Upstream returned invalid turn-test payload.',
+        detail: body || bodyText
+      };
+    }
+    return {
+      ok: true,
+      result: body.result
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message
+    };
+  }
 }
 
 async function postJson(url, payload) {
@@ -1340,6 +1383,141 @@ function runCommand(command, args, options = {}) {
       });
     });
   });
+}
+
+function createPerceptionRunner() {
+  let child = null;
+  let startedAt = null;
+  let lastExitCode = null;
+  let lastExitSignal = null;
+  const recentLogs = [];
+
+  const appendLog = (chunk) => {
+    if (!chunk) return;
+    const text = String(chunk);
+    if (!text) return;
+    recentLogs.push(text);
+    if (recentLogs.length > 2000) {
+      recentLogs.splice(0, recentLogs.length - 2000);
+    }
+    try {
+      fs.mkdirSync(path.dirname(PERCEPTION_LOG_FILE), { recursive: true });
+      fs.appendFileSync(PERCEPTION_LOG_FILE, text, 'utf8');
+    } catch (err) {
+      // Best effort file logging; keep in-memory logs available.
+    }
+  };
+
+  const start = () => {
+    if (child && !child.killed) {
+      return { ok: false, error: 'Perception runner is already running.', pid: child.pid };
+    }
+    if (!PERCEPTION_RUNNER_ENABLED) {
+      return { ok: false, error: 'Perception runner controls are disabled.' };
+    }
+    if (!fs.existsSync(PERCEPTION_RUN_SCRIPT)) {
+      return { ok: false, error: `Perception script not found: ${PERCEPTION_RUN_SCRIPT}` };
+    }
+
+    child = spawn('bash', [PERCEPTION_RUN_SCRIPT], {
+      cwd: PERCEPTION_RUN_CWD,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    startedAt = Date.now();
+    lastExitCode = null;
+    lastExitSignal = null;
+
+    appendLog(`[control_screen] starting perception script: ${PERCEPTION_RUN_SCRIPT}\n`);
+    child.stdout.on('data', appendLog);
+    child.stderr.on('data', appendLog);
+    child.on('close', (code, signal) => {
+      appendLog(`[control_screen] perception exited (code=${code}, signal=${signal || 'none'})\n`);
+      lastExitCode = typeof code === 'number' ? code : null;
+      lastExitSignal = signal || null;
+      child = null;
+      startedAt = null;
+    });
+    child.on('error', (err) => {
+      appendLog(`[control_screen] perception runner error: ${err.message}\n`);
+      child = null;
+      startedAt = null;
+    });
+    return { ok: true, pid: child.pid };
+  };
+
+  const stop = async () => {
+    if (!child) {
+      return { ok: true, message: 'Perception runner is not running.' };
+    }
+    const pid = child.pid;
+    appendLog('[control_screen] stopping perception runner\n');
+    child.kill('SIGTERM');
+
+    const closed = await new Promise((resolve) => {
+      let done = false;
+      const timeout = setTimeout(() => {
+        if (done) return;
+        done = true;
+        resolve(false);
+      }, PERCEPTION_STOP_TIMEOUT_MS);
+      child.once('close', () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timeout);
+        resolve(true);
+      });
+    });
+
+    if (!closed && child) {
+      child.kill('SIGKILL');
+      return { ok: true, message: 'Perception runner force-stopped.', pid };
+    }
+    return { ok: true, message: 'Perception runner stopped.', pid };
+  };
+
+  const status = () => ({
+    running: Boolean(child),
+    pid: child ? child.pid : null,
+    startedAt,
+    script: PERCEPTION_RUN_SCRIPT,
+    cwd: PERCEPTION_RUN_CWD,
+    logFile: PERCEPTION_LOG_FILE,
+    lastExitCode,
+    lastExitSignal
+  });
+
+  const readLogs = async (lines) => {
+    const fileTail = await readLogFileTail(PERCEPTION_LOG_FILE, lines);
+    let stdout = fileTail;
+    if (!stdout.trim()) {
+      stdout = recentLogs.join('');
+    }
+    return {
+      ok: true,
+      stdout,
+      stderr: '',
+      running: Boolean(child),
+      pid: child ? child.pid : null
+    };
+  };
+
+  return {
+    start,
+    stop,
+    status,
+    readLogs
+  };
+}
+
+async function readLogFileTail(logFilePath, lines) {
+  try {
+    const content = await fs.promises.readFile(logFilePath, 'utf8');
+    const rows = content.split('\n');
+    return rows.slice(Math.max(0, rows.length - lines)).join('\n');
+  } catch (err) {
+    return '';
+  }
 }
 
 function createInsightsLogger(logPath) {

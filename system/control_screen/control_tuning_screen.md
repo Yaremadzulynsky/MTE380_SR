@@ -31,30 +31,34 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 
 # Ops Dashboard
 - Route: `/ops`
-- Purpose: web operations panel for robot stack lifecycle, service status, log viewing, and test actions.
-- Requires host execution with Docker CLI access (`docker`) and compose file access.
-- Enable with environment variable: `ENABLE_OPS_DASHBOARD=true`.
-- Compose file defaults to `../docker-compose.yaml` relative to `control_screen/server.js`.
-- Override compose path with `OPS_COMPOSE_FILE=/absolute/path/to/docker-compose.yaml`.
+- Purpose: host-side panel for **perception runner control**, perception logs, vision stream preview, and robot test actions.
+- This page does **not** manage Docker containers anymore; run your containers manually.
+- Perception runner control is enabled by default; disable with `ENABLE_PERCEPTION_RUNNER=false`.
+- Script defaults to `../run_perception_rpicam.sh` relative to `control_screen/server.js`.
+- Override script path with `PERCEPTION_RUN_SCRIPT=/absolute/path/to/run_perception_rpicam.sh`.
+- Override working directory with `PERCEPTION_RUN_CWD=/absolute/path/to/system`.
+- Perception logs are written to `../perception/logs/control-screen-perception.log` by default (override with `PERCEPTION_LOG_FILE`).
 
 ## Ops API endpoints
-- `GET /api/ops/config` returns feature flag and service groups.
-- `GET /api/ops/services` returns docker compose service states.
-- `POST /api/ops/stack/up` starts selected group/services.
-- `POST /api/ops/stack/stop` stops selected group/services.
-- `POST /api/ops/stack/down` removes selected services or full project.
-- `POST /api/ops/service/restart` restarts one service.
-- `GET /api/ops/logs?service=<name>&lines=<n>` fetches recent logs.
+- `GET /api/ops/config` returns runner feature flags and defaults.
+- `GET /api/ops/services` returns `perception-runner` status.
+- `GET /api/ops/perception/status` returns detailed runner status.
+- `POST /api/ops/stack/up` starts the perception runner.
+- `POST /api/ops/stack/stop` stops the perception runner.
+- `POST /api/ops/stack/down` alias for stopping the perception runner.
+- `POST /api/ops/service/restart` restarts the perception runner.
+- `GET /api/ops/logs?service=perception-runner&lines=<n>` fetches recent runner logs.
 - `POST /api/ops/tests/neutral-control` sends a neutral input.
 - `POST /api/ops/tests/sample-input` sends a sample movement input.
+- `POST /api/ops/tests/turn` runs encoder-validated turn tests (degrees in payload) and then auto-sends robot stop.
 - `POST /api/ops/robot/start` sends a state-machine start command (default state `searching`).
 - `POST /api/ops/robot/stop` sends explicit stop commands to both state-machine inputs and control-communication control endpoint.
 
 ## Security and guardrails
-- Services are restricted by an allowlist.
-- Commands are run with fixed compose args and sanitized service names.
-- Commands use timeout and max-output limits to avoid hanging or oversized responses.
-- On ARM (`process.arch === "arm"` or `process.arch === "arm64"`), the default ops groups automatically exclude `alloy` because compatible images may be unavailable.
-- To force-include `alloy` anyway, set `OPS_INCLUDE_ALLOY=true`.
-- `core` stack group includes only control-communication, state-machine, and control-screen.
+- Only the configured local runner script is started/stopped by `/ops`.
+- Container lifecycle is intentionally excluded from the UI/API in this dashboard mode.
 - Set `OPS_HOUGH_STREAM_URL` to prefill the Vision Stream URL in the Ops UI (default: `http://localhost:8090/stream.mjpg`).
+- **H.264 / WebRTC (recommended):** On the Pi run `docker compose --profile mediamtx up -d mediamtx`, then start the Hough tool with
+  `--h264-rtsp-url rtsp://127.0.0.1:8554/hough` (requires `ffmpeg` on the Pi). In Ops, choose viewer **Web / WebRTC (iframe)** and set the URL to
+  `http://<pi-tailscale-host>:8889/hough` (MediaMTX embeds the player).
+- **H.264 / UDP:** Use `--h264-udp <laptop-tailscale-ip>:5004` and view on the laptop with `ffplay -fflags nobuffer udp://0.0.0.0:5004?localaddr=<laptop-ip>` (or VLC).
