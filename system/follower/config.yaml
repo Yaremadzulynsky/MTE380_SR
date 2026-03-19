@@ -1,0 +1,50 @@
+camera:
+  source: usb       # 'usb' for webcam/V4L2, 'picamera2' for Pi Camera Module
+  device: 0         # V4L2 device index (ignored for picamera2)
+  width: 320
+  height: 240
+  fps: 30
+  flip: false       # flip 180° if camera is mounted upside-down
+
+vision:
+  # Bottom fraction of the frame to use as ROI (0.4 = bottom 40%)
+  # Closer to robot = more immediate feedback, less lookahead
+  roi_bottom_frac: 0.5
+
+  # Red HSV ranges — two needed because red wraps around hue=0/180
+  red_lo1: [0,   100, 80]
+  red_hi1: [10,  255, 255]
+  red_lo2: [165, 100, 80]
+  red_hi2: [179, 255, 255]
+
+  # Morphology to remove noise (kernel size in pixels)
+  morph_kernel: 5
+
+  # Minimum red blob area in pixels — ignore smaller blobs
+  min_area: 300
+
+control:
+  rate_hz: 30            # Control loop frequency
+
+  base_speed: 0.35       # Forward speed sent to both motors [0, 1]
+
+  # PID on lateral error (error = (centroid_x - frame_cx) / half_width, range [-1, 1])
+  # correction = kp*error + ki*integral + kd*derivative
+  # left  = base_speed + correction
+  # right = base_speed - correction
+  kp: 0.5
+  ki: 0.002
+  kd: 0.08
+  i_max: 0.3        # Integral windup clamp
+  out_max: 0.6      # Max correction magnitude (limits how hard it can steer)
+
+  # If line is not detected for this many seconds, send stop and reset PID
+  line_lost_timeout: 0.5
+
+serial:
+  port: /dev/ttyACM0
+  baud: 115200
+
+web:
+  host: 0.0.0.0
+  port: 8080

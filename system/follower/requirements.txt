@@ -1,0 +1,6 @@
+opencv-python-headless
+pyserial
+flask
+pyyaml
+# On Pi with Pi Camera Module, also install:
+# picamera2

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Line Follower Tuner</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #0d0d0d;
+    color: #ddd;
+    padding: 16px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  h1 { color: #5af; font-size: 17px; margin-bottom: 14px; letter-spacing: 1px; }
+
+  .card {
+    background: #141414;
+    border: 1px solid #252525;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .card h2 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #555;
+    margin-bottom: 10px;
+  }
+
+  /* ── Buttons / badges ── */
+  .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button {
+    padding: 7px 18px;
+    border: none; border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit; font-size: 12px; font-weight: bold;
+  }
+  .btn-start { background: #1a5c2a; color: #6f6; }
+  .btn-start:hover { background: #22703a; }
+  .btn-stop  { background: #5c1a1a; color: #f66; }
+  .btn-stop:hover  { background: #702222; }
+  .btn-apply { background: #1a3a5c; color: #6af; }
+  .btn-apply:hover { background: #224a72; }
+
+  .badge {
+    display: inline-block; padding: 3px 9px;
+    border-radius: 10px; font-size: 10px; font-weight: bold; letter-spacing: 1px;
+  }
+  .badge-running  { background: #1a5c2a; color: #6f6; }
+  .badge-stopped  { background: #222; color: #555; }
+  .badge-detected { background: #1a3a5c; color: #6af; }
+  .badge-lost     { background: #5c1a1a; color: #f66; }
+
+  /* ── Two-column layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 560px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* ── Camera feed ── */
+  #camera-feed {
+    width: 100%; display: block;
+    border-radius: 4px; background: #000;
+    image-rendering: pixelated;  /* keeps the small frame crisp when stretched */
+  }
+
+  /* ── Stat numbers ── */
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .stat { text-align: center; }
+  .stat-label { font-size: 10px; color: #555; text-transform: uppercase; margin-bottom: 1px; }
+  .stat-val   { font-size: 20px; color: #5af; font-weight: bold; }
+
+  /* ── Bars ── */
+  .bar-wrap {
+    height: 14px; background: #0e0e0e;
+    border: 1px solid #222; border-radius: 3px;
+    position: relative; overflow: hidden; margin-bottom: 6px;
+  }
+  .bar-center { position: absolute; left: 50%; top: 0; width: 1px; height: 100%; background: #2a2a2a; }
+  .bar-fill   { position: absolute; top: 0; height: 100%; transition: left .05s, width .05s; }
+
+  .motor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .motor-label { font-size: 10px; color: #555; text-transform: uppercase; margin-bottom: 3px; }
+
+  /* ── Error chart ── */
+  canvas { display: block; width: 100%; height: 80px; background: #090909; border-radius: 3px; }
+
+  /* ── Gains ── */
+  .gain-row {
+    display: grid; grid-template-columns: 90px 1fr 68px;
+    gap: 8px; align-items: center; margin-bottom: 7px;
+  }
+  .gain-label { font-size: 12px; color: #999; }
+  input[type=range] { width: 100%; accent-color: #5af; cursor: pointer; }
+  input[type=number] {
+    background: #0e0e0e; border: 1px solid #2a2a2a;
+    color: #ddd; padding: 3px 5px; border-radius: 3px;
+    width: 66px; font-family: inherit; font-size: 12px; text-align: right;
+  }
+  #apply-msg { font-size: 11px; color: #555; margin-left: 8px; }
+
+  /* ── Log stream ── */
+  #log-box {
+    background: #090909; border: 1px solid #1e1e1e; border-radius: 3px;
+    height: 160px; overflow-y: auto;
+    padding: 6px 8px; font-size: 11px; line-height: 1.5;
+    color: #888;
+  }
+  .log-info  { color: #888; }
+  .log-warn  { color: #fa0; }
+  .log-error { color: #f44; }
+</style>
+</head>
+<body>
+
+<h1>LINE FOLLOWER TUNER</h1>
+
+<!-- Control -->
+<div class="card">
+  <h2>Control</h2>
+  <div class="btn-row">
+    <button class="btn-start" onclick="setRunning(true)">▶ START</button>
+    <button class="btn-stop"  onclick="setRunning(false)">■ STOP</button>
+    <span id="badge-run"  class="badge badge-stopped">STOPPED</span>
+    <span id="badge-line" class="badge badge-lost">LINE LOST</span>
+  </div>
+</div>
+
+<!-- Camera + Status side by side -->
+<div class="two-col">
+
+  <!-- Camera feed -->
+  <div class="card">
+    <h2>Camera Feed</h2>
+    <img id="camera-feed" src="/video" alt="camera feed">
+  </div>
+
+  <!-- Live numbers + bars -->
+  <div class="card">
+    <h2>Live Status</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-label">Error</div><div class="stat-val" id="val-error">0.000</div></div>
+      <div class="stat"><div class="stat-label">Left</div><div class="stat-val"  id="val-left">0.000</div></div>
+      <div class="stat"><div class="stat-label">Right</div><div class="stat-val" id="val-right">0.000</div></div>
+    </div>
+
+    <div style="font-size:10px;color:#555;text-transform:uppercase;margin-bottom:3px;">Error &nbsp;← L | R →</div>
+    <div class="bar-wrap" style="margin-bottom:10px;">
+      <div class="bar-center"></div>
+      <div class="bar-fill" id="bar-error" style="background:#5af;"></div>
+    </div>
+
+    <div class="motor-row">
+      <div>
+        <div class="motor-label">Left</div>
+        <div class="bar-wrap"><div class="bar-center"></div><div class="bar-fill" id="bar-left"  style="background:#4c4;"></div></div>
+      </div>
+      <div>
+        <div class="motor-label">Right</div>
+        <div class="bar-wrap"><div class="bar-center"></div><div class="bar-fill" id="bar-right" style="background:#4c4;"></div></div>
+      </div>
+    </div>
+
+    <!-- Error history -->
+    <div style="margin-top:10px;">
+      <div style="font-size:10px;color:#555;text-transform:uppercase;margin-bottom:3px;">Error History</div>
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- PID Gains -->
+<div class="card">
+  <h2>PID Gains</h2>
+  <div id="gains-form"></div>
+  <button class="btn-apply" onclick="applyGains()">Apply Gains</button>
+  <span id="apply-msg"></span>
+</div>
+
+<!-- Log stream -->
+<div class="card">
+  <h2>Log Stream</h2>
+  <div id="log-box"></div>
+</div>
+
+<script>
+// ── Gains form ────────────────────────────────────────────────────────────────
+const GAINS = [
+  { key: 'kp',         label: 'Kp',         min: 0, max: 3,   step: 0.01,  dec: 3 },
+  { key: 'ki',         label: 'Ki',         min: 0, max: 0.5, step: 0.001, dec: 4 },
+  { key: 'kd',         label: 'Kd',         min: 0, max: 2,   step: 0.01,  dec: 3 },
+  { key: 'i_max',      label: 'I Max',      min: 0, max: 1,   step: 0.01,  dec: 3 },
+  { key: 'out_max',    label: 'Out Max',    min: 0, max: 1,   step: 0.01,  dec: 3 },
+  { key: 'base_speed', label: 'Base Speed', min: 0, max: 1,   step: 0.01,  dec: 3 },
+];
+let pending = {};
+
+const form = document.getElementById('gains-form');
+for (const g of GAINS) {
+  form.insertAdjacentHTML('beforeend', `
+    <div class="gain-row">
+      <span class="gain-label">${g.label}</span>
+      <input type="range"  id="sl-${g.key}" min="${g.min}" max="${g.max}" step="${g.step}" oninput="onSlider('${g.key}')">
+      <input type="number" id="nu-${g.key}" min="${g.min}" max="${g.max}" step="${g.step}" oninput="onNum('${g.key}')">
+    </div>`);
+}
+
+function onSlider(key) {
+  const g = GAINS.find(x => x.key === key);
+  const v = parseFloat(document.getElementById('sl-' + key).value);
+  document.getElementById('nu-' + key).value = v.toFixed(g.dec);
+  pending[key] = v;
+}
+function onNum(key) {
+  const g = GAINS.find(x => x.key === key);
+  let v = parseFloat(document.getElementById('nu-' + key).value);
+  if (isNaN(v)) return;
+  v = Math.max(g.min, Math.min(g.max, v));
+  document.getElementById('sl-' + key).value = v;
+  pending[key] = v;
+}
+function setFormValues(gains) {
+  pending = { ...gains };
+  for (const g of GAINS) {
+    const v = gains[g.key] ?? 0;
+    document.getElementById('sl-' + g.key).value = v;
+    document.getElementById('nu-' + g.key).value = v.toFixed(g.dec);
+  }
+}
+async function applyGains() {
+  const r = await fetch('/gains', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(pending),
+  });
+  const j = await r.json();
+  const msg = document.getElementById('apply-msg');
+  msg.textContent = j.ok ? '✓ applied' : '✗ error';
+  msg.style.color = j.ok ? '#4c4' : '#f66';
+  setTimeout(() => msg.textContent = '', 2000);
+}
+async function setRunning(v) {
+  await fetch('/run', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ running: v }),
+  });
+}
+fetch('/gains').then(r => r.json()).then(setFormValues);
+
+// ── Bars ──────────────────────────────────────────────────────────────────────
+function setBar(id, value, posCol, negCol) {
+  const el = document.getElementById(id);
+  const pct = Math.abs(value) * 50;
+  if (value >= 0) {
+    el.style.left = '50%'; el.style.width = pct + '%'; el.style.background = posCol;
+  } else {
+    el.style.left = (50 - pct) + '%'; el.style.width = pct + '%'; el.style.background = negCol;
+  }
+}
+
+// ── Error chart ───────────────────────────────────────────────────────────────
+const canvas = document.getElementById('chart');
+const W = 500, H = 80;
+canvas.width = W; canvas.height = H;
+const ctx = canvas.getContext('2d');
+const history = new Float32Array(W);
+let head = 0;
+
+function pushError(v) { history[head] = v; head = (head + 1) % W; }
+
+function drawChart() {
+  ctx.fillStyle = '#090909'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1;
+  for (const y of [0.25, 0.75]) {
+    ctx.beginPath(); ctx.moveTo(0, H * y); ctx.lineTo(W, H * y); ctx.stroke();
+  }
+  ctx.strokeStyle = '#2a2a2a';
+  ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+  ctx.strokeStyle = '#5af'; ctx.lineWidth = 1.5; ctx.beginPath();
+  for (let i = 0; i < W; i++) {
+    const x = i, y = H/2 - history[(head + i) % W] * (H/2 - 3);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  requestAnimationFrame(drawChart);
+}
+requestAnimationFrame(drawChart);
+
+// ── SSE status ────────────────────────────────────────────────────────────────
+const es = new EventSource('/stream');
+es.onmessage = e => {
+  const d = JSON.parse(e.data);
+
+  document.getElementById('val-error').textContent = (d.error >= 0 ? '+' : '') + d.error.toFixed(3);
+  document.getElementById('val-left').textContent  = d.left.toFixed(3);
+  document.getElementById('val-right').textContent = d.right.toFixed(3);
+
+  const br = document.getElementById('badge-run');
+  br.className = 'badge ' + (d.running ? 'badge-running' : 'badge-stopped');
+  br.textContent = d.running ? 'RUNNING' : 'STOPPED';
+
+  const bl = document.getElementById('badge-line');
+  bl.className = 'badge ' + (d.detected ? 'badge-detected' : 'badge-lost');
+  bl.textContent = d.detected ? 'LINE OK' : 'LINE LOST';
+
+  setBar('bar-error', d.error, '#f84', '#5af');
+  setBar('bar-left',  d.left,  '#4c4', '#c44');
+  setBar('bar-right', d.right, '#4c4', '#c44');
+  pushError(d.error);
+};
+
+// ── SSE log stream ────────────────────────────────────────────────────────────
+const logBox = document.getElementById('log-box');
+const MAX_LOG_LINES = 100;
+
+const logEs = new EventSource('/logs');
+logEs.onmessage = e => {
+  const line = JSON.parse(e.data);
+  const div = document.createElement('div');
+  const upper = line.toUpperCase();
+  div.className = upper.includes('ERROR') ? 'log-error'
+                : upper.includes('WARN')  ? 'log-warn'
+                : 'log-info';
+  div.textContent = line;
+  logBox.appendChild(div);
+  // Trim old lines
+  while (logBox.children.length > MAX_LOG_LINES) logBox.removeChild(logBox.firstChild);
+  logBox.scrollTop = logBox.scrollHeight;
+};
+</script>
+</body>
+</html>
