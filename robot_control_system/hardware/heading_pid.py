@@ -2,12 +2,18 @@
 """Heading PID — wraps the generic PID with angle wrapping and deadbands."""
 
 import math
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+import config as _config
 
 from .pid import PID
 
-HEADING_KP, HEADING_KI, HEADING_KD = 0.45, 0, 0 #0.5, 0.3 #0.5, 0.1
-MOTOR_DEADBAND   = 0.015  # minimum output to actually move the motors
-HEADING_DEADBAND = 0.005  # heading error (rad) below which correction stops (~0.3°)
+_c = _config.get()['heading_pid']
+HEADING_KP       = _c['kp']
+HEADING_KI       = _c['ki']
+HEADING_KD       = _c['kd']
+MOTOR_DEADBAND   = _c['motor_deadband']
+HEADING_DEADBAND = _c['heading_deadband']
 
 
 def _wrap(angle: float) -> float:

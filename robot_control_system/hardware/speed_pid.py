@@ -1,13 +1,17 @@
 """Speed PID — wraps the generic PID for forward/backward velocity control."""
 
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+import config as _config
+
 from .pid import PID
 
-SPEED_KP = 1
-SPEED_KI = 0.0
-SPEED_KD = 0.0
-
-MOTOR_DEADBAND = 0.015   # minimum output to actually move the motors
-SPEED_DEADBAND = 0.02    # speed error (m/s) below which correction stops
+_c = _config.get()['speed_pid']
+SPEED_KP       = _c['kp']
+SPEED_KI       = _c['ki']
+SPEED_KD       = _c['kd']
+MOTOR_DEADBAND = _c['motor_deadband']
+SPEED_DEADBAND = _c['speed_deadband']
 
 
 class SpeedPID:

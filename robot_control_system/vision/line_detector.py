@@ -38,6 +38,9 @@ Usage
 import logging
 import math
 import subprocess
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+import config as _config
 import threading
 import time
 from dataclasses import dataclass, field
@@ -137,17 +140,16 @@ class _RpicamVidCamera:
 
 log = logging.getLogger(__name__)
 
-# ── Red HSV thresholds ────────────────────────────────────────────────────────
-# Red wraps around the 0/180 boundary in OpenCV HSV, so two ranges are needed.
-_RED_LOWER1 = np.array([0,   100,  60], dtype=np.uint8)
-_RED_UPPER1 = np.array([10,  255, 255], dtype=np.uint8)
-_RED_LOWER2 = np.array([170, 100,  60], dtype=np.uint8)
-_RED_UPPER2 = np.array([180, 255, 255], dtype=np.uint8)
-
-# ── Config ────────────────────────────────────────────────────────────────────
-FRAME_WIDTH      = 640
-FRAME_HEIGHT     = 480
-MIN_MASK_PIXELS  = 200   # ignore detections with fewer red pixels than this
+# ── Config (loaded from config.yaml) ─────────────────────────────────────────
+_vc = _config.get()['vision']
+_rc = _vc['red_hsv']
+_RED_LOWER1 = np.array(_rc['lower1'], dtype=np.uint8)
+_RED_UPPER1 = np.array(_rc['upper1'], dtype=np.uint8)
+_RED_LOWER2 = np.array(_rc['lower2'], dtype=np.uint8)
+_RED_UPPER2 = np.array(_rc['upper2'], dtype=np.uint8)
+FRAME_WIDTH     = _vc['frame_width']
+FRAME_HEIGHT    = _vc['frame_height']
+MIN_MASK_PIXELS = _vc['min_mask_pixels']
 
 
 @dataclass

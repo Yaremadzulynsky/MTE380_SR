@@ -37,12 +37,15 @@ import cv2
 import numpy as np
 from flask import Flask, Response, render_template, request, jsonify
 
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+import config as _config
+
 log = logging.getLogger(__name__)
 
-# JPEG quality for the video stream (0-100). Lower = less bandwidth.
-_JPEG_QUALITY = 70
-# Target frame rate for the MJPEG stream.
-_STREAM_FPS   = 20
+_wc = _config.get()['web_server']
+_JPEG_QUALITY = _wc['jpeg_quality']
+_STREAM_FPS   = _wc['stream_fps']
 
 # ── No-signal placeholder ──────────────────────────────────────────────────────
 

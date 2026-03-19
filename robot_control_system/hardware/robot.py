@@ -6,21 +6,28 @@ import time
 from .bridge      import SerialBridge
 from .heading_pid import HeadingPID, MOTOR_DEADBAND
 from .speed_pid   import SpeedPID
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+import config as _config
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config (loaded from config.yaml) ─────────────────────────────────────────
 
-RATE_HZ   = 20.0
-MAX_SPEED     = 1
-MAX_ROT_SPEED = 1
+def _load_cfg():
+    global RATE_HZ, MAX_SPEED, MAX_ROT_SPEED, HEARTBEAT_TIMEOUT
+    global TICKS_PER_REV, WHEEL_DIAMETER_M, WHEEL_BASE_M, WHEEL_CIRC_M
+    cfg = _config.get()
+    r = cfg['robot']
+    w = cfg['wheel']
+    RATE_HZ           = r['rate_hz']
+    MAX_SPEED         = r['max_speed']
+    MAX_ROT_SPEED     = r['max_rot_speed']
+    HEARTBEAT_TIMEOUT = r['heartbeat_timeout']
+    TICKS_PER_REV     = w['ticks_per_rev']
+    WHEEL_DIAMETER_M  = w['diameter_m']
+    WHEEL_BASE_M      = w['base_m']
+    WHEEL_CIRC_M      = math.pi * WHEEL_DIAMETER_M
 
-HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
-
-
-# ── Wheel geometry (update these for your robot) ──────────────────────────────
-TICKS_PER_REV    = 680    # encoder ticks per full wheel revolution
-WHEEL_DIAMETER_M = 0.08  # wheel diameter in metres
-WHEEL_BASE_M     = 0.188   # centre-to-centre distance between wheels in metres
-WHEEL_CIRC_M     = math.pi * WHEEL_DIAMETER_M
+_load_cfg()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

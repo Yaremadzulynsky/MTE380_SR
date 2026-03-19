@@ -1,5 +1,6 @@
 pyserial
 flask
+pyyaml
 numpy
 # opencv-python-headless: install via apt instead — no armv7l wheel on piwheels
 #   sudo apt install -y python3-opencv

@@ -22,6 +22,9 @@ import math
 from typing import TYPE_CHECKING, Optional
 
 from state_machine.state import State
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent.parent))
+import config as _config
 
 if TYPE_CHECKING:
     from hardware.robot       import Robot
@@ -29,18 +32,11 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# ── Tuning ────────────────────────────────────────────────────────────────────
-
-# Forward speed while following the line (fraction of max, 0–1).
-FOLLOW_SPEED: float = 0.35
-
-# Lateral error below which no correction is applied (pixels).
-# Prevents hunting/oscillation when the robot is close to the line.
-DEADZONE_PX: float = 20.0
-
-# Lateral error at which the correction weight reaches 1.0 (full blend).
-# Errors beyond this are clamped to full correction.
-CORRECTION_SCALE_PX: float = 100.0
+# ── Tuning (from config.yaml) ─────────────────────────────────────────────────
+_lf = _config.get()['line_follow']
+FOLLOW_SPEED:        float = _lf['follow_speed']
+DEADZONE_PX:         float = _lf['deadzone_px']
+CORRECTION_SCALE_PX: float = _lf['correction_scale_px']
 
 
 class LineFollow(State):

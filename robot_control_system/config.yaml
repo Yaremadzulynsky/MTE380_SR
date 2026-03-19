@@ -1,0 +1,43 @@
+robot:
+  rate_hz: 20.0
+  max_speed: 1.0
+  max_rot_speed: 1.0
+  heartbeat_timeout: 3.0
+
+wheel:
+  ticks_per_rev: 680
+  diameter_m: 0.08
+  base_m: 0.188
+
+heading_pid:
+  kp: 0.45
+  ki: 0.0
+  kd: 0.0
+  motor_deadband: 0.015
+  heading_deadband: 0.005  # radians (~0.3°)
+
+speed_pid:
+  kp: 1.0
+  ki: 0.0
+  kd: 0.0
+  motor_deadband: 0.015
+  speed_deadband: 0.02     # m/s
+
+vision:
+  frame_width: 640
+  frame_height: 480
+  min_mask_pixels: 200
+  red_hsv:
+    lower1: [0,   100,  60]
+    upper1: [10,  255, 255]
+    lower2: [170, 100,  60]
+    upper2: [180, 255, 255]
+
+line_follow:
+  follow_speed: 0.35
+  deadzone_px: 20.0
+  correction_scale_px: 100.0
+
+web_server:
+  jpeg_quality: 70
+  stream_fps: 20
