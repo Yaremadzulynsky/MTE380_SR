@@ -220,6 +220,10 @@ def cmd_wheel(robot: Robot, args):
 
 def cmd_motors(robot: Robot, args):
     robot.set_motors(args.left, args.right)
+    try:
+        input('  Running — press Enter or Ctrl-C to stop\n')
+    except KeyboardInterrupt:
+        pass
 
 
 def cmd_servo(robot: Robot, args):
@@ -228,10 +232,18 @@ def cmd_servo(robot: Robot, args):
 
 def cmd_direction(robot: Robot, args):
     robot.add_direction(args.x, args.y)
+    try:
+        input('  Holding direction — press Enter or Ctrl-C to stop\n')
+    except KeyboardInterrupt:
+        pass
 
 
 def cmd_speed(robot: Robot, args):
     robot.set_speed(args.value)
+    try:
+        input('  Running — press Enter or Ctrl-C to stop\n')
+    except KeyboardInterrupt:
+        pass
 
 
 def cmd_rotation(robot: Robot, args):
