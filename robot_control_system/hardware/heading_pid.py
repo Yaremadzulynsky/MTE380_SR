@@ -5,7 +5,7 @@ import math
 
 from .pid import PID
 
-HEADING_KP, HEADING_KI, HEADING_KD = 0.4, 0, 0 #0.5, 0.3 #0.5, 0.1
+HEADING_KP, HEADING_KI, HEADING_KD = 0.45, 0, 0 #0.5, 0.3 #0.5, 0.1
 MOTOR_DEADBAND   = 0.015  # minimum output to actually move the motors
 HEADING_DEADBAND = 0.005  # heading error (rad) below which correction stops (~0.3°)
 
