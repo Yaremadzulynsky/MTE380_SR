@@ -215,6 +215,16 @@ input[type='number'] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+input[type='text'] {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e4d7c5;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fffdf8;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
 select {
   padding: 12px 14px;
   border-radius: 12px;
@@ -227,6 +237,12 @@ select {
 }
 
 input[type='number']:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px rgba(31, 156, 139, 0.2);
+}
+
+input[type='text']:focus {
   outline: none;
   border-color: var(--accent-2);
   box-shadow: 0 0 0 3px rgba(31, 156, 139, 0.2);
@@ -464,6 +480,17 @@ button.ghost {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.ops-stream {
+  margin-top: 14px;
+  width: 100%;
+  min-height: 240px;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid #2b3139;
+  background: #0f141a;
 }
 
 .bg-shape {

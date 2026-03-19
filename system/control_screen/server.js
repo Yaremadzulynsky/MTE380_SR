@@ -41,6 +41,7 @@ const OPS_MAX_OUTPUT_BYTES = Number.parseInt(process.env.OPS_MAX_OUTPUT_BYTES ||
 const OPS_LOG_TAIL_DEFAULT = Number.parseInt(process.env.OPS_LOG_TAIL_DEFAULT || '150', 10);
 const OPS_LOG_TAIL_MAX = Number.parseInt(process.env.OPS_LOG_TAIL_MAX || '2000', 10);
 const OPS_ROBOT_START_STATE = (process.env.OPS_ROBOT_START_STATE || 'searching').trim();
+const OPS_HOUGH_STREAM_URL = process.env.OPS_HOUGH_STREAM_URL || 'http://localhost:8090/stream.mjpg';
 const OPS_INCLUDE_ALLOY = String(process.env.OPS_INCLUDE_ALLOY || '').toLowerCase() === 'true';
 const OPS_IS_ARM = process.arch === 'arm' || process.arch === 'arm64';
 const OPS_SUPPORTS_ALLOY = !OPS_IS_ARM || OPS_INCLUDE_ALLOY;
@@ -85,7 +86,7 @@ const OPS_SERVICE_ALLOWLIST = new Set([
 ]);
 
 const OPS_SERVICE_GROUPS = {
-  core: ['control-communication', 'state-machine', 'control-screen', 'robot-mock'],
+  core: ['control-communication', 'state-machine', 'control-screen'],
   observability: [
     'metrics-aggregator',
     'prometheus',
@@ -376,7 +377,8 @@ app.get('/api/ops/config', (req, res) => {
     composeFile: OPS_COMPOSE_FILE,
     groups: OPS_SERVICE_GROUPS,
     supportsAlloy: OPS_SUPPORTS_ALLOY,
-    architecture: process.arch
+    architecture: process.arch,
+    houghStreamUrl: OPS_HOUGH_STREAM_URL
   });
 });
 

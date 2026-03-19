@@ -7,11 +7,40 @@
 set -euo pipefail
 cd "$(dirname "$0")/perception"
 
-if [ -d ".venv" ]; then
+activate_local_venv_if_present() {
+  if [ -d ".venv" ]; then
+    # shellcheck source=/dev/null
+    source .venv/bin/activate
+  elif [ -d "venv" ]; then
+    # shellcheck source=/dev/null
+    source venv/bin/activate
+  fi
+}
+
+ensure_python_deps() {
+  if python3 -c "import yaml, cv2, numpy, serial" >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "[run_perception_rpicam] missing python dependencies; bootstrapping local venv"
+  if [ ! -d ".venv" ]; then
+    # Reuse system OpenCV/Numpy on Pi to avoid slow wheel builds.
+    python3 -m venv --system-site-packages .venv
+  fi
+
+  # shellcheck source=/dev/null
   source .venv/bin/activate
-elif [ -d "venv" ]; then
-  source venv/bin/activate
-fi
+  python3 -m pip install --upgrade pip >/dev/null
+  python3 -m pip install pyyaml pyserial pytest >/dev/null
+
+  if ! python3 -c "import yaml, cv2, numpy, serial" >/dev/null 2>&1; then
+    echo "[run_perception_rpicam] error: dependencies still missing after install" >&2
+    exit 1
+  fi
+}
+
+activate_local_venv_if_present
+ensure_python_deps
 
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 

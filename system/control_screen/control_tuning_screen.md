@@ -47,6 +47,8 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - `GET /api/ops/logs?service=<name>&lines=<n>` fetches recent logs.
 - `POST /api/ops/tests/neutral-control` sends a neutral input.
 - `POST /api/ops/tests/sample-input` sends a sample movement input.
+- `POST /api/ops/robot/start` sends a state-machine start command (default state `searching`).
+- `POST /api/ops/robot/stop` sends explicit stop commands to both state-machine inputs and control-communication control endpoint.
 
 ## Security and guardrails
 - Services are restricted by an allowlist.
@@ -54,3 +56,5 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - Commands use timeout and max-output limits to avoid hanging or oversized responses.
 - On ARM (`process.arch === "arm"` or `process.arch === "arm64"`), the default ops groups automatically exclude `alloy` because compatible images may be unavailable.
 - To force-include `alloy` anyway, set `OPS_INCLUDE_ALLOY=true`.
+- `core` stack group excludes `robot-mock`.
+- Set `OPS_HOUGH_STREAM_URL` to prefill the Vision Stream URL in the Ops UI (default: `http://localhost:8090/stream.mjpg`).

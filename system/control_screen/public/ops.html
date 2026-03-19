@@ -47,15 +47,31 @@
       </section>
 
       <section class="panel" data-animate>
+        <h2>Vision Stream</h2>
+        <p class="hint">
+          Live MJPEG feed from Pi Hough overlay output.
+        </p>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Stream URL</span>
+            <input id="streamUrlInput" type="text" value="" />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" id="openStreamBtn">Open Stream</button>
+          <button type="button" class="ghost" id="reloadStreamBtn">Reload Stream</button>
+        </div>
+        <img id="visionStreamImg" class="ops-stream" alt="Hough overlay stream" />
+      </section>
+
+      <section class="panel" data-animate>
         <h2>Stack Controls</h2>
         <p class="hint">
           These actions run docker compose commands on the host. Keep this page restricted to trusted users.
         </p>
         <div class="ops-actions-grid">
           <button type="button" data-action="start-core">Start Core</button>
-          <button type="button" data-action="start-full">Start Full</button>
           <button type="button" class="ghost" data-action="stop-core">Stop Core</button>
-          <button type="button" class="ghost" data-action="down-full">Down Full</button>
         </div>
         <div class="feedback" id="stackFeedback" role="status" aria-live="polite">Ready.</div>
       </section>

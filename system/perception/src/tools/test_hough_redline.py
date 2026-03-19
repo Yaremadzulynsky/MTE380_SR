@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,74 @@ from src.config import AppConfig, load_config
 from src.pipeline import PipelineState, run_pipeline
 from src.vision.camera import OpenCVCamera
 from src.vision.masks import crop_roi
+
+
+class _FrameStore:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._cond = threading.Condition(self._lock)
+        self._frame_jpeg: bytes | None = None
+
+    def update_bgr(self, frame_bgr: Any, *, jpeg_quality: int = 80) -> None:
+        ok, encoded = cv2.imencode(
+            ".jpg",
+            frame_bgr,
+            [int(cv2.IMWRITE_JPEG_QUALITY), int(max(1, min(100, jpeg_quality)))],
+        )
+        if not ok:
+            return
+        payload = encoded.tobytes()
+        with self._cond:
+            self._frame_jpeg = payload
+            self._cond.notify_all()
+
+    def wait_latest(self, timeout_s: float = 1.0) -> bytes | None:
+        with self._cond:
+            if self._frame_jpeg is None:
+                self._cond.wait(timeout=timeout_s)
+            return self._frame_jpeg
+
+
+class _MjpegHandler(BaseHTTPRequestHandler):
+    server_version = "HoughMjpeg/1.0"
+
+    def do_GET(self) -> None:
+        if self.path in ("/", "/index.html"):
+            body = b"Hough stream available at /stream.mjpg\n"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path != "/stream.mjpg":
+            self.send_error(404, "Not found")
+            return
+
+        frame_store: _FrameStore = self.server.frame_store  # type: ignore[attr-defined]
+        boundary = b"--frame\r\n"
+        self.send_response(200)
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Connection", "close")
+        self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+        self.end_headers()
+
+        try:
+            while True:
+                frame = frame_store.wait_latest(timeout_s=2.0)
+                if frame is None:
+                    continue
+                self.wfile.write(boundary)
+                self.wfile.write(b"Content-Type: image/jpeg\r\n")
+                self.wfile.write(f"Content-Length: {len(frame)}\r\n\r\n".encode("ascii"))
+                self.wfile.write(frame)
+                self.wfile.write(b"\r\n")
+        except (BrokenPipeError, ConnectionResetError):
+            return
+
+    def log_message(self, fmt: str, *args: Any) -> None:
+        _ = (fmt, args)
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -252,6 +322,22 @@ def main() -> None:
         action="store_true",
         help="Start overlay window in fullscreen mode",
     )
+    parser.add_argument(
+        "--no-display",
+        action="store_true",
+        help="Disable OpenCV windows (useful for headless stream mode).",
+    )
+    parser.add_argument(
+        "--mjpeg-port",
+        type=int,
+        default=0,
+        help="If >0, publish overlay stream at /stream.mjpg on this port.",
+    )
+    parser.add_argument(
+        "--mjpeg-host",
+        default="0.0.0.0",
+        help="Bind host for MJPEG stream server.",
+    )
     args = parser.parse_args()
 
     cv2.setUseOptimized(True)
@@ -275,16 +361,29 @@ def main() -> None:
     window_scale = max(0.5, float(args.window_scale))
     fullscreen = bool(args.fullscreen)
 
-    cv2.namedWindow("hough_test_overlay", cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty(
-        "hough_test_overlay",
-        cv2.WND_PROP_FULLSCREEN,
-        cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL,
-    )
-    show_masks = not args.hide_masks
-    if show_masks:
-        cv2.namedWindow("hough_test_red_mask", cv2.WINDOW_NORMAL)
-        cv2.namedWindow("hough_test_edges", cv2.WINDOW_NORMAL)
+    display_enabled = not bool(args.no_display)
+    show_masks = display_enabled and not args.hide_masks
+    if display_enabled:
+        cv2.namedWindow("hough_test_overlay", cv2.WINDOW_NORMAL)
+        cv2.setWindowProperty(
+            "hough_test_overlay",
+            cv2.WND_PROP_FULLSCREEN,
+            cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL,
+        )
+        if show_masks:
+            cv2.namedWindow("hough_test_red_mask", cv2.WINDOW_NORMAL)
+            cv2.namedWindow("hough_test_edges", cv2.WINDOW_NORMAL)
+
+    frame_store: _FrameStore | None = None
+    mjpeg_server: ThreadingHTTPServer | None = None
+    mjpeg_thread: threading.Thread | None = None
+    if int(args.mjpeg_port) > 0:
+        frame_store = _FrameStore()
+        mjpeg_server = ThreadingHTTPServer((str(args.mjpeg_host), int(args.mjpeg_port)), _MjpegHandler)
+        setattr(mjpeg_server, "frame_store", frame_store)
+        mjpeg_thread = threading.Thread(target=mjpeg_server.serve_forever, daemon=True)
+        mjpeg_thread.start()
+        print(f"[hough_test] stream_url=http://{args.mjpeg_host}:{args.mjpeg_port}/stream.mjpg")
 
     csv_file = None
     csv_writer = None
@@ -402,7 +501,10 @@ def main() -> None:
                 )
             else:
                 overlay_show = overlay
-            cv2.imshow("hough_test_overlay", overlay_show)
+            if frame_store is not None:
+                frame_store.update_bgr(overlay_show)
+            if display_enabled:
+                cv2.imshow("hough_test_overlay", overlay_show)
 
             if csv_writer is not None:
                 csv_writer.writerow(
@@ -418,21 +520,28 @@ def main() -> None:
                     ]
                 )
 
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
-            if key == ord("f"):
-                fullscreen = not fullscreen
-                cv2.setWindowProperty(
-                    "hough_test_overlay",
-                    cv2.WND_PROP_FULLSCREEN,
-                    cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL,
-                )
+            if display_enabled:
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+                if key == ord("f"):
+                    fullscreen = not fullscreen
+                    cv2.setWindowProperty(
+                        "hough_test_overlay",
+                        cv2.WND_PROP_FULLSCREEN,
+                        cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL,
+                    )
     finally:
         cam.release()
         if csv_file is not None:
             csv_file.close()
-        cv2.destroyAllWindows()
+        if mjpeg_server is not None:
+            mjpeg_server.shutdown()
+            mjpeg_server.server_close()
+            if mjpeg_thread is not None:
+                mjpeg_thread.join(timeout=1.0)
+        if display_enabled:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

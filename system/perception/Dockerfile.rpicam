@@ -23,4 +23,4 @@ COPY configs configs
 COPY src src
 
 ENV PYTHONUNBUFFERED=1
-CMD ["python3", "-m", "src.main", "--mode", "production", "--config", "configs/docker-rpicam.yaml", "--source", "rpicam", "--fps", "30", "--comms", "http"]
+CMD ["python3", "-m", "src.main", "--mode", "production", "--config", "configs/docker-rpicam.yaml", "--source", "rpicam", "--fps", "60", "--comms", "http"]

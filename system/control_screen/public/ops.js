@@ -12,6 +12,10 @@ const elements = {
   robotFeedback: document.getElementById('robotFeedback'),
   startRobotBtn: document.getElementById('startRobotBtn'),
   stopRobotBtn: document.getElementById('stopRobotBtn'),
+  streamUrlInput: document.getElementById('streamUrlInput'),
+  openStreamBtn: document.getElementById('openStreamBtn'),
+  reloadStreamBtn: document.getElementById('reloadStreamBtn'),
+  visionStreamImg: document.getElementById('visionStreamImg'),
   stackFeedback: document.getElementById('stackFeedback'),
   servicesGrid: document.getElementById('servicesGrid'),
   refreshServicesBtn: document.getElementById('refreshServicesBtn'),
@@ -42,6 +46,8 @@ function bindEvents() {
   });
   elements.startRobotBtn?.addEventListener('click', startRobot);
   elements.stopRobotBtn?.addEventListener('click', stopRobot);
+  elements.openStreamBtn?.addEventListener('click', openVisionStream);
+  elements.reloadStreamBtn?.addEventListener('click', reloadVisionStream);
   elements.refreshServicesBtn?.addEventListener('click', refreshServices);
   elements.refreshLogsBtn?.addEventListener('click', refreshLogs);
   elements.toggleTailBtn?.addEventListener('click', toggleTail);
@@ -86,6 +92,10 @@ async function loadOpsConfig() {
   elements.opsEnabled.classList.add(state.enabled ? 'online' : 'offline');
   const alloySuffix = result.data.supportsAlloy ? 'alloy enabled' : 'alloy disabled';
   elements.opsDetail.textContent = `Compose: ${result.data.composeFile || 'not set'} (${alloySuffix})`;
+  if (elements.streamUrlInput) {
+    elements.streamUrlInput.value = result.data.houghStreamUrl || 'http://localhost:8090/stream.mjpg';
+    openVisionStream();
+  }
   setControlsEnabled(state.enabled);
   if (!state.enabled) {
     setFeedback(
@@ -178,9 +188,7 @@ function populateServiceSelect(services) {
 async function runStackAction(action) {
   const endpointMap = {
     'start-core': { url: '/api/ops/stack/up', body: { group: 'core' } },
-    'start-full': { url: '/api/ops/stack/up', body: { group: 'full' } },
-    'stop-core': { url: '/api/ops/stack/stop', body: { group: 'core' } },
-    'down-full': { url: '/api/ops/stack/down', body: { group: 'full' } }
+    'stop-core': { url: '/api/ops/stack/stop', body: { group: 'core' } }
   };
   const target = endpointMap[action];
   if (!target) {
@@ -200,6 +208,23 @@ async function runStackAction(action) {
   }
   setFeedback(elements.stackFeedback, result.data?.message || 'Command complete.');
   await refreshServices();
+}
+
+function openVisionStream() {
+  const url = (elements.streamUrlInput?.value || '').trim();
+  if (!url || !elements.visionStreamImg) {
+    return;
+  }
+  elements.visionStreamImg.src = url;
+}
+
+function reloadVisionStream() {
+  const url = (elements.streamUrlInput?.value || '').trim();
+  if (!url || !elements.visionStreamImg) {
+    return;
+  }
+  const separator = url.includes('?') ? '&' : '?';
+  elements.visionStreamImg.src = `${url}${separator}t=${Date.now()}`;
 }
 
 async function restartService(service) {
