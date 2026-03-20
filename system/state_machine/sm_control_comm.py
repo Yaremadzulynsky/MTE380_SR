@@ -13,6 +13,7 @@ class ControlCommClient:
         state_path: str = "/state",
         control_path: str = "/control",
         line_follow_pid_path: str = "/line-follow-pid",
+        metrics_state_path: str = "/metrics/state",
         timeout: float = 0.5,
     ) -> None:
         self._state_url = urljoin(base_url.rstrip("/") + "/", state_path.lstrip("/"))
@@ -21,6 +22,9 @@ class ControlCommClient:
         )
         self._line_follow_pid_url = urljoin(
             base_url.rstrip("/") + "/", line_follow_pid_path.lstrip("/")
+        )
+        self._metrics_state_url = urljoin(
+            base_url.rstrip("/") + "/", metrics_state_path.lstrip("/")
         )
         self._timeout = timeout
 
@@ -95,13 +99,17 @@ class ControlCommClient:
         return result
 
     def send_state(self, state: State) -> dict[str, Any]:
-        _ = state
-        return {
-            "ok": True,
-            "status_code": None,
-            "url": self._state_url,
-            "state_transport": "disabled",
-        }
+        return self._post(self._metrics_state_url, {"state": state.value})
+
+    def send_state_transition(self, *, state: str, source_state: str, transition_label: str) -> dict[str, Any]:
+        return self._post(
+            self._metrics_state_url,
+            {
+                "state": state,
+                "source_state": source_state,
+                "transition_label": transition_label,
+            },
+        )
 
     def send_control(
         self,

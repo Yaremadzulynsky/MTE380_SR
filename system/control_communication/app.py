@@ -12,6 +12,7 @@ from typing import Any, Optional
 from urllib import request as urlrequest
 
 from flask import Flask, jsonify, request
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -53,16 +54,6 @@ SIM_CONTROL_URL = (
     os.getenv("SIM_CONTROL_URL")
     or ""
 ).strip()
-PROMETHEUS_EXPORTER_BASE_URL = (
-    os.getenv("PROMETHEUS_EXPORTER_BASE_URL")
-    or "http://localhost:9101"
-).strip().rstrip("/")
-PROMETHEUS_EXPORTER_ENABLED = parse_env_bool("PROMETHEUS_EXPORTER_ENABLED", "1")
-PROMETHEUS_EXPORTER_TIMEOUT_S = float(os.getenv("PROMETHEUS_EXPORTER_TIMEOUT_S", "0.2"))
-PROMETHEUS_EXPORTER_FEEDBACK_INTERVAL_S = max(
-    float(os.getenv("PROMETHEUS_EXPORTER_FEEDBACK_INTERVAL_S", "0.2")),
-    0.05,
-)
 PID_AUDIT_LOG_PATH = (
     os.getenv("PID_AUDIT_LOG_PATH")
     or "/var/log/control-communication/pid-changes.txt"
@@ -75,6 +66,55 @@ LINE_FOLLOW_TUNING_PATH = (
 app = Flask(__name__)
 
 last_sent: Optional[dict[str, Any]] = None
+
+COMMAND_X = Gauge("robot_command_x", "Latest commanded x axis.")
+COMMAND_Y = Gauge("robot_command_y", "Latest commanded y axis.")
+COMMAND_SPEED = Gauge("robot_command_speed", "Latest commanded speed.")
+COMMAND_SERVO_DEG = Gauge("robot_command_servo_deg", "Latest commanded servo angle in degrees.")
+COMMAND_TARGET_HEADING_RAD = Gauge("robot_command_target_heading_rad", "Latest commanded target heading in radians.")
+COMMAND_LEFT = Gauge("robot_command_left", "Latest commanded left motor value.")
+COMMAND_RIGHT = Gauge("robot_command_right", "Latest commanded right motor value.")
+COMMAND_UPDATED_AT = Gauge("robot_command_updated_at_unixtime", "Unix time of the latest command update.")
+COMMANDS_TOTAL = Counter("robot_commands_total", "Total number of accepted command updates.")
+
+FEEDBACK_HEADING_RAD = Gauge("robot_feedback_heading_rad", "Latest measured heading in radians.")
+FEEDBACK_LINEAR_SPEED_MPS = Gauge("robot_feedback_linear_speed_mps", "Latest measured forward speed in metres per second.")
+FEEDBACK_LEFT_ENCODER_TICKS = Gauge("robot_feedback_left_encoder_ticks", "Latest left encoder tick count.")
+FEEDBACK_RIGHT_ENCODER_TICKS = Gauge("robot_feedback_right_encoder_ticks", "Latest right encoder tick count.")
+FEEDBACK_UPDATED_AT = Gauge("robot_feedback_updated_at_unixtime", "Unix time of the latest feedback update.")
+FEEDBACK_UPDATES_TOTAL = Counter("robot_feedback_updates_total", "Total number of accepted feedback updates.")
+
+CURRENT_STATE = Gauge(
+    "robot_current_state",
+    "Current state machine state. Exactly one state label should be 1.",
+    ["state"],
+)
+STATE_UPDATED_AT = Gauge("robot_state_updated_at_unixtime", "Unix time of the latest state update.")
+STATE_UPDATES_TOTAL = Counter("robot_state_updates_total", "Total number of accepted state updates.")
+STATE_TRANSITIONS_TOTAL = Counter(
+    "robot_state_transitions_total",
+    "Total number of reported state transitions.",
+    ["source_state", "target_state", "transition_label"],
+)
+
+KNOWN_STATES = {
+    "searching_demo",
+    "pickup",
+    "remote_control",
+    "searching",
+    "find_target",
+    "align_for_retrieve",
+    "retrieving",
+    "retrieved",
+    "transporting",
+    "align_for_place",
+    "placing",
+    "place_success",
+    "return_home",
+    "error_retrieve",
+    "error_place",
+    "end",
+}
 
 
 def _clampf(value: float, lo: float, hi: float) -> float:
@@ -212,24 +252,6 @@ def log_line(event: str, fields: dict[str, Any]) -> None:
     print(" ".join(parts), flush=True)
 
 
-def _post_to_prometheus_exporter(path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if not PROMETHEUS_EXPORTER_ENABLED:
-        return {"ok": False, "disabled": True}
-    body = json.dumps(payload).encode("utf-8")
-    req = urlrequest.Request(
-        f"{PROMETHEUS_EXPORTER_BASE_URL}{path}",
-        data=body,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        method="POST",
-    )
-    try:
-        with urlrequest.urlopen(req, timeout=PROMETHEUS_EXPORTER_TIMEOUT_S) as response:
-            return {"ok": 200 <= response.status < 300, "status_code": int(response.status)}
-    except Exception as exc:
-        log_line("prometheus_exporter_forward_fail", {"path": path, "error": repr(exc)})
-        return {"ok": False, "error": str(exc)}
-
-
 def publish_command_metrics(
     *,
     x: float,
@@ -240,34 +262,43 @@ def publish_command_metrics(
     right: float,
     target_heading_rad: float | None = None,
 ) -> None:
-    payload: dict[str, Any] = {
-        "x": x,
-        "y": y,
-        "speed": speed,
-        "servo_deg": servo_deg,
-        "left": left,
-        "right": right,
-    }
+    COMMAND_X.set(x)
+    COMMAND_Y.set(y)
+    COMMAND_SPEED.set(speed)
+    COMMAND_SERVO_DEG.set(servo_deg)
+    COMMAND_LEFT.set(left)
+    COMMAND_RIGHT.set(right)
     if target_heading_rad is not None:
-        payload["target_heading_rad"] = target_heading_rad
-    _post_to_prometheus_exporter("/command", payload)
+        COMMAND_TARGET_HEADING_RAD.set(target_heading_rad)
+    COMMAND_UPDATED_AT.set(time.time())
+    COMMANDS_TOTAL.inc()
 
 
 def publish_feedback_metrics() -> None:
-    if not PROMETHEUS_EXPORTER_ENABLED or robot is None:
+    if robot is None:
         return
     try:
         snapshot = robot.get_feedback_snapshot()
     except Exception as exc:
-        log_line("prometheus_exporter_feedback_snapshot_fail", {"error": repr(exc)})
+        log_line("metrics_feedback_snapshot_fail", {"error": repr(exc)})
         return
-    _post_to_prometheus_exporter("/feedback", snapshot)
+    FEEDBACK_HEADING_RAD.set(float(snapshot.get("heading_rad", 0.0)))
+    FEEDBACK_LINEAR_SPEED_MPS.set(float(snapshot.get("linear_speed_mps", 0.0)))
+    FEEDBACK_LEFT_ENCODER_TICKS.set(float(snapshot.get("enc_left_ticks", 0)))
+    FEEDBACK_RIGHT_ENCODER_TICKS.set(float(snapshot.get("enc_right_ticks", 0)))
+    FEEDBACK_UPDATED_AT.set(time.time())
+    FEEDBACK_UPDATES_TOTAL.inc()
 
 
 def _feedback_metrics_loop() -> None:
     while True:
         publish_feedback_metrics()
-        time.sleep(PROMETHEUS_EXPORTER_FEEDBACK_INTERVAL_S)
+        time.sleep(0.2)
+
+
+def _set_current_state_metric(state: str) -> None:
+    for known_state in KNOWN_STATES | {state}:
+        CURRENT_STATE.labels(state=known_state).set(1 if known_state == state else 0)
 
 
 def _append_pid_audit(kind: str, value: float, *, source_ip: str | None) -> None:
@@ -893,6 +924,37 @@ def telemetry():
     )
 
 
+@app.get("/metrics")
+def metrics():
+    return app.response_class(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+
+
+@app.post("/metrics/state")
+def post_metrics_state():
+    if not request.is_json:
+        return jsonify({"ok": False, "message": "Expected JSON payload."}), 400
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "message": "JSON payload must be an object."}), 400
+
+    state = str(payload.get("state", "")).strip()
+    source_state = str(payload.get("source_state", "")).strip()
+    transition_label = str(payload.get("transition_label", "")).strip() or "unspecified"
+    if not state:
+        return jsonify({"ok": False, "message": "Missing 'state'."}), 400
+
+    _set_current_state_metric(state)
+    STATE_UPDATED_AT.set(time.time())
+    STATE_UPDATES_TOTAL.inc()
+    if source_state:
+        STATE_TRANSITIONS_TOTAL.labels(
+            source_state=source_state,
+            target_state=state,
+            transition_label=transition_label,
+        ).inc()
+    return jsonify({"ok": True, "state": state})
+
+
 @app.get("/last")
 def get_last():
     return jsonify({"ok": True, "last": last_sent})
@@ -991,6 +1053,7 @@ def post_turn_test():
 def main() -> None:
     _load_tuning_settings()
     _persist_tuning_settings()
+    _set_current_state_metric("remote_control")
     log_line(
         "startup",
         {
@@ -1003,12 +1066,9 @@ def main() -> None:
             "servo_max_deg": SERVO_MAX_DEG,
             "servo_default_deg": SERVO_DEFAULT_DEG,
             "debug": DEBUG,
-            "prometheus_exporter_enabled": PROMETHEUS_EXPORTER_ENABLED,
-            "prometheus_exporter_base_url": PROMETHEUS_EXPORTER_BASE_URL,
         },
     )
-    if PROMETHEUS_EXPORTER_ENABLED:
-        threading.Thread(target=_feedback_metrics_loop, daemon=True).start()
+    threading.Thread(target=_feedback_metrics_loop, daemon=True).start()
     app.run(host=HOST, port=PORT, debug=DEBUG)
 
 
