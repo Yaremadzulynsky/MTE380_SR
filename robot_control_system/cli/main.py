@@ -50,7 +50,7 @@ import urllib.request
 import urllib.error
 
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
-from hardware.robot import Robot
+from state_machine.hardware.robot import Robot
 
 # Commands that talk to a running serve process over HTTP
 _SERVER_COMMANDS = {'start', 'stop', 'state', 'status'}
@@ -219,7 +219,7 @@ class RobotShell(cmd.Cmd):
     intro  = "MTE 380 robot shell — type 'help' for commands, 'exit' to quit."
     prompt = '(robot) '
 
-    _STATES = ['stopped', 'line_follow', 'line_follow_p', 'line_follow_angle']
+    _STATES = ['idle', 'stopped', 'line_follow', 'line_follow_p', 'line_follow_angle']
 
     def __init__(self, server: str):
         super().__init__()
@@ -364,12 +364,12 @@ def cmd_shell(args):
 
 def cmd_serve(args):
     """Launch the robot brain: state machine + web server."""
-    import hardware.robot as _robot_module
-    from hardware.robot         import Robot, MAX_SPEED, MAX_ROT_SPEED
-    from vision.line_detector   import LineDetector
-    from state_machine.machine  import StateMachine
-    from state_machine.states   import Stopped, LineFollow, LineFollowP, LineFollowAngle
-    from web_server.server      import WebServer
+    import state_machine.hardware.robot as _robot_module
+    from state_machine.hardware.robot       import Robot, MAX_SPEED, MAX_ROT_SPEED
+    from state_machine.vision.line_detector import LineDetector
+    from state_machine.machine              import StateMachine
+    from state_machine.states               import Idle, Stopped, LineFollow, LineFollowP, LineFollowAngle
+    from web_server.server                  import WebServer
 
     log = logging.getLogger('cli.serve')
 
@@ -413,15 +413,11 @@ def cmd_serve(args):
     # ── State machine ─────────────────────────────────────────────────────────
     sm = (
         StateMachine(robot, detector)
-        .register(Stopped())
-        .register(LineFollow())
-        .register(LineFollowP())
-        .register(LineFollowAngle())
+        .register(Idle())
     )
 
     # ── Web server ────────────────────────────────────────────────────────────
-    server = WebServer(robot=robot, detector=detector, state_machine=sm,
-                       host=args.host, port=args.web_port)
+    server = WebServer(state_machine=sm, host=args.host, port=args.web_port)
     server.start()
     log.info('Dashboard: http://localhost:%d', args.web_port)
 
@@ -614,9 +610,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help='Web server bind address (default: 0.0.0.0)')
     p.add_argument('--web-port', type=int, default=8321,
                    help='Web server HTTP port (default: 8321)')
-    p.add_argument('--initial-state', default='stopped',
-                   choices=['stopped', 'line_follow', 'line_follow_p', 'line_follow_angle'],
-                   help='Initial state machine state (default: stopped)')
+    p.add_argument('--initial-state', default='idle',
+                   choices=['idle', 'stopped', 'line_follow', 'line_follow_p', 'line_follow_angle'],
+                   help='Initial state machine state (default: idle)')
     p.add_argument('--max-speed', type=float, default=None,
                    help='Override MAX_SPEED (0–1)')
     p.add_argument('--max-rot-speed', type=float, default=None,

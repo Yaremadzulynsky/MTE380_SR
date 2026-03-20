@@ -8,9 +8,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from hardware.robot            import Robot
-    from vision.line_detector      import LineDetector
-    from state_machine.odometry    import Odometry
+    from state_machine.hardware.robot       import Robot
+    from state_machine.vision.line_detector import LineDetector
+    from state_machine.odometry             import Odometry
 
 
 class State:

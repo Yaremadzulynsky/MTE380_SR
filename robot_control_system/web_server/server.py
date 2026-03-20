@@ -12,16 +12,13 @@ Routes
 
 Usage
 -----
-    from hardware.robot import Robot
-    from vision.line_detector import LineDetector
-    from web_server import WebServer
+    from state_machine.machine import StateMachine
+    from web_server.server import WebServer
 
-    robot    = Robot(port='/dev/ttyACM0')
-    detector = LineDetector(debug=True)   # debug=True → annotated frames streamed
-    server   = WebServer(robot=robot, detector=detector)
+    sm = StateMachine(robot, detector)
+    sm.start('idle')
 
-    robot.start()
-    detector.start()
+    server = WebServer(state_machine=sm)
     server.start()          # non-blocking — runs in a daemon thread
 
     # ... rest of your main loop ...
@@ -80,11 +77,11 @@ class WebServer:
         HTTP port (default 8321).
     """
 
-    def __init__(self, *, robot=None, detector=None, state_machine=None,
+    def __init__(self, *, state_machine=None,
                  host: str = '0.0.0.0', port: int = 8321):
-        self._robot         = robot
-        self._detector      = detector
         self._state_machine = state_machine
+        self._robot         = state_machine.robot    if state_machine else None
+        self._detector      = state_machine.detector if state_machine else None
         self._state_log: list = []   # recent state transitions [(ts, state), ...]
         self._host          = host
         self._port          = port

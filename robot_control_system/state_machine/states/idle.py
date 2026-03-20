@@ -1,7 +1,7 @@
 """
-state_machine/states/stopped.py
+state_machine/states/idle.py
 
-Robot is stopped. Motors off, waiting for a command to transition out.
+Default startup state — motors off, waiting for a command.
 """
 
 from __future__ import annotations
@@ -11,21 +11,22 @@ from typing import TYPE_CHECKING, Optional
 from state_machine.state import State
 
 if TYPE_CHECKING:
-    from hardware.robot          import Robot
-    from vision.line_detector    import LineDetector
-    from state_machine.odometry  import Odometry
+    from state_machine.hardware.robot       import Robot
+    from state_machine.vision.line_detector import LineDetector
+    from state_machine.odometry            import Odometry
 
 log = logging.getLogger(__name__)
 
 
-class Stopped(State):
-    name = 'stopped'
+class Idle(State):
+    name = 'idle'
 
     def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
               odometry: Optional['Odometry']) -> None:
-        robot.set_speed(0.0)
-        robot.set_motors(0.0, 0.0)
-        log.info('Entered STOPPED')
+        if robot is not None:
+            robot.set_speed(0.0)
+            robot.set_motors(0.0, 0.0)
+        log.info('Entered IDLE')
 
     def tick(self, robot: 'Robot', detector: Optional['LineDetector'],
              odometry: Optional['Odometry']) -> Optional[str]:
@@ -33,4 +34,4 @@ class Stopped(State):
 
     def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
              odometry: Optional['Odometry']) -> None:
-        log.info('Leaving STOPPED')
+        log.info('Leaving IDLE')

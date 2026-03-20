@@ -1,3 +1,6 @@
+- make sure web_server o
+
+
 - detect line edges and find centroid
 - robot odometry model for debugging
 - speed pid?

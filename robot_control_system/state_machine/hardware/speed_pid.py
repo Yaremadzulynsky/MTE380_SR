@@ -1,7 +1,7 @@
 """Speed PID — wraps the generic PID for forward/backward velocity control."""
 
 import sys as _sys, pathlib as _pathlib
-_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent.parent))
 import config as _config
 
 from .pid import PID

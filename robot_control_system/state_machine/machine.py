@@ -2,6 +2,8 @@
 state_machine/machine.py
 
 Drives the robot by ticking the active State at a fixed rate.
+The StateMachine is the single entry point for the robot brain — hardware
+and vision are accessed through it, not imported directly by outside code.
 """
 
 from __future__ import annotations
@@ -10,12 +12,12 @@ import threading
 import time
 from typing import Optional, TYPE_CHECKING
 
-from state_machine.state     import State
-from state_machine.odometry  import Odometry
+from state_machine.state    import State
+from state_machine.odometry import Odometry
 
 if TYPE_CHECKING:
-    from hardware.robot       import Robot
-    from vision.line_detector import LineDetector
+    from state_machine.hardware.robot       import Robot
+    from state_machine.vision.line_detector import LineDetector
 
 log = logging.getLogger(__name__)
 
@@ -26,19 +28,24 @@ class StateMachine:
     """
     Runs a fixed-rate tick loop, delegating each tick to the active State.
 
+    The StateMachine owns the Robot and LineDetector instances and exposes
+    them as properties so callers (e.g. WebServer) never need to import from
+    the hardware or vision packages directly.
+
     Usage
     -----
         sm = StateMachine(robot, detector)
-        sm.register(Stopped())
+        sm.register(Idle())
         sm.register(LineFollow())
-        sm.start('stopped')
+        sm.start('idle')
         ...
         sm.transition('line_follow')
         ...
         sm.stop()
     """
 
-    def __init__(self, robot: 'Robot', detector: Optional['LineDetector'] = None):
+    def __init__(self, robot: Optional['Robot'] = None,
+                 detector: Optional['LineDetector'] = None):
         self._robot    = robot
         self._detector = detector
         self._odometry = Odometry()
@@ -48,6 +55,28 @@ class StateMachine:
         self._lock     = threading.Lock()
         self._running  = False
         self._thread:  Optional[threading.Thread] = None
+
+    # ── Public accessors ──────────────────────────────────────────────────────
+
+    @property
+    def robot(self) -> Optional['Robot']:
+        """The hardware robot instance (None if running without hardware)."""
+        return self._robot
+
+    @property
+    def detector(self) -> Optional['LineDetector']:
+        """The vision line detector instance (None if running without camera)."""
+        return self._detector
+
+    @property
+    def odometry(self) -> Odometry:
+        """Live pose estimate (x_m, y_m, heading_rad) from encoder dead-reckoning."""
+        return self._odometry
+
+    @property
+    def current_state(self) -> Optional[str]:
+        """Name of the currently active state."""
+        return self._current.name if self._current else None
 
     # ── Registration ──────────────────────────────────────────────────────────
 
@@ -60,7 +89,7 @@ class StateMachine:
 
     # ── Control ───────────────────────────────────────────────────────────────
 
-    def start(self, initial_state: str) -> None:
+    def start(self, initial_state: str = 'idle') -> None:
         """Start the tick loop in a background thread."""
         if initial_state not in self._states:
             raise ValueError(f'Unknown state: {initial_state!r}')
@@ -74,30 +103,20 @@ class StateMachine:
         log.info('StateMachine started in state %r', initial_state)
 
     def stop(self) -> None:
-        """Stop the tick loop and enter STOPPED if registered."""
+        """Stop the tick loop and enter idle if registered."""
         self._running = False
         if self._thread:
             self._thread.join(timeout=3.0)
-        if 'stopped' in self._states and (
-            self._current is None or self._current.name != 'stopped'
+        if 'idle' in self._states and (
+            self._current is None or self._current.name != 'idle'
         ):
-            self._transition('stopped')
+            self._transition('idle')
         log.info('StateMachine stopped')
 
     def transition(self, state_name: str) -> None:
         """Externally request a state transition (thread-safe)."""
         with self._lock:
             self._pending = state_name
-
-    @property
-    def current_state(self) -> Optional[str]:
-        """Name of the currently active state."""
-        return self._current.name if self._current else None
-
-    @property
-    def odometry(self) -> Odometry:
-        """Live pose estimate (x_m, y_m, heading_rad) from encoder dead-reckoning."""
-        return self._odometry
 
     # ── Internal ──────────────────────────────────────────────────────────────
 

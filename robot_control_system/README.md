@@ -45,7 +45,7 @@ python -m hardware.main --port /dev/ttyACM1
 | `--web-port` | `8321` | HTTP port |
 | `--max-speed` | `1.0` | Cap robot speed (0–1) |
 | `--max-rot-speed` | `1.0` | Cap rotation speed (0–1) |
-| `--initial-state` | `stopped` | Start in `stopped` or `line_follow` |
+| `--initial-state` | `idle` | Start in `idle`, `stopped`, or `line_follow` |
 | `--debug` | — | Verbose logging + annotated camera overlay |
 
 ## CLI
