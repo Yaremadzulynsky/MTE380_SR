@@ -1,5 +1,6 @@
 import math
 import os
+import threading
 import time
 from typing import Optional
 
@@ -36,7 +37,6 @@ control = ControlCommClient(
     control_path=os.getenv("CONTROL_COMM_CONTROL_PATH", "/control"),
 )
 
-
 def clamp(value: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, value))
 
@@ -44,6 +44,43 @@ def clamp(value: float, lo: float, hi: float) -> float:
 def parse_env_bool(name: str, default: str = "0") -> bool:
     raw = (os.getenv(name, default) or "").strip().lower()
     return raw in {"1", "true", "yes", "on"}
+
+
+LINE_FOLLOW_DEBUG = parse_env_bool("LINE_FOLLOW_DEBUG", "0")
+ASYNC_CONTROL_SENDER = parse_env_bool("ASYNC_CONTROL_SENDER", "1")
+ASYNC_CONTROL_SEND_HZ = max(float(os.getenv("ASYNC_CONTROL_SEND_HZ", "50.0")), 1.0)
+
+
+class _AsyncControlSender:
+    def __init__(self, client: ControlCommClient, send_hz: float) -> None:
+        self._client = client
+        self._interval = 1.0 / max(send_hz, 1.0)
+        self._lock = threading.Lock()
+        self._latest: tuple[float, float, float, int | None] | None = None
+        self._event = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="sm_async_control_sender", daemon=True)
+        self._thread.start()
+
+    def set_latest(self, x: float, y: float, speed: float, servo: int | None) -> None:
+        with self._lock:
+            self._latest = (float(x), float(y), float(speed), int(servo) if servo is not None else None)
+        self._event.set()
+
+    def _run(self) -> None:
+        next_deadline = time.monotonic()
+        while True:
+            timeout = max(0.0, next_deadline - time.monotonic())
+            self._event.wait(timeout=timeout)
+            self._event.clear()
+            with self._lock:
+                cmd = self._latest
+            if cmd is not None:
+                x, y, speed, servo = cmd
+                _ = self._client.send_control(x, y, speed, servo=servo)
+            next_deadline = time.monotonic() + self._interval
+
+
+_ASYNC_SENDER = _AsyncControlSender(control, ASYNC_CONTROL_SEND_HZ) if ASYNC_CONTROL_SENDER else None
 
 
 def wrap_angle(rad: float) -> float:
@@ -89,12 +126,10 @@ def _send_control_command(
     context: str,
     servo: int | None = None,
 ) -> None:
-    result = control.send_control(
-        x,
-        y,
-        speed,
-        servo=servo,
-    )
+    if _ASYNC_SENDER is not None:
+        _ASYNC_SENDER.set_latest(x, y, speed, servo)
+        return
+    result = control.send_control(x, y, speed, servo=servo)
     # Keep failure handling minimal for now; context retained for future logs.
     if not bool(result.get("ok")):
         _ = context
@@ -152,8 +187,15 @@ class StateMachine:
         self._line_pid_last_at = 0.0
         self._line_pid_last_sync_at = 0.0
         self.find_line_speed = clamp(float(os.getenv("FIND_LINE_SPEED", "0.02")), 0.0, 1.0)
+        self.line_lost_timeout_s = max(float(os.getenv("LINE_LOST_TIMEOUT_S", "0.8")), 0.05)
+        self.scan_switch_interval_s = max(float(os.getenv("SCAN_SWITCH_INTERVAL_S", "0.35")), 0.05)
         self._find_line_phase = self.FOLLOW_LINE_PHASE_IDLE
         self._line_last_turn_sign = 1.0
+        self._scan_next_right = True
+        self._scan_started_at = 0.0
+        self._line_lost_since = 0.0
+        self._debug_last_at = 0.0
+        self._debug_interval_s = max(float(os.getenv("LINE_FOLLOW_DEBUG_INTERVAL_S", "0.2")), 0.05)
         self._retrieved_turn_target_heading: float | None = None
 
        
@@ -198,7 +240,7 @@ class StateMachine:
         return {"x": 0.0, "y": self.pid_relinquish_y, "speed": self.pid_relinquish_speed}
 
     def _can_send_command(self) -> bool:
-        now = time.time()
+        now = time.monotonic()
         return (now - self._last_command_at) >= self.search_line_interval
 
     def _reset_line_pid(self) -> None:
@@ -208,17 +250,66 @@ class StateMachine:
 
     def _reset_find_line(self) -> None:
         self._find_line_phase = self.FOLLOW_LINE_PHASE_IDLE
+        self._line_lost_since = 0.0
+        self._scan_started_at = 0.0
 
-    def _begin_follow_line_scan(self) -> None:
+    def _begin_follow_line_scan(self, now: float) -> None:
         self._reset_line_pid()
+        self._find_line_phase = self.FOLLOW_LINE_PHASE_SCAN_RIGHT if self._scan_next_right else self.FOLLOW_LINE_PHASE_SCAN_LEFT
+        self._scan_next_right = not self._scan_next_right
+        self._scan_started_at = now
+        if self._line_lost_since <= 0.0:
+            self._line_lost_since = now
+
+    def _maybe_flip_scan_direction(self, now: float) -> None:
+        if self._scan_started_at <= 0.0:
+            self._scan_started_at = now
+            return
+        if (now - self._scan_started_at) < self.scan_switch_interval_s:
+            return
         self._find_line_phase = (
-            self.FOLLOW_LINE_PHASE_SCAN_RIGHT if self._line_last_turn_sign >= 0.0 else self.FOLLOW_LINE_PHASE_SCAN_LEFT
+            self.FOLLOW_LINE_PHASE_SCAN_LEFT
+            if self._find_line_phase == self.FOLLOW_LINE_PHASE_SCAN_RIGHT
+            else self.FOLLOW_LINE_PHASE_SCAN_RIGHT
         )
+        self._scan_started_at = now
+
+    def _debug_line_follow(self, *, now: float, stage: str, context: str, payload: dict[str, float | str | bool]) -> None:
+        if not LINE_FOLLOW_DEBUG:
+            return
+        if (now - self._debug_last_at) < self._debug_interval_s:
+            return
+        fields = " ".join(f"{k}={v}" for k, v in payload.items())
+        print(
+            f'ts={time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())} '
+            f"event=line_follow_debug stage={stage} state={self.state.value} context={context} {fields}",
+            flush=True,
+        )
+        self._debug_last_at = now
 
     def _step_follow_line_scan(self, *, line: Vector, now: float, context: str) -> bool:
         if line.detected:
             self._reset_find_line()
             return False
+        if self._line_lost_since <= 0.0:
+            self._line_lost_since = now
+        lost_for_s = now - self._line_lost_since
+        if lost_for_s >= self.line_lost_timeout_s:
+            send_stop_command(context=f"{context}_line_lost_stop")
+            self._last_command_at = now
+            self._reset_line_pid()
+            self._debug_line_follow(
+                now=now,
+                stage="scan_timeout_stop",
+                context=context,
+                payload={
+                    "line_detected": False,
+                    "lost_for_s": round(lost_for_s, 3),
+                    "timeout_s": round(self.line_lost_timeout_s, 3),
+                },
+            )
+            return False
+        self._maybe_flip_scan_direction(now)
         turn_sign = 1.0 if self._find_line_phase == self.FOLLOW_LINE_PHASE_SCAN_RIGHT else -1.0
         _send_control_polar(
             angle_rad=turn_sign * 2.8,
@@ -226,6 +317,18 @@ class StateMachine:
             context=f"{context}_reacquire",
         )
         self._last_command_at = now
+        self._debug_line_follow(
+            now=now,
+            stage="scan",
+            context=context,
+            payload={
+                "line_detected": False,
+                "scan_phase": self._find_line_phase,
+                "turn_sign": turn_sign,
+                "lost_for_s": round(lost_for_s, 3),
+                "scan_switch_s": round(self.scan_switch_interval_s, 3),
+            },
+        )
         return False
 
     def _step_follow_line_pid(
@@ -235,6 +338,10 @@ class StateMachine:
         now: float,
         context: str,
         follow_max_speed: float,
+        debug_red_line_x: float = 0.0,
+        debug_red_line_detected: bool = False,
+        debug_line_error_x: float = 0.0,
+        debug_line_error_detected: bool = False,
     ) -> bool:
         dt = now - self._line_pid_last_at if self._line_pid_last_at > 0.0 else self.tick_interval
         dt = clamp(dt, self.line_pid_dt_min, self.line_pid_dt_max)
@@ -277,6 +384,25 @@ class StateMachine:
             context=context,
         )
         self._last_command_at = now
+        self._debug_line_follow(
+            now=now,
+            stage="pid",
+            context=context,
+            payload={
+                "line_detected": bool(line.detected),
+                "red_line_detected": bool(debug_red_line_detected),
+                "line_error_detected": bool(debug_line_error_detected),
+                "red_line_x": round(float(debug_red_line_x), 4),
+                "line_error_x": round(float(debug_line_error_x), 4),
+                "pid_error": round(float(error), 4),
+                "turn_raw": round(float(turn_raw), 4),
+                "turn": round(float(turn), 4),
+                "angle_rad": round(float(angle_rad), 4),
+                "speed": round(float(speed), 4),
+                "scan_phase": self._find_line_phase,
+                "last_turn_sign": self._line_last_turn_sign,
+            },
+        )
         return True
 
     def _init_relative_turn_target(
@@ -400,7 +526,11 @@ class StateMachine:
         context: str,
         follow_max_speed: float,
         heading_rad: float,
+        debug_red_line: Vector | None = None,
+        debug_line_error: Vector | None = None,
     ) -> bool:
+        red_line = debug_red_line if debug_red_line is not None else line
+        line_error = debug_line_error if debug_line_error is not None else line
         match self._find_line_phase:
             case self.FOLLOW_LINE_PHASE_SCAN_LEFT | self.FOLLOW_LINE_PHASE_SCAN_RIGHT:
                 return self._step_follow_line_scan(
@@ -410,7 +540,7 @@ class StateMachine:
                 )
             case self.FOLLOW_LINE_PHASE_IDLE:
                 if not line.detected:
-                    self._begin_follow_line_scan()
+                    self._begin_follow_line_scan(now)
                     return self._step_follow_line_scan(
                         line=line,
                         now=now,
@@ -422,12 +552,16 @@ class StateMachine:
                     now=now,
                     context=context,
                     follow_max_speed=follow_max_speed,
+                    debug_red_line_x=red_line.x,
+                    debug_red_line_detected=red_line.detected,
+                    debug_line_error_x=line_error.x,
+                    debug_line_error_detected=line_error.detected,
                 )
             case _:
                 # Recover safely if phase was corrupted.
                 self._reset_find_line()
                 if not line.detected:
-                    self._begin_follow_line_scan()
+                    self._begin_follow_line_scan(now)
                     return self._step_follow_line_scan(
                         line=line,
                         now=now,
@@ -438,10 +572,15 @@ class StateMachine:
                     now=now,
                     context=context,
                     follow_max_speed=follow_max_speed,
+                    debug_red_line_x=red_line.x,
+                    debug_red_line_detected=red_line.detected,
+                    debug_line_error_x=line_error.x,
+                    debug_line_error_detected=line_error.detected,
                 )
 
     def step(self, inputs: Inputs) -> TransitionResult | None:
-        now = time.time()
+        now = time.monotonic()
+        wall_now = time.time()
         self._sync_line_pid_from_bridge(now=now)
         next_state: State | None = None
         label: str | None = None
@@ -517,11 +656,13 @@ class StateMachine:
                         self._last_remote_control_poll_at = now
             case State.SEARCHING:
                 self.follow_line(
-                    inputs.red_line,
+                    inputs.line_error,
                     now=now,
                     context="searching_follow_line",
                     follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
+                    debug_red_line=inputs.red_line,
+                    debug_line_error=inputs.line_error,
                 )
                 if inputs.lego_detected:
                     next_state = State.FIND_TARGET
@@ -532,11 +673,13 @@ class StateMachine:
                     label = "TD"
             case State.ALIGN_FOR_RETRIEVE:
                 self.follow_line(
-                    inputs.red_line,
+                    inputs.line_error,
                     now=now,
                     context="align_retrieve_follow_line",
                     follow_max_speed=self.line_pid_follow_max_speed*0.5,
                     heading_rad=inputs.heading_rad,
+                    debug_red_line=inputs.red_line,
+                    debug_line_error=inputs.line_error,
                 )
                 if inputs.aligned_for_retrieve:
                     # send_stop_command()
@@ -577,11 +720,13 @@ class StateMachine:
                     label = "R180"
             case State.TRANSPORTING:
                 self.follow_line(
-                    inputs.red_line,
+                    inputs.line_error,
                     now=now,
                     context="transporting_follow_line",
                     follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
+                    debug_red_line=inputs.red_line,
+                    debug_line_error=inputs.line_error,
                 )
                 if inputs.safe_zone_detected:
                     send_stop_command()
@@ -597,11 +742,13 @@ class StateMachine:
                     label = "FPU"
             case State.PLACING:
                 self.follow_line(
-                    inputs.red_line,
+                    inputs.line_error,
                     now=now,
                     context="placing_follow_line",
                     follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
+                    debug_red_line=inputs.red_line,
+                    debug_line_error=inputs.line_error,
                 )
                 #this should be sent from CV but just for now its for testing
                 # if inputs.safe_zone.detected and inputs.safe_zone.magnitude < 0.3:
@@ -614,11 +761,13 @@ class StateMachine:
                 label = "PS"
             case State.RETURN_HOME:
                 self.follow_line(
-                    inputs.red_line,
+                    inputs.line_error,
                     now=now,
                     context="return_home_follow_line",
                     follow_max_speed=self.line_pid_follow_max_speed,
                     heading_rad=inputs.heading_rad,
+                    debug_red_line=inputs.red_line,
+                    debug_line_error=inputs.line_error,
                 )
                 # if inputs.at_home:
                 if inputs.home.detected and inputs.home.magnitude < 0.3:
@@ -667,7 +816,7 @@ class StateMachine:
             self._reset_line_pid()
             self._reset_find_line()
         self.context.transition_count += 1
-        self.context.last_transition_at = now
+        self.context.last_transition_at = wall_now
         return TransitionResult(source=source, target=next_state, label=label)
 
     def reset(self) -> None:

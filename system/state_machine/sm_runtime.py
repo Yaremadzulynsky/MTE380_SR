@@ -6,11 +6,12 @@ from typing import Optional, Tuple
 from sm_control_comm import ControlCommClient
 from sm_input_buffer import InputBuffer
 from sm_logging import log_delivery_failure, log_event
-from sm_models import State, VectorObservation
+from sm_models import Inputs, State, Vector, VectorObservation
 from sm_state_machine import StateMachine, clamp, normalized_direction
 
 
 STOP_COMMAND = {"x": 0.0, "y": 0.0, "speed": 0.0}
+MAX_INPUT_AGE_S = max(float(os.getenv("MAX_INPUT_AGE_S", "0.25")), 0.01)
 
 
 def _send_state_update(
@@ -136,6 +137,31 @@ def process_flags(input_buffer: InputBuffer) -> None:
     input_buffer.recompute_flags()
 
 
+def _stale_safe_inputs(inputs: Inputs) -> Inputs:
+    stale_vec = Vector(detected=False, x=0.0, y=0.0)
+    return Inputs(
+        lego_detected=False,
+        target_detected=False,
+        safe_zone_detected=False,
+        danger_zone_detected=False,
+        aligned_for_retrieve=False,
+        aligned_for_place=False,
+        placing=False,
+        pick_up_success=False,
+        place_success=False,
+        failed_pickup=False,
+        at_home=False,
+        heading_rad=inputs.heading_rad,
+        speed=0.0,
+        red_line=stale_vec,
+        line_error=stale_vec,
+        home=stale_vec,
+        danger_zone=stale_vec,
+        target=stale_vec,
+        safe_zone=stale_vec,
+    )
+
+
 def run_flag_loop(
     input_buffer: InputBuffer,
     stop_event: Event,
@@ -184,9 +210,22 @@ def run_state_loop(
         last_state_sync_at = time.time()
 
     while not stop_event.is_set() and state_machine.state != State.END:
-        inputs, payload, _ = input_buffer.snapshot()
-        transition = state_machine.step(inputs)
+        inputs, payload, updated_at = input_buffer.snapshot()
         now = time.time()
+        stale = updated_at is None or (now - updated_at) > MAX_INPUT_AGE_S
+        if stale:
+            inputs = _stale_safe_inputs(inputs)
+            payload = {}
+            log_event(
+                logger,
+                "input_stale_safe_mode",
+                {
+                    "max_input_age_s": MAX_INPUT_AGE_S,
+                    "updated_at": updated_at,
+                    "age_s": None if updated_at is None else round(now - updated_at, 3),
+                },
+            )
+        transition = state_machine.step(inputs)
 
         if (
             control_comm
