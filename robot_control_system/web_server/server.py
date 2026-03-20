@@ -183,41 +183,7 @@ class WebServer:
             speed = body.get('speed', 0.0)
             robot.set_speed(float(speed))
             return jsonify({'speed': speed})
-
-        @app.route('/api/align', methods=['POST'])
-        def align_to_line():
-            robot    = self._robot
-            detector = self._detector
-            if robot is None:
-                return jsonify({'error': 'no robot'}), 503
-            if detector is None:
-                return jsonify({'error': 'no detector'}), 503
-            result = detector.get_result()
-            if result is None:
-                return jsonify({'error': 'no line detected'}), 404
-            tx, ty = result.direction
-            robot.set_speed(0.0)
-            robot.add_direction(tx, ty)
-            return jsonify({'direction': [round(tx, 3), round(ty, 3)]})
-
-        @app.route('/api/align-target', methods=['POST'])
-        def align_to_target():
-            robot    = self._robot
-            detector = self._detector
-            if robot is None:
-                return jsonify({'error': 'no robot'}), 503
-            if detector is None:
-                return jsonify({'error': 'no detector'}), 503
-            result = detector.get_result()
-            if result is None:
-                return jsonify({'error': 'no line detected'}), 404
-            from state_machine.states.line_follow import compute_target_direction
-            bx, by = compute_target_direction(result)
-            robot.set_speed(0.0)
-            robot.add_direction(bx, by)
-            return jsonify({'direction': [round(bx, 3), round(by, 3)],
-                            'lateral_px': round(result.lateral_distance_px, 1)})
-
+        
         @app.route('/api/gains', methods=['GET'])
         def get_gains():
             robot = self._robot
@@ -243,21 +209,20 @@ class WebServer:
                 robot.set_speed_gains(float(kp), float(ki), float(kd))
             return jsonify(robot.get_gains())
 
-        @app.route('/api/line-kp', methods=['GET'])
-        def get_line_kp():
-            import state_machine.states.line_follow_p as _lfp
-            return jsonify({'kp': _lfp.KP})
+        @app.route('/api/limits', methods=['GET'])
+        def get_limits():
+            import state_machine.hardware.robot as _hw
+            return jsonify({'max_speed': _hw.MAX_SPEED, 'max_rot_speed': _hw.MAX_ROT_SPEED})
 
-        @app.route('/api/line-kp', methods=['POST'])
-        def set_line_kp():
-            import state_machine.states.line_follow_p as _lfp
+        @app.route('/api/limits', methods=['POST'])
+        def set_limits():
+            import state_machine.hardware.robot as _hw
             body = request.get_json(silent=True) or {}
-            kp = body.get('kp')
-            if kp is None:
-                return jsonify({'error': 'missing kp'}), 400
-            _lfp.KP = float(kp)
-            log.info('line_follow_p KP → %.5f', _lfp.KP)
-            return jsonify({'kp': _lfp.KP})
+            if 'max_speed' in body:
+                _hw.MAX_SPEED = max(0.0, min(1.0, float(body['max_speed'])))
+            if 'max_rot_speed' in body:
+                _hw.MAX_ROT_SPEED = max(0.0, min(1.0, float(body['max_rot_speed'])))
+            return jsonify({'max_speed': _hw.MAX_SPEED, 'max_rot_speed': _hw.MAX_ROT_SPEED})
 
     # ── MJPEG stream ───────────────────────────────────────────────────────────
 

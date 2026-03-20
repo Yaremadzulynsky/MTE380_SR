@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find 'C:/Users/Lucas/Projects/school/3B/MTE 380 - code/MTE380_SR/robot_control_system/web_server' -type f \\\\\\(-name *.html -o -name *.css -o -name *.js \\\\\\))"
+    ]
+  }
+}

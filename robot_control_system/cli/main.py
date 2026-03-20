@@ -6,8 +6,9 @@ Launch the robot brain (state machine + web server):
   python -m cli.main serve --port COM3 --camera 0 --initial-state line_follow
   python -m cli.main serve --no-robot --virtual-cam   # vision only, no hardware
 
-Interactive shell (connects to a running 'serve' process):
-  python -m cli.main shell
+Interactive shell (embedded in serve, or connect to a remote process):
+  python -m cli.main serve --port COM3     # starts robot + drops into shell
+  python -m cli.main shell                 # attach to an already-running serve
   python -m cli.main shell --server http://pi.local:8321
 
 Server commands (talk to a running 'serve' process):
@@ -368,7 +369,7 @@ def cmd_serve(args):
     from state_machine.hardware.robot       import Robot, MAX_SPEED, MAX_ROT_SPEED
     from state_machine.vision.line_detector import LineDetector
     from state_machine.machine              import StateMachine
-    from state_machine.states               import Idle, Stopped, LineFollow, LineFollowP, LineFollowAngle
+    from state_machine.states               import Idle
     from web_server.server                  import WebServer
 
     log = logging.getLogger('cli.serve')
@@ -423,21 +424,24 @@ def cmd_serve(args):
 
     sm.start(args.initial_state)
 
-    # ── Run until Ctrl-C ──────────────────────────────────────────────────────
-    def _shutdown(sig, frame):
+    def _shutdown():
         log.info('Shutting down…')
         sm.stop()
         if detector:
             detector.stop()
         if robot:
             robot.stop()
-        sys.exit(0)
 
-    signal.signal(signal.SIGINT,  _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGTERM, lambda *_: (_shutdown(), sys.exit(0)))
 
-    while True:
-        time.sleep(1)
+    # ── Embedded interactive shell ─────────────────────────────────────────────
+    shell = RobotShell(f'http://localhost:{args.web_port}')
+    try:
+        shell.cmdloop()
+    except KeyboardInterrupt:
+        print()
+    finally:
+        _shutdown()
 
 
 # ── Hardware helpers ──────────────────────────────────────────────────────────
@@ -587,7 +591,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--debug', action='store_true')
 
     sub = parser.add_subparsers(dest='command', metavar='command')
-    sub.required = True
+    sub.required = False
 
     # ── Serve ─────────────────────────────────────────────────────────────────
     p = sub.add_parser('serve', help='Launch robot brain: state machine + web server')
@@ -693,12 +697,12 @@ def main():
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     )
 
-    if args.command == 'serve':
-        cmd_serve(args)
+    if args.command is None or args.command == 'shell':
+        cmd_shell(args)
         return
 
-    if args.command == 'shell':
-        cmd_shell(args)
+    if args.command == 'serve':
+        cmd_serve(args)
         return
 
     if args.command in _SERVER_COMMANDS:

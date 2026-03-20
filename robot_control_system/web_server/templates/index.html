@@ -72,6 +72,9 @@
     /* ── Camera column ──────────────────────────────────────── */
     #camera-col {
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     #camera-col img {
@@ -89,6 +92,31 @@
       font-size: 11px;
       color: var(--dim);
       letter-spacing: 0.08em;
+    }
+
+    /* ── Odometry canvas ────────────────────────────────────── */
+    #odo-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    #odo-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 14px;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: var(--dim);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+
+    #odo-canvas {
+      display: block;
+      background: var(--bg);
     }
 
     /* ── Panels column ──────────────────────────────────────── */
@@ -163,12 +191,12 @@
       border-radius: 3px;
       border: 1px solid var(--dim);
       color: var(--dim);
-      min-width: 110px;
+      min-width: 130px;
       text-align: center;
     }
 
     #state-badge.running { color: var(--success); border-color: var(--success); }
-    #state-badge.stopped { color: var(--warning); border-color: var(--warning); }
+    #state-badge.idle    { color: var(--dim);     border-color: var(--dim);     }
 
     .ctrl-btn {
       background: var(--surface);
@@ -186,7 +214,7 @@
 
     .ctrl-btn:disabled { opacity: 0.35; cursor: default; }
 
-  /* ── Bar chart for motors / speed ───────────────────────── */
+    /* ── Gauge / bar rows ───────────────────────────────────── */
     .bar-wrap {
       display: flex;
       align-items: center;
@@ -221,7 +249,6 @@
       flex-shrink: 0;
     }
 
-    /* ── Gauge rows ─────────────────────────────────────────── */
     .gauge-row {
       display: flex;
       align-items: center;
@@ -238,6 +265,30 @@
       color: var(--dim);
       font-size: 11px;
     }
+
+    /* ── Tuner inputs ───────────────────────────────────────── */
+    .tuner-input {
+      width: 80px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 3px 6px;
+      font-family: inherit;
+      font-size: 12px;
+    }
+
+    .tuner-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tuner-lbl {
+      width: var(--label-w);
+      color: var(--dim);
+      font-size: 11px;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -250,26 +301,33 @@
 <div id="control-bar">
   <span id="state-badge">&#9679; &mdash;</span>
   <button class="ctrl-btn" id="btn-start"       onclick="setState('line_follow')">&#9654; START</button>
-  <button class="ctrl-btn" id="btn-start-p"     onclick="setState('line_follow_p')" style="color:var(--warning);">&#9654; START P</button>
   <button class="ctrl-btn" id="btn-start-angle" onclick="setState('line_follow_angle')" style="color:var(--accent);">&#9654; START &#x03B8;</button>
-  <button class="ctrl-btn" id="btn-stop"        onclick="setState('stopped')">&#9632; STOP</button>
+  <button class="ctrl-btn" id="btn-stop"        onclick="setState('idle')">&#9632; STOP</button>
 </div>
 
 <main>
 
-  <!-- ── Camera ─────────────────────────────────────────────── -->
+  <!-- ── Left column: camera + odometry ─────────────────────── -->
   <div id="camera-col">
-    <img src="/video_feed" alt="PiCamera feed" id="camera-img">
-    <div id="camera-label">PICAMERA &nbsp;/&nbsp; LINE OVERLAY</div>
+    <img src="/video_feed" alt="Camera feed" id="camera-img">
+    <div id="camera-label">CAMERA &nbsp;/&nbsp; LINE OVERLAY</div>
+
+    <!-- Odometry 2D view -->
+    <div id="odo-wrap">
+      <div id="odo-header">
+        <span>ODOMETRY &mdash; TOP DOWN VIEW</span>
+        <button class="ctrl-btn" onclick="resetOdoPath()" style="color:var(--dim); font-size:10px; padding:2px 8px;">&#10005; CLEAR PATH</button>
+      </div>
+      <canvas id="odo-canvas" width="640" height="400"></canvas>
+    </div>
   </div>
 
-  <!-- ── Panels ─────────────────────────────────────────────── -->
+  <!-- ── Panels column ───────────────────────────────────────── -->
   <div id="panels-col">
 
     <!-- Line detection -->
     <div class="panel">
       <div class="panel-title">LINE DETECTION</div>
-
       <div class="row">
         <span class="lbl">Status</span>
         <span class="val" id="line-status">&mdash;</span>
@@ -299,7 +357,6 @@
     <!-- Hardware telemetry -->
     <div class="panel">
       <div class="panel-title">HARDWARE</div>
-
       <div class="row">
         <span class="lbl">Heartbeat</span>
         <span class="val" id="hw-hb">&mdash;</span>
@@ -316,8 +373,6 @@
         <span class="lbl">Encoders</span>
         <span class="val" id="hw-enc">&mdash;</span>
       </div>
-
-      <!-- Motor L bar -->
       <div class="gauge-row">
         <span class="lbl">Motor L</span>
         <div class="bar-wrap">
@@ -325,8 +380,6 @@
           <span class="bar-num" id="hw-ml">&mdash;</span>
         </div>
       </div>
-
-      <!-- Motor R bar -->
       <div class="gauge-row">
         <span class="lbl">Motor R</span>
         <div class="bar-wrap">
@@ -334,8 +387,6 @@
           <span class="bar-num" id="hw-mr">&mdash;</span>
         </div>
       </div>
-
-      <!-- Speed scale bar -->
       <div class="gauge-row">
         <span class="lbl">Speed scale</span>
         <div class="bar-wrap">
@@ -345,13 +396,41 @@
       </div>
     </div>
 
+    <!-- Speed limits -->
+    <div class="panel">
+      <div class="panel-title">SPEED LIMITS</div>
+      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Max Speed</span>
+          <input id="lim-speed" class="tuner-input" type="number" step="0.05" min="0" max="1" value="1.0">
+          <input id="lim-speed-range" type="range" min="0" max="1" step="0.05" value="1.0"
+                 style="flex:1;" oninput="document.getElementById('lim-speed').value = this.value">
+        </div>
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Max Rot Speed</span>
+          <input id="lim-rot" class="tuner-input" type="number" step="0.05" min="0" max="1" value="1.0">
+          <input id="lim-rot-range" type="range" min="0" max="1" step="0.05" value="1.0"
+                 style="flex:1;" oninput="document.getElementById('lim-rot').value = this.value">
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="ctrl-btn" id="btn-lim-apply" onclick="applyLimits()" style="color:var(--accent);">&#10003; APPLY</button>
+          <button class="ctrl-btn" onclick="loadLimits()" style="color:var(--dim);">&#8635; LOAD</button>
+          <span id="lim-status" style="font-size:11px; color:var(--dim);"></span>
+        </div>
+
+      </div>
+    </div>
+
     <!-- PID tuner -->
     <div class="panel">
       <div class="panel-title">PID TUNER</div>
       <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
 
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Loop</span>
+        <div class="tuner-row">
+          <span class="tuner-lbl">Loop</span>
           <label style="color:var(--text); font-size:12px;">
             <input type="radio" name="pid-loop" value="heading" checked> Heading
           </label>
@@ -360,82 +439,23 @@
           </label>
         </div>
 
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Kp</span>
-          <input id="pid-kp" type="number" step="0.01" value="2.0" style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        <div class="tuner-row">
+          <span class="tuner-lbl">Kp</span>
+          <input id="pid-kp" class="tuner-input" type="number" step="0.01" value="2.0">
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Ki</span>
-          <input id="pid-ki" type="number" step="0.01" value="0.1" style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        <div class="tuner-row">
+          <span class="tuner-lbl">Ki</span>
+          <input id="pid-ki" class="tuner-input" type="number" step="0.01" value="0.1">
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Kd</span>
-          <input id="pid-kd" type="number" step="0.01" value="0.0" style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+        <div class="tuner-row">
+          <span class="tuner-lbl">Kd</span>
+          <input id="pid-kd" class="tuner-input" type="number" step="0.01" value="0.0">
         </div>
 
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="ctrl-btn" id="btn-pid-apply" onclick="applyGains()" style="color:var(--accent);">&#10003; APPLY</button>
           <button class="ctrl-btn" onclick="loadGains()" style="color:var(--dim);">&#8635; LOAD</button>
           <span id="pid-status" style="font-size:11px; color:var(--dim);"></span>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Line follow P tuner -->
-    <div class="panel">
-      <div class="panel-title">LINE FOLLOW P</div>
-      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
-
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Kp (per px)</span>
-          <input id="lfp-kp" type="number" step="0.0005" value="0.005"
-            style="width:100px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
-          <span style="color:var(--dim); font-size:11px;">correction = lat_px × kp</span>
-        </div>
-
-        <div style="display:flex; gap:8px; align-items:center;">
-          <button class="ctrl-btn" id="btn-lfp-apply" onclick="applyLineKp()" style="color:var(--warning);">&#10003; APPLY</button>
-          <button class="ctrl-btn" onclick="loadLineKp()" style="color:var(--dim);">&#8635; LOAD</button>
-          <span id="lfp-status" style="font-size:11px; color:var(--dim);"></span>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- Manual control -->
-    <div class="panel">
-      <div class="panel-title">MANUAL CONTROL</div>
-      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
-
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Speed</span>
-          <input id="ctrl-speed" type="number" step="0.05" value="0.0" min="-1" max="1"
-            style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
-        </div>
-
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Direction X</span>
-          <input id="ctrl-x" type="number" step="0.1" value="0.0" min="-1" max="1"
-            style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
-          <span style="color:var(--dim); font-size:11px;">(-1=left, 1=right)</span>
-        </div>
-
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Direction Y</span>
-          <input id="ctrl-y" type="number" step="0.1" value="1.0" min="-1" max="1"
-            style="width:80px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
-          <span style="color:var(--dim); font-size:11px;">(-1=back, 1=fwd)</span>
-        </div>
-
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="ctrl-btn" onclick="sendDirection()" style="color:var(--accent);">&#9654; GO</button>
-          <button class="ctrl-btn" onclick="sendStop()" style="color:var(--danger);">&#9632; STOP</button>
-          <button class="ctrl-btn" onclick="sendTurnLeft()"  style="color:var(--warning);">&#8592; LEFT</button>
-          <button class="ctrl-btn" onclick="sendTurnRight()" style="color:var(--warning);">&#8594; RIGHT</button>
-          <button class="ctrl-btn" id="btn-align" onclick="alignToLine()" style="color:#c080ff;">&#8982; ALIGN TANGENT</button>
-          <button class="ctrl-btn" id="btn-align-target" onclick="alignToTarget()" style="color:#ff80c0;">&#8982; ALIGN TARGET</button>
-          <span id="align-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
 
       </div>
@@ -455,7 +475,7 @@
   <div style="display:flex; gap:12px; flex-wrap:wrap;">
 
     <div class="panel" style="flex:1; min-width:320px;">
-      <div class="panel-title">HEADING — CURRENT vs TARGET (deg)</div>
+      <div class="panel-title">HEADING &mdash; CURRENT vs TARGET (deg)</div>
       <div style="padding:8px;"><canvas id="chart-heading-abs" height="120"></canvas></div>
     </div>
 
@@ -505,9 +525,7 @@
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = text;
-    if (cls !== undefined) {
-      el.className = 'val ' + (cls || '');
-    }
+    if (cls !== undefined) el.className = 'val ' + (cls || '');
   }
 
   function fmt(v, decimals, plus) {
@@ -516,12 +534,11 @@
     return (plus && v >= 0) ? '+' + s : s;
   }
 
-  // Draw a bipolar bar [-1, 1].  positive = from centre right; negative = from centre left.
   function setBar(barId, numId, v) {
     const bar = document.getElementById(barId);
     const num = document.getElementById(numId);
     if (!bar || !num) return;
-    const pct = Math.min(Math.abs(v), 1) * 50;   // 50% = full half
+    const pct = Math.min(Math.abs(v), 1) * 50;
     if (v >= 0) {
       bar.style.left  = '50%';
       bar.style.width = pct + '%';
@@ -540,28 +557,14 @@
 
   function connect() {
     const es = new EventSource('/events');
-
-    es.onopen = () => {
-      badge.textContent = '\u25CF CONNECTED';
-      badge.className   = 'connected';
-    };
-
+    es.onopen = () => { badge.textContent = '\u25CF CONNECTED'; badge.className = 'connected'; };
     es.onerror = () => {
-      badge.textContent = '\u25CF RECONNECTING';
-      badge.className   = 'reconnecting';
-      es.close();
-      setTimeout(connect, 2000);
+      badge.textContent = '\u25CF RECONNECTING'; badge.className = 'reconnecting';
+      es.close(); setTimeout(connect, 2000);
     };
-
-    es.onmessage = (e) => {
-      try { update(JSON.parse(e.data)); }
-      catch (_) {}
-    };
+    es.onmessage = (e) => { try { update(JSON.parse(e.data)); } catch (_) {} };
   }
-
   connect();
-
-  // ── Update handlers ───────────────────────────────────────────────────────
 
   // ── State control ─────────────────────────────────────────────────────────
 
@@ -576,101 +579,138 @@
   function updateStateBadge(state) {
     const badge = document.getElementById('state-badge');
     if (!badge) return;
-    if (!state) {
-      badge.textContent = '\u25CF \u2014';
-      badge.className = '';
-      return;
-    }
-    const label = state.toUpperCase().replace('_', ' ');
-    badge.textContent = '\u25CF ' + label;
-    badge.className = state === 'stopped' ? 'stopped' : 'running';
+    if (!state) { badge.textContent = '\u25CF \u2014'; badge.className = ''; return; }
+    badge.textContent = '\u25CF ' + state.toUpperCase().replace(/_/g, ' ');
+    badge.className = (state === 'idle' || state === 'stopped') ? 'idle' : 'running';
   }
 
-  // ── Update handlers ───────────────────────────────────────────────────────
+  // ── Update dispatcher ─────────────────────────────────────────────────────
 
   function update(d) {
     if (d.state !== undefined) updateStateBadge(d.state);
     if (d.line)     updateLine(d.line);
     if (d.hardware) updateHardware(d.hardware);
+    if (d.vision)   updateVision(d.vision);
     updateCharts(d);
+    updateOdometry(d);
   }
+
+  // ── Line panel ────────────────────────────────────────────────────────────
 
   function updateLine(ln) {
     if (ln.found) {
       set('line-status', '\u25CF TRACKING', 'success');
       set('line-angle',  fmt(ln.angle_deg, 1, true) + '\u00b0', 'accent');
-
-      // Lateral distance — colour-code by magnitude (green < 20px, yellow < 60px, red beyond)
       const absPx  = Math.abs(ln.lateral_distance_px);
       const latCls = absPx < 20 ? 'success' : absPx < 60 ? 'warning' : 'danger';
       set('line-lat-px', fmt(ln.lateral_distance_px, 1, true) + ' px', latCls);
       set('line-lat-m',
           ln.lateral_distance_m !== null ? fmt(ln.lateral_distance_m, 4, true) + ' m' : 'n/a',
           latCls);
-
       set('line-dir',
           '(' + fmt(ln.direction[0], 3, true) + ',\u2009' + fmt(ln.direction[1], 3) + ')',
           'accent');
-
-      // Delta angle — colour-code by magnitude (green < 5°, yellow < 15°, red beyond)
       if (ln.delta_angle_deg !== null && ln.delta_angle_deg !== undefined) {
-        const absDA  = Math.abs(ln.delta_angle_deg);
-        const daCls  = absDA < 5 ? 'success' : absDA < 15 ? 'warning' : 'danger';
-        set('line-delta-angle', fmt(ln.delta_angle_deg, 2, true) + '\u00b0', daCls);
+        const absDA = Math.abs(ln.delta_angle_deg);
+        set('line-delta-angle', fmt(ln.delta_angle_deg, 2, true) + '\u00b0',
+            absDA < 5 ? 'success' : absDA < 15 ? 'warning' : 'danger');
       } else {
         set('line-delta-angle', 'n/a', '');
       }
     } else {
-      set('line-status',       '\u25CB NOT FOUND', 'danger');
-      set('line-angle',        '—', '');
-      set('line-lat-px',       '—', '');
-      set('line-lat-m',        '—', '');
-      set('line-dir',          '—', '');
-      set('line-delta-angle',  '—', '');
+      ['line-status','line-angle','line-lat-px','line-lat-m','line-dir','line-delta-angle']
+        .forEach(id => set(id, '\u25CB NOT FOUND', id === 'line-status' ? 'danger' : ''));
     }
   }
 
-  function updateHardware(hw) {
-    // Heartbeat
-    const age = hw.heartbeat_age_s;
-    if (age === null || age === undefined) {
-      set('hw-hb', '\u25CB NO SIGNAL', 'danger');
-    } else if (age < 2) {
-      set('hw-hb', '\u25CF ' + age.toFixed(1) + 's ago', 'success');
-    } else {
-      set('hw-hb', '\u26A0 ' + age.toFixed(1) + 's ago', 'warning');
-    }
+  // ── Hardware panel ────────────────────────────────────────────────────────
 
-    // Heading
+  function updateHardware(hw) {
+    const age = hw.heartbeat_age_s;
+    if (age === null || age === undefined)
+      set('hw-hb', '\u25CB NO SIGNAL', 'danger');
+    else if (age < 2)
+      set('hw-hb', '\u25CF ' + age.toFixed(1) + 's ago', 'success');
+    else
+      set('hw-hb', '\u26A0 ' + age.toFixed(1) + 's ago', 'warning');
+
     const hdg = hw.heading;
     if (hdg) {
       const err = hdg.current_deg - hdg.target_deg;
       set('hw-hdg',
           fmt(hdg.current_deg, 1) + '\u00b0 \u2192 ' + fmt(hdg.target_deg, 1) + '\u00b0' +
-          '  (err ' + fmt(err, 1, true) + '\u00b0)',
-          'accent');
+          '  (err ' + fmt(err, 1, true) + '\u00b0)', 'accent');
     }
-
-    // Velocity
-    if (hw.linear_speed_mps !== undefined) {
+    if (hw.linear_speed_mps !== undefined)
       set('hw-vel', fmt(hw.linear_speed_mps, 3) + ' m/s', 'accent');
-    }
-
-    // Encoders
-    if (hw.encoders) {
+    if (hw.encoders)
       set('hw-enc', 'L ' + hw.encoders.left + '  R ' + hw.encoders.right, '');
-    }
-
-    // Motor bars
     if (hw.last_drive) {
       setBar('bar-l', 'hw-ml', hw.last_drive.left);
       setBar('bar-r', 'hw-mr', hw.last_drive.right);
     }
-
-    // Speed scale bar
-    if (hw.speed_scale !== undefined) {
+    if (hw.speed_scale !== undefined)
       setBar('bar-spd', 'hw-spd', hw.speed_scale);
-    }
+  }
+
+  function updateVision(vis) {
+    const pct = (vis.detection_rate * 100).toFixed(1);
+    const col = vis.detection_rate > 0.7 ? 'success' : vis.detection_rate > 0.3 ? 'warning' : 'danger';
+    set('vision-det-rate', pct + '%', col);
+  }
+
+  // ── Speed limits ──────────────────────────────────────────────────────────
+
+  function syncRangeFromInput(inputId, rangeId) {
+    const v = document.getElementById(inputId).value;
+    document.getElementById(rangeId).value = v;
+  }
+  document.getElementById('lim-speed').addEventListener('input',
+    () => syncRangeFromInput('lim-speed', 'lim-speed-range'));
+  document.getElementById('lim-rot').addEventListener('input',
+    () => syncRangeFromInput('lim-rot', 'lim-rot-range'));
+
+  function loadLimits() {
+    fetch('/api/limits')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('lim-speed').value       = d.max_speed;
+        document.getElementById('lim-speed-range').value = d.max_speed;
+        document.getElementById('lim-rot').value         = d.max_rot_speed;
+        document.getElementById('lim-rot-range').value   = d.max_rot_speed;
+        const st = document.getElementById('lim-status');
+        st.textContent = 'loaded'; st.style.color = 'var(--success)';
+      })
+      .catch(() => {
+        const st = document.getElementById('lim-status');
+        st.textContent = 'error'; st.style.color = 'var(--danger)';
+      });
+  }
+
+  function applyLimits() {
+    const max_speed    = parseFloat(document.getElementById('lim-speed').value);
+    const max_rot_speed = parseFloat(document.getElementById('lim-rot').value);
+    const btn = document.getElementById('btn-lim-apply');
+    btn.disabled = true;
+    fetch('/api/limits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_speed, max_rot_speed }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('lim-speed').value       = d.max_speed;
+        document.getElementById('lim-speed-range').value = d.max_speed;
+        document.getElementById('lim-rot').value         = d.max_rot_speed;
+        document.getElementById('lim-rot-range').value   = d.max_rot_speed;
+        const st = document.getElementById('lim-status');
+        st.textContent = 'applied'; st.style.color = 'var(--success)';
+      })
+      .catch(() => {
+        const st = document.getElementById('lim-status');
+        st.textContent = 'error'; st.style.color = 'var(--danger)';
+      })
+      .finally(() => { btn.disabled = false; });
   }
 
   // ── PID tuner ─────────────────────────────────────────────────────────────
@@ -689,12 +729,12 @@
         document.getElementById('pid-kp').value = g.kp;
         document.getElementById('pid-ki').value = g.ki;
         document.getElementById('pid-kd').value = g.kd;
-        document.getElementById('pid-status').textContent = 'loaded';
-        document.getElementById('pid-status').style.color = 'var(--success)';
+        const st = document.getElementById('pid-status');
+        st.textContent = 'loaded'; st.style.color = 'var(--success)';
       })
       .catch(() => {
-        document.getElementById('pid-status').textContent = 'error';
-        document.getElementById('pid-status').style.color = 'var(--danger)';
+        const st = document.getElementById('pid-status');
+        st.textContent = 'error'; st.style.color = 'var(--danger)';
       });
   }
 
@@ -712,121 +752,274 @@
     })
       .then(r => r.json())
       .then(() => {
-        document.getElementById('pid-status').textContent = 'applied';
-        document.getElementById('pid-status').style.color = 'var(--success)';
+        const st = document.getElementById('pid-status');
+        st.textContent = 'applied'; st.style.color = 'var(--success)';
       })
       .catch(() => {
-        document.getElementById('pid-status').textContent = 'error';
-        document.getElementById('pid-status').style.color = 'var(--danger)';
+        const st = document.getElementById('pid-status');
+        st.textContent = 'error'; st.style.color = 'var(--danger)';
       })
       .finally(() => { btn.disabled = false; });
   }
 
-  // ── Line follow P tuner ───────────────────────────────────────────────────
+  // ── 2D Odometry view ──────────────────────────────────────────────────────
 
-  function loadLineKp() {
-    fetch('/api/line-kp')
-      .then(r => r.json())
-      .then(d => {
-        document.getElementById('lfp-kp').value = d.kp;
-        document.getElementById('lfp-status').textContent = 'loaded';
-        document.getElementById('lfp-status').style.color = 'var(--success)';
-      })
-      .catch(() => {
-        document.getElementById('lfp-status').textContent = 'error';
-        document.getElementById('lfp-status').style.color = 'var(--danger)';
-      });
+  const odoCanvas  = document.getElementById('odo-canvas');
+  const odoCtx     = odoCanvas.getContext('2d');
+  const ODO_MAX_PATH = 3000;
+
+  let odoPath      = [];          // [{x, y}] in metres
+  let odoRobot     = null;        // {x, y, heading_rad}
+  let odoLineSeg   = null;        // {cx, cy, dx, dy} line centre + unit tangent in world
+  let odoLineHist  = [];          // [{cx, cy}] sampled line centre positions over time
+
+  function resetOdoPath() {
+    odoPath     = [];
+    odoLineHist = [];
+    odoLineSeg  = null;
+    drawOdometry();
   }
 
-  function applyLineKp() {
-    const kp  = parseFloat(document.getElementById('lfp-kp').value);
-    const btn = document.getElementById('btn-lfp-apply');
-    btn.disabled = true;
-    fetch('/api/line-kp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kp }),
-    })
-      .then(r => r.json())
-      .then(d => {
-        document.getElementById('lfp-status').textContent = 'kp = ' + d.kp;
-        document.getElementById('lfp-status').style.color = 'var(--success)';
-      })
-      .catch(() => {
-        document.getElementById('lfp-status').textContent = 'error';
-        document.getElementById('lfp-status').style.color = 'var(--danger)';
-      })
-      .finally(() => { btn.disabled = false; });
+  function updateOdometry(d) {
+    if (!d.odometry) return;
+
+    const { x_m, y_m, heading_deg } = d.odometry;
+    const h = heading_deg * Math.PI / 180;
+
+    odoRobot = { x: x_m, y: y_m, heading: h };
+
+    // Append to path (skip duplicate points)
+    const last = odoPath[odoPath.length - 1];
+    if (!last || Math.hypot(x_m - last.x, y_m - last.y) > 0.005) {
+      odoPath.push({ x: x_m, y: y_m });
+      if (odoPath.length > ODO_MAX_PATH) odoPath.shift();
+    }
+
+    // Compute line position in world space
+    odoLineSeg = null;
+    if (d.line && d.line.found && d.line.lateral_distance_m !== null) {
+      const latM     = d.line.lateral_distance_m;
+      const angleRad = (d.line.angle_deg || 0) * Math.PI / 180;
+      // Right direction in world (robot right = rotate forward CW)
+      const rightX = Math.sin(h);
+      const rightY = -Math.cos(h);
+      // Line centre point in world
+      const cx = x_m + latM * rightX;
+      const cy = y_m + latM * rightY;
+      // Line tangent in world (robot forward rotated by line angle)
+      const dx = Math.cos(h + angleRad);
+      const dy = Math.sin(h + angleRad);
+      odoLineSeg = { cx, cy, dx, dy };
+
+      // Track line centre history
+      const lastL = odoLineHist[odoLineHist.length - 1];
+      if (!lastL || Math.hypot(cx - lastL.x, cy - lastL.y) > 0.02) {
+        odoLineHist.push({ x: cx, y: cy });
+        if (odoLineHist.length > ODO_MAX_PATH) odoLineHist.shift();
+      }
+    }
+
+    drawOdometry();
   }
 
-  // ── Manual control ────────────────────────────────────────────────────────
+  function drawOdometry() {
+    const W = odoCanvas.width;
+    const H = odoCanvas.height;
 
-  function sendDirection() {
-    const x = parseFloat(document.getElementById('ctrl-x').value);
-    const y = parseFloat(document.getElementById('ctrl-y').value);
-    const speed = parseFloat(document.getElementById('ctrl-speed').value);
-    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
-    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x, y}) });
-  }
+    odoCtx.fillStyle = '#0a0a18';
+    odoCtx.fillRect(0, 0, W, H);
 
-  function sendStop() {
-    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed: 0}) });
-    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: 0, y: 0}) });
-  }
+    // Determine view bounds — centre on robot if available
+    const cx = odoRobot ? odoRobot.x : 0;
+    const cy = odoRobot ? odoRobot.y : 0;
 
-  function sendTurnLeft()  {
-    const speed = parseFloat(document.getElementById('ctrl-speed').value);
-    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
-    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: -1, y: 0}) });
-  }
+    // Compute span to fit all path points
+    let minX = cx - 1, maxX = cx + 1, minY = cy - 1, maxY = cy + 1;
+    for (const p of odoPath) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+    const spanX  = Math.max(maxX - minX, 1.5);
+    const spanY  = Math.max(maxY - minY, 1.5);
+    const maxSpan = Math.max(spanX, spanY) * 1.4;
 
-  function alignToLine() {
-    const btn = document.getElementById('btn-align');
-    const st  = document.getElementById('align-status');
-    btn.disabled = true;
-    fetch('/api/align', { method: 'POST' })
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) {
-          st.textContent = d.error;
-          st.style.color = 'var(--danger)';
-        } else {
-          st.textContent = `aligned (${d.direction[0]}, ${d.direction[1]})`;
-          st.style.color = 'var(--success)';
-        }
-      })
-      .catch(() => { st.textContent = 'error'; st.style.color = 'var(--danger)'; })
-      .finally(() => { btn.disabled = false; });
-  }
+    const scale  = Math.min(W, H) / maxSpan;   // px per metre
+    const originX = W / 2 - cx * scale;
+    const originY = H / 2 + cy * scale;         // flip Y (world Y up, canvas Y down)
 
-  function alignToTarget() {
-    const btn = document.getElementById('btn-align-target');
-    const st  = document.getElementById('align-status');
-    btn.disabled = true;
-    fetch('/api/align-target', { method: 'POST' })
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) {
-          st.textContent = d.error;
-          st.style.color = 'var(--danger)';
-        } else {
-          st.textContent = `target (${d.direction[0]}, ${d.direction[1]}) lat=${d.lateral_px}px w=${d.weight}`;
-          st.style.color = 'var(--success)';
-        }
-      })
-      .catch(() => { st.textContent = 'error'; st.style.color = 'var(--danger)'; })
-      .finally(() => { btn.disabled = false; });
-  }
+    function toC(wx, wy) {
+      return [originX + wx * scale, originY - wy * scale];
+    }
 
-  function sendTurnRight() {
-    const speed = parseFloat(document.getElementById('ctrl-speed').value);
-    fetch('/api/speed',     { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({speed}) });
-    fetch('/api/direction', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({x: 1, y: 0}) });
+    // ── Grid ──────────────────────────────────────────────────
+    const raw = maxSpan / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const gridStep = [1, 2, 5].map(f => f * mag).find(s => maxSpan / s <= 6) || mag;
+
+    odoCtx.strokeStyle = '#1c1c38';
+    odoCtx.lineWidth   = 1;
+    odoCtx.setLineDash([]);
+
+    const gx0 = Math.floor((cx - maxSpan) / gridStep) * gridStep;
+    const gy0 = Math.floor((cy - maxSpan) / gridStep) * gridStep;
+    for (let gx = gx0; gx < cx + maxSpan; gx += gridStep) {
+      const [px] = toC(gx, 0);
+      odoCtx.beginPath(); odoCtx.moveTo(px, 0); odoCtx.lineTo(px, H); odoCtx.stroke();
+    }
+    for (let gy = gy0; gy < cy + maxSpan; gy += gridStep) {
+      const [, py] = toC(0, gy);
+      odoCtx.beginPath(); odoCtx.moveTo(0, py); odoCtx.lineTo(W, py); odoCtx.stroke();
+    }
+
+    // Grid labels
+    odoCtx.fillStyle  = '#2a2a50';
+    odoCtx.font       = '9px Courier New';
+    odoCtx.textAlign  = 'left';
+    for (let gx = gx0; gx < cx + maxSpan; gx += gridStep) {
+      const [px] = toC(gx, 0);
+      if (px > 0 && px < W) odoCtx.fillText(gx.toFixed(1) + 'm', px + 2, H - 4);
+    }
+
+    // ── World axes ────────────────────────────────────────────
+    odoCtx.strokeStyle = '#2a2a55';
+    odoCtx.lineWidth   = 1;
+    odoCtx.setLineDash([4, 4]);
+    const [ox, oy] = toC(0, 0);
+    odoCtx.beginPath(); odoCtx.moveTo(0, oy); odoCtx.lineTo(W, oy); odoCtx.stroke();
+    odoCtx.beginPath(); odoCtx.moveTo(ox, 0); odoCtx.lineTo(ox, H); odoCtx.stroke();
+    odoCtx.setLineDash([]);
+
+    // ── Line history (sampled centre positions) ───────────────
+    if (odoLineHist.length > 1) {
+      odoCtx.beginPath();
+      const [lx0, ly0] = toC(odoLineHist[0].x, odoLineHist[0].y);
+      odoCtx.moveTo(lx0, ly0);
+      for (let i = 1; i < odoLineHist.length; i++) {
+        const [lx, ly] = toC(odoLineHist[i].x, odoLineHist[i].y);
+        odoCtx.lineTo(lx, ly);
+      }
+      odoCtx.strokeStyle = 'rgba(240,64,96,0.5)';
+      odoCtx.lineWidth   = 2;
+      odoCtx.stroke();
+    }
+
+    // ── Current line segment ──────────────────────────────────
+    if (odoLineSeg) {
+      const { cx: lx, cy: ly, dx, dy } = odoLineSeg;
+      const halfLen = maxSpan * 0.35;
+      const [p1x, p1y] = toC(lx - dx * halfLen, ly - dy * halfLen);
+      const [p2x, p2y] = toC(lx + dx * halfLen, ly + dy * halfLen);
+      odoCtx.beginPath();
+      odoCtx.moveTo(p1x, p1y);
+      odoCtx.lineTo(p2x, p2y);
+      odoCtx.strokeStyle = '#f04060';
+      odoCtx.lineWidth   = 2;
+      odoCtx.stroke();
+
+      // Line centre dot
+      const [lcx, lcy] = toC(lx, ly);
+      odoCtx.beginPath();
+      odoCtx.arc(lcx, lcy, 3, 0, Math.PI * 2);
+      odoCtx.fillStyle = '#f04060';
+      odoCtx.fill();
+    }
+
+    // ── Robot path ────────────────────────────────────────────
+    if (odoPath.length > 1) {
+      // Fade older segments
+      const n = odoPath.length;
+      for (let i = 1; i < n; i++) {
+        const alpha = 0.3 + 0.7 * (i / n);
+        const [x0, y0] = toC(odoPath[i - 1].x, odoPath[i - 1].y);
+        const [x1, y1] = toC(odoPath[i].x,     odoPath[i].y);
+        odoCtx.beginPath();
+        odoCtx.moveTo(x0, y0);
+        odoCtx.lineTo(x1, y1);
+        odoCtx.strokeStyle = `rgba(74,240,255,${alpha})`;
+        odoCtx.lineWidth   = 1.5;
+        odoCtx.stroke();
+      }
+    }
+
+    // ── Origin marker ─────────────────────────────────────────
+    if (ox > -10 && ox < W + 10 && oy > -10 && oy < H + 10) {
+      odoCtx.beginPath();
+      odoCtx.arc(ox, oy, 4, 0, Math.PI * 2);
+      odoCtx.fillStyle   = '#3a3a60';
+      odoCtx.fill();
+      odoCtx.strokeStyle = '#5a5a80';
+      odoCtx.lineWidth   = 1;
+      odoCtx.stroke();
+      odoCtx.fillStyle  = '#3a3a60';
+      odoCtx.font       = '9px Courier New';
+      odoCtx.textAlign  = 'left';
+      odoCtx.fillText('O', ox + 6, oy - 4);
+    }
+
+    // ── Robot ─────────────────────────────────────────────────
+    if (odoRobot) {
+      const [rx, ry] = toC(odoRobot.x, odoRobot.y);
+      const h        = odoRobot.heading;
+      const arrowPx  = Math.max(20, scale * 0.2);
+
+      // Heading arrow
+      const arrowX = rx + Math.cos(h) * arrowPx;
+      const arrowY = ry - Math.sin(h) * arrowPx;   // flip Y
+      odoCtx.beginPath();
+      odoCtx.moveTo(rx, ry);
+      odoCtx.lineTo(arrowX, arrowY);
+      odoCtx.strokeStyle = '#30e88a';
+      odoCtx.lineWidth   = 2;
+      odoCtx.stroke();
+
+      // Arrowhead
+      const aw   = 6;
+      const angle = Math.atan2(ry - arrowY, arrowX - rx);
+      odoCtx.beginPath();
+      odoCtx.moveTo(arrowX, arrowY);
+      odoCtx.lineTo(arrowX - aw * Math.cos(angle - 0.4), arrowY + aw * Math.sin(angle - 0.4));
+      odoCtx.lineTo(arrowX - aw * Math.cos(angle + 0.4), arrowY + aw * Math.sin(angle + 0.4));
+      odoCtx.closePath();
+      odoCtx.fillStyle = '#30e88a';
+      odoCtx.fill();
+
+      // Robot body circle
+      odoCtx.beginPath();
+      odoCtx.arc(rx, ry, 7, 0, Math.PI * 2);
+      odoCtx.fillStyle   = '#1a3a2a';
+      odoCtx.fill();
+      odoCtx.strokeStyle = '#30e88a';
+      odoCtx.lineWidth   = 2;
+      odoCtx.stroke();
+    }
+
+    // ── HUD overlay ───────────────────────────────────────────
+    odoCtx.fillStyle = 'rgba(10,10,24,0.75)';
+    odoCtx.fillRect(0, 0, W, 22);
+    odoCtx.fillStyle  = '#5a6070';
+    odoCtx.font       = '10px Courier New';
+    odoCtx.textAlign  = 'left';
+    if (odoRobot) {
+      const hdgDeg = (odoRobot.heading * 180 / Math.PI).toFixed(1);
+      odoCtx.fillText(
+        `x=${odoRobot.x.toFixed(3)}m  y=${odoRobot.y.toFixed(3)}m  hdg=${hdgDeg}°  path=${odoPath.length}pts  1grid=${gridStep}m`,
+        8, 14
+      );
+    } else {
+      odoCtx.fillText('no odometry data', 8, 14);
+    }
+
+    // Legend
+    odoCtx.textAlign = 'right';
+    odoCtx.fillStyle = '#4af0ff'; odoCtx.fillText('● robot path', W - 8, 14);
+    if (odoLineSeg || odoLineHist.length > 0) {
+      odoCtx.fillStyle = '#f04060'; odoCtx.fillText('● line', W - 90, 14);
+    }
   }
 
   // ── Charts ────────────────────────────────────────────────────────────────
 
-  const CHART_WINDOW = 200;  // number of data points to keep
+  const CHART_WINDOW = 200;
 
   const chartDefaults = {
     animation: false,
@@ -849,8 +1042,13 @@
     });
   }
 
+  const chartHeadingAbs = makeChart('chart-heading-abs', [
+    { label: 'current', data: [], borderColor: '#4af0ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+    { label: 'target',  data: [], borderColor: '#f0b030', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+  ]);
+
   const chartHeading = makeChart('chart-heading', [
-    { label: 'error',   data: [], borderColor: '#4af0ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
+    { label: 'error', data: [], borderColor: '#4af0ff', borderWidth: 1.5, pointRadius: 0, tension: 0.2 },
   ]);
 
   const chartLateral = makeChart('chart-lateral', [
@@ -896,44 +1094,34 @@
       hdg ? hdg.current_deg : null,
       hdg ? hdg.target_deg  : null,
     );
-
-    const headingErr = hdg ? hdg.current_deg - hdg.target_deg : null;
-    pushChart(chartHeading, headingErr);
-
-    const latPx = (line && line.found) ? line.lateral_distance_px : null;
-    pushChart(chartLateral, latPx);
-
+    pushChart(chartHeading, hdg ? hdg.current_deg - hdg.target_deg : null);
+    pushChart(chartLateral, (line && line.found) ? line.lateral_distance_px : null);
     pushChart(chartAngular, d.hardware ? d.hardware.angular_z : null);
-
     pushChart(chartMotors,
       drive ? drive.left  : null,
       drive ? drive.right : null,
     );
 
-    // State log
     if (d.state_log) {
       const el = document.getElementById('state-log');
       if (el) {
         el.innerHTML = d.state_log.slice().reverse().map(e => {
-          const t = new Date(e.ts * 1000).toLocaleTimeString();
-          const col = e.state === 'stopped' ? 'var(--warning)' : 'var(--success)';
+          const t   = new Date(e.ts * 1000).toLocaleTimeString();
+          const col = (e.state === 'idle' || e.state === 'stopped') ? 'var(--warning)' : 'var(--success)';
           return `<div style="color:${col}; padding:2px 0;">${t} &nbsp; ${e.state.toUpperCase()}</div>`;
         }).join('');
       }
     }
-
-    // Vision stats
-    if (d.vision) {
-      const pct = (d.vision.detection_rate * 100).toFixed(1);
-      const col = d.vision.detection_rate > 0.7 ? 'success' : d.vision.detection_rate > 0.3 ? 'warning' : 'danger';
-      set('vision-det-rate', pct + '%', col);
-    }
   }
 
-  // Load gains on page load
-  window.addEventListener('load', () => { loadGains(); loadLineKp(); });
+  // ── Init ──────────────────────────────────────────────────────────────────
 
-  // Reload gains when switching loop
+  window.addEventListener('load', () => {
+    loadGains();
+    loadLimits();
+    drawOdometry();
+  });
+
   document.querySelectorAll('input[name="pid-loop"]').forEach(r =>
     r.addEventListener('change', loadGains)
   );
