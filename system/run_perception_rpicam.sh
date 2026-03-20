@@ -187,7 +187,8 @@ start_streamer() {
       -t 0 \
       -n \
       --inline \
-      --codec h264 \
+      --codec libav \
+      --libav-format mpegts \
       --width "${RPICAM_WIDTH}" \
       --height "${RPICAM_HEIGHT}" \
       --framerate "${RPICAM_FPS}" \
@@ -196,7 +197,7 @@ start_streamer() {
       -loglevel warning \
       -fflags nobuffer \
       -flags low_delay \
-      -f h264 \
+      -f mpegts \
       -i - \
       -an \
       -c:v copy \
