@@ -163,6 +163,7 @@ class LineResult:
     lateral_distance_m: Optional[float]  # same in metres; None if pixels_per_meter not set
     mask: Optional[np.ndarray] = field(default=None, repr=False)   # binary red mask (debug)
     frame: Optional[np.ndarray] = field(default=None, repr=False)  # annotated frame (debug)
+    sampled_pixels: Optional[list] = field(default=None, repr=False)  # [(u,v)…] N sampled red pixels
 
 
 class LineDetector:
@@ -329,6 +330,16 @@ class LineDetector:
         points = cv2.findNonZero(mask)
         if points is None:
             return None
+
+        # Sample up to 30 red pixels for world-space splatter map
+        _N = 30
+        n_pts = len(points)
+        if n_pts > _N:
+            idx = np.random.choice(n_pts, _N, replace=False)
+            sampled = [(int(points[i][0][0]), int(points[i][0][1])) for i in idx]
+        else:
+            sampled = [(int(p[0][0]), int(p[0][1])) for p in points]
+
         [vx], [vy], [x0], [y0] = cv2.fitLine(points, cv2.DIST_L2, 0, 0.01, 0.01)
         vx, vy, x0, y0 = float(vx), float(vy), float(x0), float(y0)
 
@@ -477,6 +488,7 @@ class LineDetector:
             lateral_distance_m=lateral_m,
             mask=mask if self._debug else None,
             frame=annotated,
+            sampled_pixels=sampled,
         )
 
     # ── Background thread ──────────────────────────────────────────────────────

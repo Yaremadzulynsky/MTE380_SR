@@ -330,6 +330,23 @@ class WebServer:
                         round(result.direction[1], 3),
                     ],
                 }
+
+                # Transform sampled red pixels to world coordinates for splatter map
+                if result.sampled_pixels and _ppm and sm is not None:
+                    _fw = _vc.get('frame_width',  640)
+                    _fh = _vc.get('frame_height', 480)
+                    _img_cx = _fw / 2.0
+                    _rx, _ry, _rh = sm.odometry.pose()
+                    _cos_h = _math.cos(_rh)
+                    _sin_h = _math.sin(_rh)
+                    world_pts = []
+                    for (_u, _v) in result.sampled_pixels:
+                        _lat = (_u - _img_cx) / _ppm
+                        _fwd = (_fh - 1 - _v) / _ppm
+                        _wx  = _rx + _fwd * _cos_h + _lat * _sin_h
+                        _wy  = _ry + _fwd * _sin_h - _lat * _cos_h
+                        world_pts.append([round(_wx, 3), round(_wy, 3)])
+                    status['line_world_points'] = world_pts
             else:
                 status['line'] = {'found': False}
 

@@ -31,7 +31,7 @@ class Odometry:
 
         self._x       = 0.0
         self._y       = 0.0
-        self._heading = 0.0  # radians
+        self._heading = math.pi / 2.0  # radians; π/2 = facing world +y (up on screen)
         self._prev_left:  int | None = None
         self._prev_right: int | None = None
 
@@ -62,7 +62,7 @@ class Odometry:
         """Reset pose to origin."""
         self._x           = 0.0
         self._y           = 0.0
-        self._heading     = 0.0
+        self._heading     = math.pi / 2.0
         self._prev_left   = None
         self._prev_right  = None
 

@@ -768,15 +768,19 @@
   const odoCtx     = odoCanvas.getContext('2d');
   const ODO_MAX_PATH = 3000;
 
-  let odoPath      = [];          // [{x, y}] in metres
-  let odoRobot     = null;        // {x, y, heading_rad}
-  let odoLineSeg   = null;        // {cx, cy, dx, dy} line centre + unit tangent in world
-  let odoLineHist  = [];          // [{cx, cy}] sampled line centre positions over time
+  let odoPath         = [];       // [{x, y}] in metres
+  let odoRobot        = null;     // {x, y, heading_rad}
+  let odoLineSeg      = null;     // {cx, cy, dx, dy} line centre + unit tangent in world
+  let odoLineHist     = [];       // [{cx, cy}] sampled line centre positions over time
+  let odoLineSplatter = [];       // [{x, y}] world-space red pixel cloud
+
+  const ODO_MAX_SPLATTER = 6000;
 
   function resetOdoPath() {
-    odoPath     = [];
-    odoLineHist = [];
-    odoLineSeg  = null;
+    odoPath         = [];
+    odoLineHist     = [];
+    odoLineSeg      = null;
+    odoLineSplatter = [];
     drawOdometry();
   }
 
@@ -817,6 +821,15 @@
         odoLineHist.push({ x: cx, y: cy });
         if (odoLineHist.length > ODO_MAX_PATH) odoLineHist.shift();
       }
+    }
+
+    // Accumulate world-space red pixel splatter
+    if (d.line_world_points && d.line_world_points.length > 0) {
+      for (const [wx, wy] of d.line_world_points) {
+        odoLineSplatter.push({ x: wx, y: wy });
+      }
+      if (odoLineSplatter.length > ODO_MAX_SPLATTER)
+        odoLineSplatter.splice(0, odoLineSplatter.length - ODO_MAX_SPLATTER);
     }
 
     drawOdometry();
@@ -888,6 +901,17 @@
     odoCtx.beginPath(); odoCtx.moveTo(0, oy); odoCtx.lineTo(W, oy); odoCtx.stroke();
     odoCtx.beginPath(); odoCtx.moveTo(ox, 0); odoCtx.lineTo(ox, H); odoCtx.stroke();
     odoCtx.setLineDash([]);
+
+    // ── Red pixel splatter (world-projected line points) ──────
+    if (odoLineSplatter.length > 0) {
+      const n = odoLineSplatter.length;
+      for (let i = 0; i < n; i++) {
+        const alpha = 0.25 + 0.55 * (i / n);   // fade older points
+        const [px, py] = toC(odoLineSplatter[i].x, odoLineSplatter[i].y);
+        odoCtx.fillStyle = `rgba(240,80,100,${alpha.toFixed(2)})`;
+        odoCtx.fillRect(px - 1, py - 1, 2, 2);
+      }
+    }
 
     // ── Line history (sampled centre positions) ───────────────
     if (odoLineHist.length > 1) {
@@ -1012,7 +1036,7 @@
     // Legend
     odoCtx.textAlign = 'right';
     odoCtx.fillStyle = '#4af0ff'; odoCtx.fillText('● robot path', W - 8, 14);
-    if (odoLineSeg || odoLineHist.length > 0) {
+    if (odoLineSeg || odoLineHist.length > 0 || odoLineSplatter.length > 0) {
       odoCtx.fillStyle = '#f04060'; odoCtx.fillText('● line', W - 90, 14);
     }
   }
