@@ -11,7 +11,7 @@ from .speed_pid   import SpeedPID
 
 RATE_HZ   = 20.0
 MAX_SPEED = 0.2
-ONE_WHEEL_TURN_THRESHOLD = 0.5
+ONE_WHEEL_TURN_THRESHOLD = 0.1
 
 HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
 
