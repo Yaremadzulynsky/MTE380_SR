@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Override MAX_ROT_SPEED (0–1, default %.2f)' % MAX_ROT_SPEED)
     parser.add_argument('--web-port', type=int, default=8321)
     parser.add_argument('--initial-state', default='stopped',
-                        choices=['stopped', 'line_follow', 'line_follow_p'])
+                        choices=['stopped', 'line_follow', 'line_follow_p', 'line_follow_angle'])
     parser.add_argument('--debug', action='store_true')
     return parser
 
