@@ -17,29 +17,52 @@ activate_local_venv_if_present() {
   fi
 }
 
+select_python_bin() {
+  if [ -x ".venv/bin/python" ]; then
+    PYTHON_BIN=".venv/bin/python"
+    return
+  fi
+  if [ -x "venv/bin/python" ]; then
+    PYTHON_BIN="venv/bin/python"
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+    return
+  fi
+  echo "[run_perception_rpicam] error: python interpreter not found (.venv/bin/python or python3)" >&2
+  exit 1
+}
+
 ensure_python_deps() {
-  if python3 -c "import yaml, cv2, numpy, serial" >/dev/null 2>&1; then
+  if "$PYTHON_BIN" -c "import yaml, cv2, numpy, serial" >/dev/null 2>&1; then
     return
   fi
 
   echo "[run_perception_rpicam] missing python dependencies; bootstrapping local venv"
   if [ ! -d ".venv" ]; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      echo "[run_perception_rpicam] error: cannot create .venv because python3 is not installed" >&2
+      exit 1
+    fi
     # Reuse system OpenCV/Numpy on Pi to avoid slow wheel builds.
     python3 -m venv --system-site-packages .venv
   fi
 
   # shellcheck source=/dev/null
   source .venv/bin/activate
-  python3 -m pip install --upgrade pip >/dev/null
-  python3 -m pip install pyyaml pyserial pytest >/dev/null
+  PYTHON_BIN=".venv/bin/python"
+  "$PYTHON_BIN" -m pip install --upgrade pip >/dev/null
+  "$PYTHON_BIN" -m pip install pyyaml pyserial pytest >/dev/null
 
-  if ! python3 -c "import yaml, cv2, numpy, serial" >/dev/null 2>&1; then
+  if ! "$PYTHON_BIN" -c "import yaml, cv2, numpy, serial" >/dev/null 2>&1; then
     echo "[run_perception_rpicam] error: dependencies still missing after install" >&2
     exit 1
   fi
 }
 
 activate_local_venv_if_present
+select_python_bin
 ensure_python_deps
 
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
@@ -164,7 +187,7 @@ start_perception() {
     args=("${PERCEPTION_ARGS_PROD[@]}")
     echo "[run_perception_rpicam] starting in headless production mode"
   fi
-  python3 "${args[@]}" >>"$PERCEPTION_LOG_FILE" 2>&1 &
+  "$PYTHON_BIN" "${args[@]}" >>"$PERCEPTION_LOG_FILE" 2>&1 &
   PERCEPTION_PID=$!
   echo "[run_perception_rpicam] started perception (pid ${PERCEPTION_PID})"
   echo "[run_perception_rpicam] log file: ${PERCEPTION_LOG_FILE}"
@@ -189,7 +212,7 @@ trap cleanup EXIT INT TERM
 
 # Keep old behavior for non-interactive callers (e.g., systemd button controller).
 if ! [ -t 0 ]; then
-  exec python3 "${PERCEPTION_ARGS_PROD[@]}"
+  exec "$PYTHON_BIN" "${PERCEPTION_ARGS_PROD[@]}"
 fi
 
 echo "[run_perception_rpicam] Interactive controls:"
