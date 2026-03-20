@@ -19,7 +19,7 @@ from hardware.robot              import Robot, MAX_SPEED, MAX_ROT_SPEED
 import hardware.robot as _robot_module
 from vision.line_detector        import LineDetector
 from state_machine.machine       import StateMachine
-from state_machine.states        import Stopped, LineFollow
+from state_machine.states        import Stopped, LineFollow, LineFollowP
 from web_server.server           import WebServer
 from web_server.main             import _find_droidcam_index
 
@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Override MAX_ROT_SPEED (0–1, default %.2f)' % MAX_ROT_SPEED)
     parser.add_argument('--web-port', type=int, default=8321)
     parser.add_argument('--initial-state', default='stopped',
-                        choices=['stopped', 'line_follow'])
+                        choices=['stopped', 'line_follow', 'line_follow_p'])
     parser.add_argument('--debug', action='store_true')
     return parser
 
@@ -98,6 +98,7 @@ def main():
         StateMachine(robot, detector)
         .register(Stopped())
         .register(LineFollow())
+        .register(LineFollowP())
     )
 
     # ── Web server (debug dashboard) ──────────────────────────────────────────

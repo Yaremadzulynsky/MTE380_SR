@@ -40,6 +40,10 @@ line_follow:
   deadzone_px: 20.0
   correction_scale_px: 100.0
 
+line_follow_p:
+  follow_speed: 0.35
+  kp: 0.005            # lateral correction per pixel: higher = more aggressive
+
 web_server:
   jpeg_quality: 70
   stream_fps: 20
