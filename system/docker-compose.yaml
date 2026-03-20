@@ -9,9 +9,10 @@ services:
       - "/dev/video0:/dev/video1"
     environment:
       PORT: 4000
-      CONTROL_COMM_BASE_URL: "http://control-communication:5001"
+      # host network: use localhost (Docker DNS names are not used)
+      CONTROL_COMM_BASE_URL: "http://localhost:5001"
       CONTROL_COMM_CONTROL_PATH: "/control"
-      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_BASE_URL: "http://localhost:8000"
       STATE_MACHINE_INPUT_PATH: "/inputs"
       LOG_PATH: "/var/log/perception/perception.log"
     # depends_on:
@@ -93,7 +94,7 @@ services:
     network_mode: host
     environment:
       PORT: "8100"
-      STATE_MACHINE_BASE_URL: "http://state-machine:8000"
+      STATE_MACHINE_BASE_URL: "http://localhost:8000"
       STATE_MACHINE_INPUT_PATH: "/inputs"
       LOG_PATH: "/var/log/computer-vision/computer-vision.log"
 

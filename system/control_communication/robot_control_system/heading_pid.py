@@ -30,6 +30,9 @@ class HeadingPID:
         self._pid.kd = kd
         self._pid.reset()
 
+    def get_gains(self) -> tuple[float, float, float]:
+        return float(self._pid.kp), float(self._pid.ki), float(self._pid.kd)
+
     def reset(self):
         self._pid.reset()
 

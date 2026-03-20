@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import queue
 import threading
 import time
@@ -118,6 +119,14 @@ def main() -> None:
         if args.comms is not None:
             cfg.comms.method = args.comms
         gui = not getattr(args, "no_gui", False)
+    # Override state machine HTTP ingest URL (host vs Docker / scripts).
+    _http_url_override = (
+        os.environ.get("STATE_MACHINE_INPUT_URL")
+        or os.environ.get("PERCEPTION_HTTP_INPUTS_URL")
+        or ""
+    ).strip()
+    if _http_url_override:
+        cfg.comms.http_url = _http_url_override
     source = _parse_source(cfg.camera.source, cfg)
     sender = _make_sender(cfg.comms.method, cfg)
     regulator = LoopRegulator(target_hz=cfg.fps)

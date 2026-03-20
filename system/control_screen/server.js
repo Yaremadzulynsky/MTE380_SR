@@ -7,7 +7,7 @@ const app = express();
 const PORT = Number.parseInt(process.env.PORT, 10) || 3000;
 
 const CONTROL_COMM_BASE_URL =
-  process.env.CONTROL_COMM_BASE_URL || 'http://localhost:5000';
+  process.env.CONTROL_COMM_BASE_URL || 'http://localhost:5001';
 const CONTROL_COMM_P_PATH =
   process.env.CONTROL_COMM_P_PATH || '/pid/proportional';
 const CONTROL_COMM_I_PATH =

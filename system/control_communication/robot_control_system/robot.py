@@ -92,6 +92,10 @@ class Robot:
         self._heading_pid.set_gains(kp, ki, kd)
         log.info('heading PID gains → kp=%.3f ki=%.3f kd=%.3f', kp, ki, kd)
 
+    def get_heading_gains(self) -> tuple[float, float, float]:
+        """Return (kp, ki, kd) for heading PID (maps to control-screen P/I/D paths)."""
+        return self._heading_pid.get_gains()
+
     def set_speed_gains(self, kp: float, ki: float, kd: float):
         """Set speed PID gains live."""
         self._speed_pid.set_gains(kp, ki, kd)

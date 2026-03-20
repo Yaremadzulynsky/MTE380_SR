@@ -15,6 +15,15 @@ from flask import Flask, jsonify, request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
+    from robot_control_system.heading_pid import (
+        HEADING_KP,
+        HEADING_KI,
+        HEADING_KD,
+    )
+except Exception:  # pragma: no cover
+    HEADING_KP, HEADING_KI, HEADING_KD = 2.0, 0.1, 0.0
+
+try:
     from robot_control_system.robot import Robot as _Robot
 except Exception as _robot_import_err:
     print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_import_fail error={_robot_import_err!r}", flush=True)
@@ -317,6 +326,73 @@ def post_to_simulator(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         log_line("simulator_forward_fail", {"url": SIM_CONTROL_URL, "error": repr(exc)})
         return {"ok": False, "error": str(exc)}
+
+
+def _heading_pid_triplet() -> tuple[float, float, float]:
+    if robot is None:
+        return (
+            float(HEADING_KP),
+            float(HEADING_KI),
+            float(HEADING_KD),
+        )
+    return robot.get_heading_gains()
+
+
+@app.get("/pid/proportional")
+def get_pid_p():
+    kp, _, _ = _heading_pid_triplet()
+    return jsonify(kp)
+
+
+@app.post("/pid/proportional")
+def post_pid_p():
+    if robot is None:
+        return jsonify({"ok": False, "message": "Robot is not active."}), 503
+    payload = request.get_json(silent=True) or {}
+    val, err = parse_numeric(payload, "value")
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    _, ki, kd = robot.get_heading_gains()
+    robot.set_gains(float(val), ki, kd)
+    return jsonify(float(val))
+
+
+@app.get("/pid/integral")
+def get_pid_i():
+    _, ki, _ = _heading_pid_triplet()
+    return jsonify(ki)
+
+
+@app.post("/pid/integral")
+def post_pid_i():
+    if robot is None:
+        return jsonify({"ok": False, "message": "Robot is not active."}), 503
+    payload = request.get_json(silent=True) or {}
+    val, err = parse_numeric(payload, "value")
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    kp, _, kd = robot.get_heading_gains()
+    robot.set_gains(kp, float(val), kd)
+    return jsonify(float(val))
+
+
+@app.get("/pid/derivative")
+def get_pid_d():
+    _, _, kd = _heading_pid_triplet()
+    return jsonify(kd)
+
+
+@app.post("/pid/derivative")
+def post_pid_d():
+    if robot is None:
+        return jsonify({"ok": False, "message": "Robot is not active."}), 503
+    payload = request.get_json(silent=True) or {}
+    val, err = parse_numeric(payload, "value")
+    if err:
+        return jsonify({"ok": False, "message": err}), 400
+    kp, ki, _ = robot.get_heading_gains()
+    robot.set_gains(kp, ki, float(val))
+    return jsonify(float(val))
 
 
 @app.get("/health")
