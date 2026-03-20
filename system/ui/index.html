@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MTE380 Robot</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --muted:    #21262d;
+      --text:     #e6edf3;
+      --dim:      #8b949e;
+      --blue:     #58a6ff;
+      --green:    #3fb950;
+      --orange:   #f0883e;
+      --red:      #f85149;
+      --cyan:     #39c5cf;
+      --purple:   #bc8cff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+      font-size: 12px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .logo {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      color: var(--blue);
+      margin-right: 4px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .pill .k { color: var(--dim); }
+    .pill .v { color: var(--text); font-weight: 600; }
+    .pill.good .v { color: var(--green); }
+    .pill.bad  .v { color: var(--orange); }
+    .spacer { flex: 1; }
+
+    /* ── Buttons ─────────────────────────────────────────────────────────── */
+    .btn {
+      padding: 5px 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--muted);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: inherit;
+      letter-spacing: 0.03em;
+      transition: opacity 0.12s, border-color 0.12s;
+    }
+    .btn:hover { opacity: 0.8; }
+    .btn.g { background: #1a4028; border-color: var(--green); color: var(--green); }
+    .btn.r { background: #3a0e0e; border-color: var(--red);   color: var(--red); }
+    .btn.b { background: #0d1f47; border-color: var(--blue);  color: var(--blue); }
+
+    /* ── Main layout ─────────────────────────────────────────────────────── */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Camera ──────────────────────────────────────────────────────────── */
+    #cam-panel {
+      background: #010409;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+    #cam-panel img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    #no-stream {
+      position: absolute;
+      color: var(--dim);
+      font-size: 13px;
+      display: none;
+      text-align: center;
+    }
+
+    /* ── Right panel ─────────────────────────────────────────────────────── */
+    #ctrl-panel {
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Tabs ────────────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 9px 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--dim);
+      border-bottom: 2px solid transparent;
+      transition: color 0.12s, border-color 0.12s;
+      letter-spacing: 0.04em;
+    }
+    .tab.on { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab:hover:not(.on) { color: var(--text); }
+
+    .tab-body { display: none; flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }
+    .tab-body.on { display: block; }
+
+    /* ── Section ─────────────────────────────────────────────────────────── */
+    .sec { margin-bottom: 16px; }
+    .sec-title {
+      color: var(--dim);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--muted);
+    }
+
+    /* ── Slider rows ─────────────────────────────────────────────────────── */
+    .sr {
+      display: grid;
+      grid-template-columns: 110px 1fr 50px;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px;
+    }
+    .sr-label { font-size: 11px; line-height: 1.3; }
+    .sr-label small { display: block; color: var(--dim); font-size: 10px; margin-top: 1px; }
+    input[type=range] {
+      width: 100%;
+      height: 3px;
+      accent-color: var(--blue);
+      cursor: pointer;
+    }
+    .sr-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--blue);
+      text-align: right;
+    }
+
+    /* ── Number inputs ───────────────────────────────────────────────────── */
+    .nr {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px;
+    }
+    .nr label { font-size: 11px; color: var(--text); }
+    .nr input[type=number] {
+      background: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      padding: 4px 7px;
+      font-size: 12px;
+      font-family: inherit;
+      width: 100%;
+    }
+    .nr input[type=number]:focus { outline: none; border-color: var(--blue); }
+
+    /* ── Apply row ───────────────────────────────────────────────────────── */
+    .apply-row { display: flex; justify-content: flex-end; margin-top: 6px; }
+
+    /* ── Status table ────────────────────────────────────────────────────── */
+    .stbl { width: 100%; border-collapse: collapse; }
+    .stbl td { padding: 5px 6px; border-bottom: 1px solid var(--muted); font-size: 11px; }
+    .stbl td:first-child { color: var(--dim); width: 50%; }
+    .stbl td:last-child { font-weight: 600; text-align: right; }
+
+    /* ── State grid ──────────────────────────────────────────────────────── */
+    .sg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+    }
+    .sg-btn {
+      padding: 7px 4px;
+      font-size: 10px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--muted);
+      color: var(--dim);
+      cursor: pointer;
+      text-align: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: inherit;
+      transition: all 0.12s;
+    }
+    .sg-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .sg-btn.on { background: #0d1f47; border-color: var(--blue); color: var(--blue); }
+
+    /* ── Telemetry live values ───────────────────────────────────────────── */
+    .tval-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .tval {
+      background: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+    }
+    .tval .k { color: var(--dim); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; }
+    .tval .v { font-size: 15px; font-weight: 700; margin-top: 2px; color: var(--text); }
+    .tval.ok  .v { color: var(--green); }
+    .tval.bad .v { color: var(--red); }
+    .tval.warn .v { color: var(--orange); }
+
+    /* ── Rolling log ─────────────────────────────────────────────────────── */
+    #log-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 10px;
+      line-height: 1.7;
+      overflow-y: auto;
+      max-height: 280px;
+      padding: 6px 8px;
+      color: var(--dim);
+    }
+    #log-box .lr { display: flex; gap: 6px; border-bottom: 1px solid #1c2128; padding: 1px 0; }
+    #log-box .lr:last-child { border-bottom: none; }
+    #log-box .lt { color: #444d56; min-width: 52px; }
+    #log-box .lf { color: var(--blue); min-width: 28px; }
+    #log-box .lv { color: var(--text); }
+    #log-box .err-hi { color: var(--red); }
+    #log-box .err-med { color: var(--orange); }
+    #log-box .err-ok  { color: var(--green); }
+
+    /* ── Scrollbar ───────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <span class="logo">MTE380</span>
+
+  <div class="pill"><span class="k">state</span><span class="v" id="h-state">—</span></div>
+  <div class="pill"><span class="k">zone</span><span class="v" id="h-zone">—</span></div>
+  <div class="pill"><span class="k">γ</span><span class="v" id="h-gamma">—</span></div>
+  <div class="pill"><span class="k">err</span><span class="v" id="h-err">—</span></div>
+  <div class="pill"><span class="k">fps</span><span class="v" id="h-fps">—</span></div>
+  <div class="pill" id="pill-robot"><span class="k">hw</span><span class="v" id="h-robot">—</span></div>
+
+  <span class="spacer"></span>
+
+  <button class="btn g" onclick="setStateApi('searching')">▶ SEARCHING</button>
+  <button class="btn g" onclick="setStateApi('remote_control')">▶ RC MODE</button>
+  <button class="btn r" onclick="doReset()">■ RESET</button>
+</header>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Camera -->
+  <div id="cam-panel">
+    <img id="stream-img" src="/stream" alt="stream"
+         onerror="this.style.display='none'; document.getElementById('no-stream').style.display='flex'">
+    <div id="no-stream">No stream — camera not running</div>
+  </div>
+
+  <!-- Right panel -->
+  <div id="ctrl-panel">
+    <div class="tabs">
+      <div class="tab on"  onclick="tab('pid')">PID</div>
+      <div class="tab"     onclick="tab('speed')">Speed</div>
+      <div class="tab"     onclick="tab('perc')">Perception</div>
+      <div class="tab"     onclick="tab('adv')">Advanced</div>
+      <div class="tab"     onclick="tab('states')">States</div>
+      <div class="tab"     onclick="tab('logs')">Logs</div>
+    </div>
+
+    <!-- PID tab -->
+    <div id="tab-pid" class="tab-body on">
+      <div class="sec">
+        <div class="sec-title">Line Follow PID</div>
+        <div id="pid-sliders"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applyPid()">Apply PID</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Speed tab -->
+    <div id="tab-speed" class="tab-body">
+      <div class="sec">
+        <div class="sec-title">Speed Controls</div>
+        <div id="speed-sliders"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applyPid()">Apply Speed</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Perception tab -->
+    <div id="tab-perc" class="tab-body">
+      <div class="sec">
+        <div class="sec-title">Error Smoothing</div>
+        <div id="perc-sliders"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applySmoothing()">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced tab -->
+    <div id="tab-adv" class="tab-body">
+      <div class="sec">
+        <div class="sec-title">Persisted tuning</div>
+        <p id="tuning-persist-info" style="color:var(--dim);font-size:11px;line-height:1.55;margin:0">
+          Loading…
+        </p>
+      </div>
+      <div class="sec">
+        <div class="sec-title">PID Limits</div>
+        <div id="limit-sliders"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applyPid()">Apply Limits</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Servo Range (deg)</div>
+        <div id="servo-inputs"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applyServo()">Apply Servo</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">State Machine Params</div>
+        <div id="sm-inputs"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applySmParams()">Apply SM</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- States tab -->
+    <div id="tab-states" class="tab-body">
+      <div class="sec">
+        <div class="sec-title">Force State</div>
+        <div class="sg" id="state-grid"></div>
+      </div>
+      <div class="sec" style="margin-top:14px">
+        <div class="sec-title">Live Telemetry</div>
+        <table class="stbl" id="telem-tbl"></table>
+      </div>
+    </div>
+
+    <!-- Logs tab -->
+    <div id="tab-logs" class="tab-body">
+      <div class="sec">
+        <div class="sec-title">Live Perception Values</div>
+        <div class="tval-grid">
+          <div class="tval" id="tv-px"><div class="k">px</div><div class="v" id="tv-px-v">—</div></div>
+          <div class="tval" id="tv-py"><div class="k">py</div><div class="v" id="tv-py-v">—</div></div>
+          <div class="tval" id="tv-err"><div class="k">err (smoothed)</div><div class="v" id="tv-err-v">—</div></div>
+          <div class="tval" id="tv-err-raw"><div class="k">err (raw)</div><div class="v" id="tv-err-raw-v">—</div></div>
+          <div class="tval" id="tv-gamma"><div class="k">γ confidence</div><div class="v" id="tv-gamma-v">—</div></div>
+          <div class="tval" id="tv-zone"><div class="k">zone</div><div class="v" id="tv-zone-v">—</div></div>
+          <div class="tval" id="tv-mask"><div class="k">path mask</div><div class="v" id="tv-mask-v">—</div></div>
+          <div class="tval" id="tv-fps"><div class="k">perception fps</div><div class="v" id="tv-fps-v">—</div></div>
+          <div class="tval" id="tv-path"><div class="k">path detected</div><div class="v" id="tv-path-v">—</div></div>
+          <div class="tval" id="tv-tgt"><div class="k">target detected</div><div class="v" id="tv-tgt-v">—</div></div>
+          <div class="tval" id="tv-tpx"><div class="k">target px</div><div class="v" id="tv-tpx-v">—</div></div>
+          <div class="tval" id="tv-tpy"><div class="k">target py</div><div class="v" id="tv-tpy-v">—</div></div>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Frame Log</span>
+          <button class="btn" style="font-size:10px;padding:2px 8px" onclick="clearLog()">Clear</button>
+        </div>
+        <div id="log-box"></div>
+      </div>
+    </div>
+
+  </div><!-- #ctrl-panel -->
+</main>
+
+<script>
+// ── Tab switching ─────────────────────────────────────────────────────────────
+const TAB_NAMES = ['pid','speed','perc','adv','states','logs'];
+function tab(name) {
+  document.querySelectorAll('.tab').forEach((el, i) =>
+    el.classList.toggle('on', TAB_NAMES[i] === name));
+  TAB_NAMES.forEach(n =>
+    document.getElementById('tab-'+n).classList.toggle('on', n === name));
+}
+
+// ── Local mirrors for live slider state ───────────────────────────────────────
+const pidVals    = {};  // kp, ki, kd, i_max, out_max, base_speed, ...
+const servoVals  = {};  // min, max, center
+const smVals     = {};  // find_line_speed, ...
+
+// ── Slider / input definitions ────────────────────────────────────────────────
+const PID_DEFS = [
+  { k:'kp',  label:'Kp',  hint:'proportional gain', min:0, max:20,  step:0.01 },
+  { k:'ki',  label:'Ki',  hint:'integral gain',      min:0, max:20,  step:0.001 },
+  { k:'kd',  label:'Kd',  hint:'derivative gain',    min:0, max:20,  step:0.01 },
+];
+const SPEED_DEFS = [
+  { k:'base_speed',       label:'Base Speed',    hint:'nominal forward',        min:0, max:5, step:0.01 },
+  { k:'min_speed',        label:'Min Speed',     hint:'floor',                  min:0, max:5, step:0.01 },
+  { k:'max_speed',        label:'Max Speed',     hint:'ceiling',                min:0, max:5, step:0.01 },
+  { k:'follow_max_speed', label:'Follow Max',    hint:'line-follow cap',        min:0, max:5, step:0.01 },
+  { k:'turn_slowdown',    label:'Turn Slowdown', hint:'speed deduct per turn',  min:0, max:5, step:0.01 },
+  { k:'error_slowdown',   label:'Error Slowdown',hint:'speed deduct per error', min:0, max:5, step:0.001},
+];
+const LIMIT_DEFS = [
+  { k:'i_max',    label:'I Max',    hint:'integrator clamp', min:0, max:20, step:0.1  },
+  { k:'out_max',  label:'Out Max',  hint:'output clamp',     min:0, max:20, step:0.1  },
+  { k:'deadband', label:'Deadband', hint:'error dead zone',  min:0, max:1,  step:0.001},
+];
+const PERC_DEFS = [
+  { k:'max_error_step',    label:'Max Error Step',    hint:'max Δerr per frame — lower = smoother', min:0,   max:1,    step:0.005 },
+  { k:'ema_alpha_error',   label:'EMA α Error',       hint:'error smoothing — higher = more damp',  min:0,   max:0.999, step:0.005 },
+  { k:'ema_alpha_path',    label:'EMA α Path',        hint:'heading smoothing',                     min:0,   max:0.999, step:0.005 },
+  { k:'window_size',       label:'Median Window',     hint:'frames for median filter',              min:1,   max:15,   step:1     },
+  { k:'freeze_on_miss_frames', label:'Freeze Frames', hint:'hold last error on miss',               min:0,   max:30,   step:1     },
+];
+
+const SERVO_DEFS = [
+  { k:'min',    label:'Servo Min (deg)'    },
+  { k:'max',    label:'Servo Max (deg)'    },
+  { k:'center', label:'Servo Center (deg)' },
+];
+const SM_DEFS = [
+  { k:'find_line_speed',        label:'Find Line Speed',       min:0,    max:1,    step:0.01  },
+  { k:'line_lost_timeout_s',    label:'Line Lost Timeout (s)', min:0.05, max:30,   step:0.05  },
+  { k:'scan_switch_interval_s', label:'Scan Switch (s)',       min:0.05, max:10,   step:0.05  },
+  { k:'retrieved_turn_speed',   label:'Turn Speed',            min:0,    max:1,    step:0.01  },
+  { k:'retrieved_turn_tol_rad', label:'Turn Tol (rad)',        min:0.01, max:3.14, step:0.01  },
+  { k:'tick_interval',          label:'Tick Interval (s)',     min:0.001,max:1,    step:0.001 },
+];
+
+// ── Build slider ──────────────────────────────────────────────────────────────
+function mkSlider(def, container) {
+  const { k, label, hint, min, max, step } = def;
+  const row = document.createElement('div');
+  row.className = 'sr';
+  row.innerHTML = `
+    <span class="sr-label">${label}<small>${hint||''}</small></span>
+    <input type="range" id="sl-${k}" min="${min}" max="${max}" step="${step}" value="${min}"
+           oninput="onSlider('${k}',this.value)">
+    <span class="sr-val" id="sv-${k}">0</span>
+  `;
+  container.appendChild(row);
+}
+
+function onSlider(k, val) {
+  const v = parseFloat(val);
+  document.getElementById('sv-'+k).textContent = fmtVal(v);
+  pidVals[k] = v;
+}
+
+function fmtVal(v) {
+  return v < 0.01 ? v.toFixed(4) : v < 1 ? v.toFixed(3) : v.toFixed(2);
+}
+
+// ── Build number input ────────────────────────────────────────────────────────
+function mkNum(def, container, store) {
+  const { k, label, min, max, step } = def;
+  const row = document.createElement('div');
+  row.className = 'nr';
+  row.innerHTML = `
+    <label>${label}</label>
+    <input type="number" id="ni-${k}" min="${min}" max="${max}" step="${step||1}" value="0">
+  `;
+  row.querySelector('input').addEventListener('input', function() {
+    store[k] = parseFloat(this.value);
+  });
+  container.appendChild(row);
+}
+
+// ── Wire up DOM ───────────────────────────────────────────────────────────────
+PID_DEFS  .forEach(d => mkSlider(d, document.getElementById('pid-sliders')));
+SPEED_DEFS.forEach(d => mkSlider(d, document.getElementById('speed-sliders')));
+PERC_DEFS .forEach(d => mkSlider(d, document.getElementById('perc-sliders')));
+LIMIT_DEFS.forEach(d => mkSlider(d, document.getElementById('limit-sliders')));
+SERVO_DEFS.forEach(d => mkNum(d, document.getElementById('servo-inputs'),  servoVals));
+SM_DEFS   .forEach(d => mkNum(d, document.getElementById('sm-inputs'),     smVals));
+
+// ── Load functions ────────────────────────────────────────────────────────────
+function setSlider(k, v) {
+  const sl = document.getElementById('sl-'+k);
+  const sv = document.getElementById('sv-'+k);
+  if (!sl) return;
+  sl.value = v;
+  sv.textContent = fmtVal(parseFloat(v));
+  pidVals[k] = parseFloat(v);
+}
+
+async function loadPid() {
+  try {
+    const { values } = await (await fetch('/api/pid')).json();
+    Object.entries(values).forEach(([k,v]) => setSlider(k,v));
+  } catch(e) { console.warn('loadPid', e); }
+}
+
+async function loadSmoothing() {
+  try {
+    const d = await (await fetch('/api/smoothing')).json();
+    Object.entries(d).forEach(([k,v]) => setSlider(k, v));
+  } catch(e) {}
+}
+
+async function applySmoothing() {
+  const payload = {};
+  PERC_DEFS.forEach(({ k }) => { if (pidVals[k] !== undefined) payload[k] = pidVals[k]; });
+  try { await fetch('/api/smoothing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); }
+  catch(e) {}
+}
+
+async function loadServo() {
+  try {
+    const d = await (await fetch('/api/servo')).json();
+    ['min','max','center'].forEach(k => {
+      const el = document.getElementById('ni-'+k);
+      if (el) { el.value = d[k]; servoVals[k] = d[k]; }
+    });
+  } catch(e) {}
+}
+
+async function loadSmParams() {
+  try {
+    const d = await (await fetch('/api/sm-params')).json();
+    Object.entries(d).forEach(([k,v]) => {
+      const el = document.getElementById('ni-'+k);
+      if (el) { el.value = v; smVals[k] = v; }
+    });
+  } catch(e) {}
+}
+
+function _escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function loadTuningInfo() {
+  const el = document.getElementById('tuning-persist-info');
+  if (!el) return;
+  try {
+    const d = await (await fetch('/api/tuning')).json();
+    if (d.persist_enabled) {
+      el.innerHTML =
+        'Values are written to <code style="font-size:10px;word-break:break-all">' +
+        _escapeHtml(d.path) +
+        '</code> whenever you Apply (PID, smoothing, servo, SM). ' +
+        'They are restored on the next <code style="font-size:10px">run.py</code> start. ' +
+        'Full JSON: <code style="font-size:10px">GET /api/tuning</code>.';
+    } else {
+      el.textContent =
+        'File persistence is off (RUN_UI_TUNING_DISABLE). Tuning is in-memory only until restart.';
+    }
+  } catch (e) {
+    el.textContent = 'Could not load tuning info.';
+    console.warn('loadTuningInfo', e);
+  }
+}
+
+async function loadStates() {
+  try {
+    const states = await (await fetch('/api/states')).json();
+    const grid = document.getElementById('state-grid');
+    grid.innerHTML = '';
+    states.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'sg-btn';
+      btn.id = 'sbtn-'+s;
+      btn.title = s;
+      btn.textContent = s.replace(/_/g,' ');
+      btn.onclick = () => setStateApi(s);
+      grid.appendChild(btn);
+    });
+  } catch(e) {}
+}
+
+// ── Apply functions ───────────────────────────────────────────────────────────
+async function applyPid() {
+  try {
+    const res = await fetch('/api/pid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pidVals),
+    });
+    const d = await res.json();
+    if (!d.ok) console.warn('PID apply error', d);
+  } catch(e) { console.error(e); }
+}
+
+async function applyServo() {
+  try {
+    await fetch('/api/servo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(servoVals),
+    });
+  } catch(e) {}
+}
+
+async function applySmParams() {
+  try {
+    await fetch('/api/sm-params', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(smVals),
+    });
+  } catch(e) {}
+}
+
+async function setStateApi(state) {
+  try {
+    await fetch('/api/set-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state }),
+    });
+  } catch(e) {}
+}
+
+async function doReset() {
+  try { await fetch('/api/reset', { method: 'POST' }); } catch(e) {}
+}
+
+// ── Rolling log ───────────────────────────────────────────────────────────────
+const LOG_MAX = 60;
+const _logRows = [];
+
+function _errClass(e) {
+  const a = Math.abs(e);
+  return a > 0.4 ? 'err-hi' : a > 0.15 ? 'err-med' : 'err-ok';
+}
+
+function _appendLog(d) {
+  const now = new Date();
+  const ts = now.toTimeString().slice(0,8) + '.' + String(now.getMilliseconds()).padStart(3,'0');
+  const sign = d.line_error_x >= 0 ? '+' : '';
+  const ec = _errClass(d.line_error_x);
+  _logRows.push(
+    `<div class="lr">` +
+    `<span class="lt">${ts}</span>` +
+    `<span class="lf">#${d.frame_count}</span>` +
+    `<span class="lv">px=<b>${d.px}</b> py=<b>${d.py}</b> ` +
+    `err=<b class="${ec}">${sign}${d.line_error_x.toFixed(4)}</b> ` +
+    `raw=<b>${(d.line_error_raw>=0?'+':'')+d.line_error_raw.toFixed(4)}</b> ` +
+    `γ=${d.gamma.toFixed(3)} z=${d.zone} ${d.path_detected?'<span style="color:var(--green)">LINE</span>':'<span style="color:var(--red)">LOST</span>'}` +
+    `</span></div>`
+  );
+  if (_logRows.length > LOG_MAX) _logRows.shift();
+  const box = document.getElementById('log-box');
+  if (box) {
+    const atBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 4;
+    box.innerHTML = _logRows.join('');
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+}
+
+function clearLog() {
+  _logRows.length = 0;
+  const box = document.getElementById('log-box');
+  if (box) box.innerHTML = '';
+}
+
+function _updateTvalEl(id, val, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val;
+  const card = document.getElementById(id.replace('-v',''));
+  if (card && cls !== undefined) card.className = 'tval ' + (cls || '');
+}
+
+// ── Status polling (recursive setTimeout prevents fetch queueing) ─────────────
+let _curState   = '';
+let _curZone    = '';
+let _curRobot   = null;
+let _lastFrame  = -1;
+
+function _setText(id, val) {
+  const el = document.getElementById(id);
+  if (el && el.textContent !== String(val)) el.textContent = val;
+}
+
+async function pollStatus() {
+  try {
+    const d = await (await fetch('/api/status')).json();
+    const sign = d.line_error_x >= 0 ? '+' : '';
+
+    // Header pills
+    _setText('h-state', d.sm_state);
+    _setText('h-zone',  d.zone);
+    _setText('h-gamma', d.gamma.toFixed(2));
+    _setText('h-err',   sign + d.line_error_x.toFixed(3));
+    _setText('h-fps',   d.fps);
+    _setText('h-robot', d.robot_active ? 'OK' : 'OFF');
+
+    if (d.robot_active !== _curRobot) {
+      document.getElementById('pill-robot').className = 'pill ' + (d.robot_active ? 'good' : 'bad');
+      _curRobot = d.robot_active;
+    }
+
+    // State grid highlight
+    if (d.sm_state !== _curState) {
+      document.querySelectorAll('.sg-btn').forEach(b => b.classList.remove('on'));
+      const ab = document.getElementById('sbtn-'+d.sm_state);
+      if (ab) ab.classList.add('on');
+      _curState = d.sm_state;
+    }
+
+    // Telemetry table (States tab)
+    const telemKey = d.sm_state + d.zone + d.gamma + d.line_error_x + d.path_detected + d.target_detected + d.fps;
+    if (telemKey !== _curZone) {
+      _curZone = telemKey;
+      const rows = [
+        ['State',          d.sm_state],
+        ['Zone',           d.zone],
+        ['Confidence γ',   d.gamma.toFixed(4)],
+        ['Line Error X',   sign + d.line_error_x.toFixed(5)],
+        ['Path Detected',  d.path_detected   ? '✓' : '—'],
+        ['Target Detected',d.target_detected ? '✓' : '—'],
+        ['Camera FPS',     d.fps],
+        ['Hardware',       d.robot_active ? 'Connected' : 'Software-only'],
+      ];
+      document.getElementById('telem-tbl').innerHTML =
+        rows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+    }
+
+    // ── Logs tab live values ─────────────────────────────────────────────
+    const ec = _errClass(d.line_error_x);
+    _updateTvalEl('tv-px-v',       d.px);
+    _updateTvalEl('tv-py-v',       d.py);
+    _updateTvalEl('tv-err-v',      (sign + d.line_error_x.toFixed(4)), ec);
+    _updateTvalEl('tv-err-raw-v',  (d.line_error_raw >= 0 ? '+' : '') + d.line_error_raw.toFixed(4));
+    _updateTvalEl('tv-gamma-v',    d.gamma.toFixed(4));
+    _updateTvalEl('tv-zone-v',     d.zone);
+    _updateTvalEl('tv-mask-v',     d.path_mask_key || '—');
+    _updateTvalEl('tv-fps-v',      d.fps + ' fps');
+    _updateTvalEl('tv-path-v',     d.path_detected  ? 'YES' : 'NO',  d.path_detected  ? 'ok' : 'bad');
+    _updateTvalEl('tv-tgt-v',      d.target_detected ? 'YES' : 'NO', d.target_detected ? 'ok' : '');
+    _updateTvalEl('tv-tpx-v',      d.target_px);
+    _updateTvalEl('tv-tpy-v',      d.target_py);
+
+    // Append to rolling log only when a new frame arrives
+    if (d.frame_count !== _lastFrame) {
+      _lastFrame = d.frame_count;
+      _appendLog(d);
+    }
+  } catch(e) { /* server momentarily busy */ }
+  setTimeout(pollStatus, 400);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadPid();
+loadSmoothing();
+loadServo();
+loadSmParams();
+loadTuningInfo();
+loadStates();
+pollStatus();
+</script>
+</body>
+</html>

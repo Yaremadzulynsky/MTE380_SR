@@ -49,6 +49,10 @@ class HoughConfig:
     max_line_gap: int = 20
     min_abs_slope: float = 0.3
     center_weight: float = 0.2
+    # Performance (see extract_hough_heading):
+    hough_downscale: float = 1.0  # 1.0 = off; e.g. 0.5 runs Canny+Hough on half size, maps lines back
+    max_hough_candidates: int = 0  # 0 = no cap; else keep this many longest segments before scoring
+    max_debug_segments: int = 0  # 0 = all scored segments in debug; else cap hough_segments for draw/payload
 
 
 @dataclass

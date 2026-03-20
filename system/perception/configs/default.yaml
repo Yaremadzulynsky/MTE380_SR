@@ -49,6 +49,9 @@ hough:
   max_line_gap: 20
   min_abs_slope: 0.3
   center_weight: 0.2
+  # Optional speed: hough_downscale: 0.5
+  # max_hough_candidates: 300
+  # max_debug_segments: 50
 
 smoothing:
   window_size: 5
