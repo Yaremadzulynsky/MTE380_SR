@@ -246,6 +246,22 @@ class WebServer:
                 robot.set_speed_gains(float(kp), float(ki), float(kd))
             return jsonify(robot.get_gains())
 
+        @app.route('/api/line-kp', methods=['GET'])
+        def get_line_kp():
+            import state_machine.states.line_follow_p as _lfp
+            return jsonify({'kp': _lfp.KP})
+
+        @app.route('/api/line-kp', methods=['POST'])
+        def set_line_kp():
+            import state_machine.states.line_follow_p as _lfp
+            body = request.get_json(silent=True) or {}
+            kp = body.get('kp')
+            if kp is None:
+                return jsonify({'error': 'missing kp'}), 400
+            _lfp.KP = float(kp)
+            log.info('line_follow_p KP → %.5f', _lfp.KP)
+            return jsonify({'kp': _lfp.KP})
+
     # ── MJPEG stream ───────────────────────────────────────────────────────────
 
     def _mjpeg_stream(self):

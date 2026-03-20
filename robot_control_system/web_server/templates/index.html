@@ -249,8 +249,9 @@
 
 <div id="control-bar">
   <span id="state-badge">&#9679; &mdash;</span>
-  <button class="ctrl-btn" id="btn-start" onclick="setState('line_follow')">&#9654; START</button>
-  <button class="ctrl-btn" id="btn-stop"  onclick="setState('stopped')">&#9632; STOP</button>
+  <button class="ctrl-btn" id="btn-start"   onclick="setState('line_follow')">&#9654; START</button>
+  <button class="ctrl-btn" id="btn-start-p" onclick="setState('line_follow_p')" style="color:var(--warning);">&#9654; START P</button>
+  <button class="ctrl-btn" id="btn-stop"    onclick="setState('stopped')">&#9632; STOP</button>
 </div>
 
 <main>
@@ -371,6 +372,27 @@
           <button class="ctrl-btn" id="btn-pid-apply" onclick="applyGains()" style="color:var(--accent);">&#10003; APPLY</button>
           <button class="ctrl-btn" onclick="loadGains()" style="color:var(--dim);">&#8635; LOAD</button>
           <span id="pid-status" style="font-size:11px; color:var(--dim);"></span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Line follow P tuner -->
+    <div class="panel">
+      <div class="panel-title">LINE FOLLOW P</div>
+      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:var(--label-w); color:var(--dim); font-size:11px; flex-shrink:0;">Kp (per px)</span>
+          <input id="lfp-kp" type="number" step="0.0005" value="0.005"
+            style="width:100px; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:3px 6px; font-family:inherit; font-size:12px;">
+          <span style="color:var(--dim); font-size:11px;">correction = lat_px × kp</span>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="ctrl-btn" id="btn-lfp-apply" onclick="applyLineKp()" style="color:var(--warning);">&#10003; APPLY</button>
+          <button class="ctrl-btn" onclick="loadLineKp()" style="color:var(--dim);">&#8635; LOAD</button>
+          <span id="lfp-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
 
       </div>
@@ -685,6 +707,43 @@
       .finally(() => { btn.disabled = false; });
   }
 
+  // ── Line follow P tuner ───────────────────────────────────────────────────
+
+  function loadLineKp() {
+    fetch('/api/line-kp')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('lfp-kp').value = d.kp;
+        document.getElementById('lfp-status').textContent = 'loaded';
+        document.getElementById('lfp-status').style.color = 'var(--success)';
+      })
+      .catch(() => {
+        document.getElementById('lfp-status').textContent = 'error';
+        document.getElementById('lfp-status').style.color = 'var(--danger)';
+      });
+  }
+
+  function applyLineKp() {
+    const kp  = parseFloat(document.getElementById('lfp-kp').value);
+    const btn = document.getElementById('btn-lfp-apply');
+    btn.disabled = true;
+    fetch('/api/line-kp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kp }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('lfp-status').textContent = 'kp = ' + d.kp;
+        document.getElementById('lfp-status').style.color = 'var(--success)';
+      })
+      .catch(() => {
+        document.getElementById('lfp-status').textContent = 'error';
+        document.getElementById('lfp-status').style.color = 'var(--danger)';
+      })
+      .finally(() => { btn.disabled = false; });
+  }
+
   // ── Manual control ────────────────────────────────────────────────────────
 
   function sendDirection() {
@@ -857,7 +916,7 @@
   }
 
   // Load gains on page load
-  window.addEventListener('load', loadGains);
+  window.addEventListener('load', () => { loadGains(); loadLineKp(); });
 
   // Reload gains when switching loop
   document.querySelectorAll('input[name="pid-loop"]').forEach(r =>
