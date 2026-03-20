@@ -1,0 +1,19 @@
+vision:
+  min_mask_pixels: 200
+  red_hsv:
+    lower1:
+    - 0
+    - 165
+    - 40
+    upper1:
+    - 12
+    - 255
+    - 255
+    lower2:
+    - 168
+    - 165
+    - 40
+    upper2:
+    - 180
+    - 255
+    - 255

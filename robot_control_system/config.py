@@ -23,3 +23,8 @@ def reload() -> dict:
     global _cfg
     _cfg = load()
     return _cfg
+
+def save(cfg: dict, path: str | Path = _PATH) -> None:
+    """Write cfg back to config.yaml, preserving key order."""
+    with open(path, 'w') as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)

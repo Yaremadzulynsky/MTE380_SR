@@ -236,6 +236,30 @@ class WebServer:
             )
             return jsonify(det.get_vision_params())
 
+        @app.route('/api/vision/save', methods=['POST'])
+        def save_vision():
+            det = self._detector
+            if det is None:
+                return jsonify({'error': 'no detector'}), 503
+            import config as _cfg_mod
+            import pathlib as _pl
+            params  = det.get_vision_params()
+            base    = _pl.Path(_cfg_mod.__file__).parent
+            orig_rc = _cfg_mod.get()['vision']['red_hsv']
+            tuned = {
+                'vision': {
+                    'min_mask_pixels': params['min_mask_pixels'],
+                    'red_hsv': {
+                        'lower1': [int(orig_rc['lower1'][0]), params['s_min'], params['v_min']],
+                        'upper1': list(map(int, orig_rc['upper1'])),
+                        'lower2': [int(orig_rc['lower2'][0]), params['s_min'], params['v_min']],
+                        'upper2': list(map(int, orig_rc['upper2'])),
+                    },
+                }
+            }
+            _cfg_mod.save(tuned, base / 'temp.yaml')
+            return jsonify({'saved': True, **params})
+
         @app.route('/api/geometry', methods=['GET'])
         def get_geometry():
             import config as _cfg

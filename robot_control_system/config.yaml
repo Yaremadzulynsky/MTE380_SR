@@ -29,11 +29,24 @@ vision:
   min_mask_pixels: 200
   pixels_per_meter: 2500   # calibrate: measure a known distance on the ground in pixels
   camera_forward_m: 0.10   # camera is this far ahead of the wheel base centre
+  min_mask_pixels: 200
   red_hsv:
-    lower1: [0,   50,  40]
-    upper1: [12,  255, 255]
-    lower2: [168, 50,  40]
-    upper2: [180, 255, 255]
+    lower1:
+    - 0
+    - 165
+    - 40
+    upper1:
+    - 12
+    - 255
+    - 255
+    lower2:
+    - 168
+    - 165
+    - 40
+    upper2:
+    - 180
+    - 255
+    - 255
 
 line_follow:
   follow_speed: 0.35

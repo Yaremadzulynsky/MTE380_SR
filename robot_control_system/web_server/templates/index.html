@@ -452,6 +452,7 @@
 
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="ctrl-btn" onclick="loadVision()" style="color:var(--dim);">&#8635; LOAD</button>
+          <button class="ctrl-btn" onclick="saveVision()" style="color:var(--warning);">&#9112; SAVE TO CONFIG</button>
           <span id="vis-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
 
@@ -782,6 +783,13 @@
       .then(r => r.json())
       .then(() => setStatus('vis-status', 'applied', true))
       .catch(() => setStatus('vis-status', 'error', false));
+  }
+
+  function saveVision() {
+    fetch('/api/vision/save', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => setStatus('vis-status', 'saved to temp.yaml', true))
+      .catch(() => setStatus('vis-status', 'save error', false));
   }
 
   const _applyVisionDebounced = debounce(applyVision, 250);

@@ -142,14 +142,10 @@ log = logging.getLogger(__name__)
 
 # ── Config (loaded from config.yaml) ─────────────────────────────────────────
 _vc = _config.get()['vision']
-_rc = _vc['red_hsv']
-_RED_LOWER1 = np.array(_rc['lower1'], dtype=np.uint8)
-_RED_UPPER1 = np.array(_rc['upper1'], dtype=np.uint8)
-_RED_LOWER2 = np.array(_rc['lower2'], dtype=np.uint8)
-_RED_UPPER2 = np.array(_rc['upper2'], dtype=np.uint8)
-FRAME_WIDTH     = _vc['frame_width']
-FRAME_HEIGHT    = _vc['frame_height']
-MIN_MASK_PIXELS = _vc['min_mask_pixels']
+FRAME_WIDTH  = _vc['frame_width']
+FRAME_HEIGHT = _vc['frame_height']
+# HSV thresholds and min_mask_pixels are loaded per-instance in __init__ so
+# they can be mutated at runtime via set_vision_params().
 
 
 @dataclass
@@ -382,12 +378,12 @@ class LineDetector:
         centroid_x = M['m10'] / M['m00']
         centroid_y = M['m01'] / M['m00']
 
-        # ── Direction via fitLine on all red pixels ───────────────────────────
-        # Using all mask pixels (not contour edges) gives a stable direction:
-        # the long axis of the full pixel distribution dominates.  Fitting on
-        # contour edges is unreliable because a thick line produces a roughly
-        # rectangular outline whose sides fight the ends in the least-squares fit.
-        all_pts = cv2.findNonZero(mask)
+        # ── Direction via fitLine on largest-contour pixels only ─────────────
+        # Fill the largest contour into a clean mask so that stray red pixels
+        # elsewhere in the frame cannot influence the direction fit.
+        contour_mask = np.zeros(mask.shape, dtype=np.uint8)
+        cv2.drawContours(contour_mask, [contour], -1, 255, cv2.FILLED)
+        all_pts = cv2.findNonZero(contour_mask)
         if all_pts is None:
             return None
         [vx], [vy], [x0], [y0] = cv2.fitLine(all_pts, cv2.DIST_L2, 0, 0.01, 0.01)
@@ -412,8 +408,8 @@ class LineDetector:
         lateral_m  = (lateral_px / self._pixels_per_meter
                       if self._pixels_per_meter is not None else None)
 
-        # ── Sample red pixels for world-space splatter ────────────────────────
-        _N  = 30
+        # ── Sample largest-contour pixels for world-space splatter ────────────
+        _N    = 30
         n_pts = len(all_pts)
         if n_pts > _N:
             idx     = np.random.choice(n_pts, _N, replace=False)
