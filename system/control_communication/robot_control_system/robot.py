@@ -349,12 +349,15 @@ class Robot:
                 # early so the robot corners on one wheel instead of waiting for the
                 # inner wheel command to cross through reverse.
                 if linear_x > 0.0 and (angular_z >= ONE_WHEEL_TURN_THRESHOLD or left < 0.0 <= right):
+                    print(f'One-wheel turn: linear_x={linear_x:.2f} angular_z={angular_z:.2f} → left=0 right={right:.2f}')
                     left = 0.0
                     right = _clamp_unit(linear_x + abs(angular_z))
                 elif linear_x > 0.0 and (angular_z <= -ONE_WHEEL_TURN_THRESHOLD or right < 0.0 <= left):
+                    print(f'One-wheel turn: linear_x={linear_x:.2f} angular_z={angular_z:.2f} → left={left:.2f} right=0')
                     right = 0.0
                     left = _clamp_unit(linear_x + abs(angular_z))
                 else:
+                    print(f'Two-wheel turn: linear_x={linear_x:.2f} angular_z={angular_z:.2f} → left={left:.2f} right={right:.2f}')
                     left = _clamp_unit(left)
                     right = _clamp_unit(right)
 
