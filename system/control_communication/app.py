@@ -53,6 +53,16 @@ SIM_CONTROL_URL = (
     os.getenv("SIM_CONTROL_URL")
     or ""
 ).strip()
+PROMETHEUS_EXPORTER_BASE_URL = (
+    os.getenv("PROMETHEUS_EXPORTER_BASE_URL")
+    or "http://localhost:9101"
+).strip().rstrip("/")
+PROMETHEUS_EXPORTER_ENABLED = parse_env_bool("PROMETHEUS_EXPORTER_ENABLED", "1")
+PROMETHEUS_EXPORTER_TIMEOUT_S = float(os.getenv("PROMETHEUS_EXPORTER_TIMEOUT_S", "0.2"))
+PROMETHEUS_EXPORTER_FEEDBACK_INTERVAL_S = max(
+    float(os.getenv("PROMETHEUS_EXPORTER_FEEDBACK_INTERVAL_S", "0.2")),
+    0.05,
+)
 PID_AUDIT_LOG_PATH = (
     os.getenv("PID_AUDIT_LOG_PATH")
     or "/var/log/control-communication/pid-changes.txt"
@@ -200,6 +210,64 @@ def log_line(event: str, fields: dict[str, Any]) -> None:
     for key, value in fields.items():
         parts.append(f"{key}={value}")
     print(" ".join(parts), flush=True)
+
+
+def _post_to_prometheus_exporter(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if not PROMETHEUS_EXPORTER_ENABLED:
+        return {"ok": False, "disabled": True}
+    body = json.dumps(payload).encode("utf-8")
+    req = urlrequest.Request(
+        f"{PROMETHEUS_EXPORTER_BASE_URL}{path}",
+        data=body,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=PROMETHEUS_EXPORTER_TIMEOUT_S) as response:
+            return {"ok": 200 <= response.status < 300, "status_code": int(response.status)}
+    except Exception as exc:
+        log_line("prometheus_exporter_forward_fail", {"path": path, "error": repr(exc)})
+        return {"ok": False, "error": str(exc)}
+
+
+def publish_command_metrics(
+    *,
+    x: float,
+    y: float,
+    speed: float,
+    servo_deg: int,
+    left: float,
+    right: float,
+    target_heading_rad: float | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "x": x,
+        "y": y,
+        "speed": speed,
+        "servo_deg": servo_deg,
+        "left": left,
+        "right": right,
+    }
+    if target_heading_rad is not None:
+        payload["target_heading_rad"] = target_heading_rad
+    _post_to_prometheus_exporter("/command", payload)
+
+
+def publish_feedback_metrics() -> None:
+    if not PROMETHEUS_EXPORTER_ENABLED or robot is None:
+        return
+    try:
+        snapshot = robot.get_feedback_snapshot()
+    except Exception as exc:
+        log_line("prometheus_exporter_feedback_snapshot_fail", {"error": repr(exc)})
+        return
+    _post_to_prometheus_exporter("/feedback", snapshot)
+
+
+def _feedback_metrics_loop() -> None:
+    while True:
+        publish_feedback_metrics()
+        time.sleep(PROMETHEUS_EXPORTER_FEEDBACK_INTERVAL_S)
 
 
 def _append_pid_audit(kind: str, value: float, *, source_ip: str | None) -> None:
@@ -523,6 +591,22 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
                 "rotation_scale": rotation_scale,
             },
         )
+        target_heading_rad = robot.get_feedback_snapshot().get("target_heading_rad")
+    else:
+        target_heading_rad = None
+
+    applied_left = clamp(cmd_y + cmd_x, -1.0, 1.0)
+    applied_right = clamp(cmd_y - cmd_x, -1.0, 1.0)
+
+    publish_command_metrics(
+        x=cmd_x,
+        y=cmd_y,
+        speed=speed_value,
+        servo_deg=encoded["servo_deg"],
+        left=applied_left,
+        right=applied_right,
+        target_heading_rad=target_heading_rad if isinstance(target_heading_rad, (int, float)) else None,
+    )
 
     ts = now_iso()
     last_sent = {
@@ -919,8 +1003,12 @@ def main() -> None:
             "servo_max_deg": SERVO_MAX_DEG,
             "servo_default_deg": SERVO_DEFAULT_DEG,
             "debug": DEBUG,
+            "prometheus_exporter_enabled": PROMETHEUS_EXPORTER_ENABLED,
+            "prometheus_exporter_base_url": PROMETHEUS_EXPORTER_BASE_URL,
         },
     )
+    if PROMETHEUS_EXPORTER_ENABLED:
+        threading.Thread(target=_feedback_metrics_loop, daemon=True).start()
     app.run(host=HOST, port=PORT, debug=DEBUG)
 
 

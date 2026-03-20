@@ -116,6 +116,19 @@ class Robot:
         with self._lock:
             return self._enc_left, self._enc_right
 
+    def get_feedback_snapshot(self) -> dict[str, float | int]:
+        """Return the latest control/odometry feedback for external publishers."""
+        with self._lock:
+            return {
+                "target_heading_rad": self._target_heading,
+                "heading_rad": self._heading_fb,
+                "linear_speed_mps": self._linear_speed,
+                "enc_left_ticks": self._enc_left,
+                "enc_right_ticks": self._enc_right,
+                "speed_scale": self._speed_scale,
+                "rotation_scale": self._rotation_scale,
+            }
+
     def drive_ticks(self, left_delta: int, right_delta: int,
                     kp: float = 0.001, kd: float = 0.0, deadband: int = 10, timeout: float = 10.0):
         """Drive both wheels by delta ticks using independent PD loops. Blocks until done or timeout."""

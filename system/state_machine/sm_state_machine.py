@@ -1,8 +1,10 @@
+import json
 import math
 import os
 import threading
 import time
 from typing import Optional
+from urllib import request as urlrequest
 
 from sm_control_comm import ControlCommClient
 from sm_models import Inputs, State, StateContext, TransitionResult, Vector
@@ -49,6 +51,12 @@ def parse_env_bool(name: str, default: str = "0") -> bool:
 LINE_FOLLOW_DEBUG = parse_env_bool("LINE_FOLLOW_DEBUG", "0")
 ASYNC_CONTROL_SENDER = parse_env_bool("ASYNC_CONTROL_SENDER", "1")
 ASYNC_CONTROL_SEND_HZ = max(float(os.getenv("ASYNC_CONTROL_SEND_HZ", "50.0")), 1.0)
+PROMETHEUS_EXPORTER_ENABLED = parse_env_bool("PROMETHEUS_EXPORTER_ENABLED", "1")
+PROMETHEUS_EXPORTER_BASE_URL = (
+    os.getenv("PROMETHEUS_EXPORTER_BASE_URL")
+    or "http://localhost:9101"
+).strip().rstrip("/")
+PROMETHEUS_EXPORTER_TIMEOUT_S = max(float(os.getenv("PROMETHEUS_EXPORTER_TIMEOUT_S", "0.2")), 0.05)
 
 
 class _AsyncControlSender:
@@ -81,6 +89,22 @@ class _AsyncControlSender:
 
 
 _ASYNC_SENDER = _AsyncControlSender(control, ASYNC_CONTROL_SEND_HZ) if ASYNC_CONTROL_SENDER else None
+
+
+def _post_state_metrics(payload: dict[str, str]) -> None:
+    if not PROMETHEUS_EXPORTER_ENABLED:
+        return
+    req = urlrequest.Request(
+        f"{PROMETHEUS_EXPORTER_BASE_URL}/state",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlrequest.urlopen(req, timeout=PROMETHEUS_EXPORTER_TIMEOUT_S):
+            return
+    except Exception:
+        return
 
 
 def wrap_angle(rad: float) -> float:
@@ -205,6 +229,13 @@ class StateMachine:
         )
         self._last_remote_control_poll_at = 0.0
         self._last_command_at = 0.0
+        _post_state_metrics(
+            {
+                "state": self.state.value,
+                "source_state": self.state.value,
+                "transition_label": "init",
+            }
+        )
 
     def _fetch_remote_control_command(self) -> Command | None:
         result = control.get_control()
@@ -812,6 +843,13 @@ class StateMachine:
 
         source = self.state
         self.state = next_state
+        _post_state_metrics(
+            {
+                "state": self.state.value,
+                "source_state": source.value,
+                "transition_label": label,
+            }
+        )
         if source != self.state:
             self._reset_line_pid()
             self._reset_find_line()
@@ -823,6 +861,7 @@ class StateMachine:
         self.force_state(State.SEARCHING)
 
     def force_state(self, target_state: State) -> None:
+        previous_state = self.state
         self.state = target_state
         self.context = StateContext()
         self._last_command_at = 0.0
@@ -830,4 +869,11 @@ class StateMachine:
         self._retrieved_turn_target_heading = None
         self._reset_line_pid()
         self._reset_find_line()
+        _post_state_metrics(
+            {
+                "state": self.state.value,
+                "source_state": previous_state.value,
+                "transition_label": "force_state",
+            }
+        )
         

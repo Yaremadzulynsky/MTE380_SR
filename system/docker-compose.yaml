@@ -46,6 +46,17 @@ services:
       SERIAL_PORT: "/dev/ttyACM0"
       SERIAL_BAUDRATE: "115200"
       LOG_PATH: "/var/log/control-communication/control-communication.log"
+      PROMETHEUS_EXPORTER_ENABLED: "1"
+      PROMETHEUS_EXPORTER_BASE_URL: "http://localhost:9101"
+
+  prometheus-exporter:
+    build:
+      context: ./control_communication
+    container_name: prometheus-exporter
+    network_mode: host
+    command: ["python", "prometheus_exporter.py"]
+    environment:
+      PORT: "9101"
 
   control-screen:
     build:
@@ -90,8 +101,11 @@ services:
       TICK_INTERVAL: "0.01"
       FAILED_PICKUP_LIMIT: "3"
       PORT: "8000"
+      PROMETHEUS_EXPORTER_ENABLED: "1"
+      PROMETHEUS_EXPORTER_BASE_URL: "http://localhost:9101"
     depends_on:
       - control-communication
+      - prometheus-exporter
 
   computer-vision:
     build:
