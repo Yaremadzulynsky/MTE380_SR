@@ -160,6 +160,8 @@ class LineResult:
     mask: Optional[np.ndarray] = field(default=None, repr=False)   # binary red mask (debug)
     frame: Optional[np.ndarray] = field(default=None, repr=False)  # annotated frame (debug)
     sampled_pixels: Optional[list] = field(default=None, repr=False)  # [(u,v)…] N sampled red pixels
+    segments: Optional[list] = field(default=None, repr=False)     # [(cx,cy)…] near→far strip centroids
+    curvature: Optional[float] = field(default=None, repr=False)   # rad; + = curves right ahead
 
 
 class LineDetector:
@@ -223,6 +225,7 @@ class LineDetector:
         self._hsv_upper2 = np.array(rc['upper2'], dtype=np.uint8).copy()
         self._min_mask_pixels: int = _vc['min_mask_pixels']
         self._cam_fwd_m: float = float(_vc.get('camera_forward_m', 0.15))
+        self._n_segments: int = int(_vc.get('line_segments', 4))
         self._smoothed_theta: Optional[float] = None  # robot-frame smoothed turn angle
 
     # ── Public API ─────────────────────────────────────────────────────────────
@@ -405,9 +408,11 @@ class LineDetector:
         if vy > 0:
             vx, vy = -vx, -vy
 
+        # Global fitLine angle (used for lateral distance and fallback direction).
         angle_rad = math.atan2(vx, -vy)
         angle_deg = math.degrees(angle_rad)
         direction = (math.sin(angle_rad), math.cos(angle_rad))
+        # Near-segment tangent will override direction below once segments are computed.
 
         # ── Lateral distance ──────────────────────────────────────────────────
         # Perpendicular distance from bottom-centre of the image (robot ground
@@ -428,6 +433,45 @@ class LineDetector:
             sampled = [(int(all_pts[i][0][0]), int(all_pts[i][0][1])) for i in idx]
         else:
             sampled = [(int(p[0][0]), int(p[0][1])) for p in all_pts]
+
+        # ── Segmented curvature detection ─────────────────────────────────────
+        strip_h = max(1, h // self._n_segments)
+        min_strip_px = max(5, self._min_mask_pixels // (self._n_segments * 2))
+        segments: list = []
+        for i in range(self._n_segments):
+            y1 = h - (i + 1) * strip_h
+            y2 = h - i * strip_h
+            strip = contour_mask[max(0, y1):y2, :]
+            if cv2.countNonZero(strip) >= min_strip_px:
+                Mseg = cv2.moments(strip)
+                if Mseg['m00'] > 0:
+                    cx = Mseg['m10'] / Mseg['m00']
+                    cy = max(0, y1) + Mseg['m01'] / Mseg['m00']
+                    segments.append((float(cx), float(cy)))
+
+        curvature: Optional[float] = None
+        if len(segments) >= 2:
+            dx_n = segments[1][0] - segments[0][0]
+            dy_n = segments[1][1] - segments[0][1]
+            mag_n = math.hypot(dx_n, dy_n)
+            if mag_n > 0:
+                seg_vx = dx_n / mag_n
+                seg_vy = dy_n / mag_n
+                # Ensure it points upward (forward in image).
+                if seg_vy > 0:
+                    seg_vx, seg_vy = -seg_vx, -seg_vy
+                seg_angle_rad = math.atan2(seg_vx, -seg_vy)
+                angle_deg = math.degrees(seg_angle_rad)
+                direction  = (math.sin(seg_angle_rad), math.cos(seg_angle_rad))
+                angle_rad  = seg_angle_rad   # keep consistent for annotation theta
+
+        if len(segments) >= 3:
+            dx_f = segments[-1][0] - segments[-2][0]
+            dy_f = segments[-1][1] - segments[-2][1]
+            a_near = math.atan2(segments[1][0] - segments[0][0],
+                                -(segments[1][1] - segments[0][1]))
+            a_far  = math.atan2(dx_f, -dy_f)
+            curvature = (a_far - a_near + math.pi) % (2 * math.pi) - math.pi
 
         # ── Annotation ────────────────────────────────────────────────────────
         ARROW_LEN      = 80
@@ -471,62 +515,76 @@ class LineDetector:
 
         cv2.circle(annotated, robot_pt, 5, (255, 255, 255), -1)
 
-        if self._debug:
-            # Contour outline
-            cv2.drawContours(annotated, [contour], -1, (0, 180, 180), 1)
+        # Segment centroids (always drawn when segments are available)
+        SEG_COLOR = (180, 255, 100)   # lime green
+        for idx, (scx, scy) in enumerate(segments):
+            pt = (int(scx), int(scy))
+            cv2.circle(annotated, pt, 4, SEG_COLOR, -1)
+            if idx > 0:
+                prev = (int(segments[idx - 1][0]), int(segments[idx - 1][1]))
+                cv2.line(annotated, prev, pt, SEG_COLOR, 1)
+        if curvature is not None:
+            curv_deg = math.degrees(curvature)
+            cv2.putText(annotated, f'curv={curv_deg:+.1f}d',
+                        (8, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.40,
+                        SEG_COLOR, 1)
 
-            # Fitted line across the full frame
-            t = float(max(w, h))
-            cv2.line(annotated,
-                     (int(centroid_x - vx * t), int(centroid_y - vy * t)),
-                     (int(centroid_x + vx * t), int(centroid_y + vy * t)),
-                     (0, 120, 0), 1)
+        # Contour outline
+        cv2.drawContours(annotated, [contour], -1, (0, 180, 180), 1)
 
-            # Centroid dot
-            cv2.circle(annotated, (int(centroid_x), int(centroid_y)), 5, (0, 255, 255), -1)
+        # Fitted line across the full frame
+        t = float(max(w, h))
+        cv2.line(annotated,
+                 (int(centroid_x - vx * t), int(centroid_y - vy * t)),
+                 (int(centroid_x + vx * t), int(centroid_y + vy * t)),
+                 (0, 120, 0), 1)
 
-            # Robot forward arrow
-            fwd_end = (int(ref_x), int(ref_y - ARROW_LEN))
-            cv2.arrowedLine(annotated, robot_pt, fwd_end, (255, 255, 255), 2, tipLength=0.2)
-            cv2.putText(annotated, 'FWD', (fwd_end[0] + 4, fwd_end[1]),
-                        FONT, FONT_SCALE, (255, 255, 255), THICKNESS)
+        # Centroid dot
+        cv2.circle(annotated, (int(centroid_x), int(centroid_y)), 5, (0, 255, 255), -1)
 
-            # Tangent arrow
-            tan_end = (int(ref_x + vx * ARROW_LEN), int(ref_y + vy * ARROW_LEN))
-            cv2.arrowedLine(annotated, robot_pt, tan_end, (0, 230, 0), 2, tipLength=0.25)
-            cv2.putText(annotated, 'TANGENT', (tan_end[0] + 4, tan_end[1]),
-                        FONT, FONT_SCALE, (0, 230, 0), THICKNESS)
+        # Robot forward arrow
+        fwd_end = (int(ref_x), int(ref_y - ARROW_LEN))
+        cv2.arrowedLine(annotated, robot_pt, fwd_end, (255, 255, 255), 2, tipLength=0.2)
+        cv2.putText(annotated, 'FWD', (fwd_end[0] + 4, fwd_end[1]),
+                    FONT, FONT_SCALE, (255, 255, 255), THICKNESS)
 
-            # Lateral correction arrow: perpendicular toward line centre
-            lat_nx = math.copysign(1.0, lateral_px) * (-vy)
-            lat_ny = math.copysign(1.0, lateral_px) * vx
-            lat_draw_len = min(1.0, abs(lat_corr) / (math.pi / 4)) * ARROW_LEN
-            lat_end = (int(ref_x + lat_nx * lat_draw_len), int(ref_y + lat_ny * lat_draw_len))
-            if lat_draw_len > 2:
-                cv2.arrowedLine(annotated, robot_pt, lat_end, (255, 220, 0), 2, tipLength=0.25)
-            cv2.putText(annotated, 'LATERAL',
-                        (lat_end[0] + 4, lat_end[1]),
-                        FONT, FONT_SCALE, (255, 220, 0), THICKNESS)
+        # Tangent arrow
+        tan_end = (int(ref_x + vx * ARROW_LEN), int(ref_y + vy * ARROW_LEN))
+        cv2.arrowedLine(annotated, robot_pt, tan_end, (0, 230, 0), 2, tipLength=0.25)
+        cv2.putText(annotated, 'TANGENT', (tan_end[0] + 4, tan_end[1]),
+                    FONT, FONT_SCALE, (0, 230, 0), THICKNESS)
 
-            lat_label = (f'{lateral_px:+.1f}px'
-                         + (f' / {lateral_m:+.3f}m' if lateral_m is not None else ''))
-            cv2.putText(
-                annotated,
-                f'angle={angle_deg:+.1f}  lat={lat_label}  dir=({direction[0]:+.2f},{direction[1]:+.2f})',
-                (8, 20), FONT, 0.45, (255, 255, 255), THICKNESS,
-            )
+        # Lateral correction arrow: perpendicular toward line centre
+        lat_nx = math.copysign(1.0, lateral_px) * (-vy)
+        lat_ny = math.copysign(1.0, lateral_px) * vx
+        lat_draw_len = min(1.0, abs(lat_corr) / (math.pi / 4)) * ARROW_LEN
+        lat_end = (int(ref_x + lat_nx * lat_draw_len), int(ref_y + lat_ny * lat_draw_len))
+        if lat_draw_len > 2:
+            cv2.arrowedLine(annotated, robot_pt, lat_end, (255, 220, 0), 2, tipLength=0.25)
+        cv2.putText(annotated, 'LATERAL',
+                    (lat_end[0] + 4, lat_end[1]),
+                    FONT, FONT_SCALE, (255, 220, 0), THICKNESS)
 
-            legend = [
-                ((0, 180, 180),   '(0) CONTOUR EDGES'),
-                ((0, 255, 255),   '(1) CENTROID'),
-                ((0, 230, 0),     '(2) TANGENT (fitLine on edges)'),
-                ((255, 220, 0),   f'(3) LATERAL (deadzone={DEADZONE_M}m)'),
-                ((0, 100, 255),   '(4) TARGET heading'),
-            ]
-            for i, (colour, text) in enumerate(legend):
-                y = h - 12 - i * 16
-                cv2.rectangle(annotated, (8, y - 9), (18, y + 1), colour, -1)
-                cv2.putText(annotated, text, (22, y), FONT, FONT_SCALE, colour, THICKNESS)
+        lat_label = (f'{lateral_px:+.1f}px'
+                     + (f' / {lateral_m:+.3f}m' if lateral_m is not None else ''))
+        cv2.putText(
+            annotated,
+            f'angle={angle_deg:+.1f}  lat={lat_label}  dir=({direction[0]:+.2f},{direction[1]:+.2f})',
+            (8, 20), FONT, 0.45, (255, 255, 255), THICKNESS,
+        )
+
+        legend = [
+            ((0, 180, 180),   '(0) CONTOUR EDGES'),
+            ((0, 255, 255),   '(1) CENTROID'),
+            ((0, 230, 0),     '(2) TANGENT (fitLine on edges)'),
+            ((255, 220, 0),   f'(3) LATERAL (deadzone={DEADZONE_M}m)'),
+            ((0, 100, 255),   '(4) TARGET heading'),
+            ((180, 255, 100), '(5) SEGMENTS / near tangent'),
+        ]
+        for i, (colour, text) in enumerate(legend):
+            y = h - 12 - i * 16
+            cv2.rectangle(annotated, (8, y - 9), (18, y + 1), colour, -1)
+            cv2.putText(annotated, text, (22, y), FONT, FONT_SCALE, colour, THICKNESS)
 
         return LineResult(
             direction=direction,
@@ -536,6 +594,8 @@ class LineDetector:
             mask=mask,
             frame=annotated,
             sampled_pixels=sampled,
+            segments=segments if segments else None,
+            curvature=curvature,
         )
 
     # ── Background thread ──────────────────────────────────────────────────────

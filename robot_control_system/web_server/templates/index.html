@@ -362,6 +362,10 @@
         <span class="lbl">&#x03B4; angle</span>
         <span class="val accent" id="line-delta-angle">&mdash;</span>
       </div>
+      <div class="row">
+        <span class="lbl">Curvature</span>
+        <span class="val accent" id="line-curvature">&mdash;</span>
+      </div>
     </div>
 
     <!-- Hardware telemetry -->
@@ -692,8 +696,16 @@
       } else {
         set('line-delta-angle', 'n/a', '');
       }
+      if (ln.curvature_deg !== null && ln.curvature_deg !== undefined) {
+        const absC = Math.abs(ln.curvature_deg);
+        const cDir = ln.curvature_deg > 1 ? ' \u25B6' : ln.curvature_deg < -1 ? ' \u25C0' : ' \u25A0';
+        set('line-curvature', fmt(ln.curvature_deg, 1, true) + '\u00b0' + cDir,
+            absC < 10 ? 'success' : absC < 30 ? 'warning' : 'danger');
+      } else {
+        set('line-curvature', 'n/a', '');
+      }
     } else {
-      ['line-status','line-angle','line-lat-px','line-lat-m','line-dir','line-delta-angle']
+      ['line-status','line-angle','line-lat-px','line-lat-m','line-dir','line-delta-angle','line-curvature']
         .forEach(id => set(id, '\u25CB NOT FOUND', id === 'line-status' ? 'danger' : ''));
     }
   }

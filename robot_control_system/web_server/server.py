@@ -422,6 +422,8 @@ class WebServer:
                                              else None),
                     'delta_angle_deg':      (round(_math.degrees(_delta_rad), 2)
                                              if _delta_rad is not None else None),
+                    'curvature_deg':        (round(_math.degrees(result.curvature), 2)
+                                             if result.curvature is not None else None),
                     'direction':            [
                         round(result.direction[0], 3),
                         round(result.direction[1], 3),

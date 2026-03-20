@@ -27,6 +27,7 @@ vision:
   frame_width: 640
   frame_height: 480
   min_mask_pixels: 200
+  line_segments: 4          # number of horizontal strips for curvature detection
   pixels_per_meter: 2500   # calibrate: measure a known distance on the ground in pixels
   camera_forward_m: 0.10   # camera is this far ahead of the wheel base centre
   min_mask_pixels: 200
