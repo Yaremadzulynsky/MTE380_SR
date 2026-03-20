@@ -17,6 +17,9 @@
 #   HOUGH_CONFIG    default configs/docker-rpicam.yaml
 #   MJPEG_PORT      default 8090
 #   MJPEG_HOST      default 0.0.0.0
+#   HOUGH_WIDTH     default 1280
+#   HOUGH_HEIGHT    default 720
+#   HOUGH_WINDOW_SCALE default 2.0
 #   LOG_DIR         default perception/logs
 #
 set -euo pipefail
@@ -80,11 +83,15 @@ run_hough() {
   local source="${CAMERA_SOURCE:-rpicam}"
   local port="${MJPEG_PORT:-8090}"
   local host="${MJPEG_HOST:-0.0.0.0}"
+  local width="${HOUGH_WIDTH:-1280}"
+  local height="${HOUGH_HEIGHT:-720}"
+  local window_scale="${HOUGH_WINDOW_SCALE:-2.0}"
 
   log_banner
   {
     echo "[start_camera_with_logs] python=${py}"
     echo "[start_camera_with_logs] Hough: config=${config} source=${source}"
+    echo "[start_camera_with_logs] Overlay size: ${width}x${height} window_scale=${window_scale}"
     echo "[start_camera_with_logs] MJPEG: http://${host}:${port}/stream.mjpg (use http://127.0.0.1:${port}/stream.mjpg on the Pi)"
     echo "[start_camera_with_logs] Ops proxy uses OPS_HOUGH_STREAM_URL on control-screen (default http://localhost:${port}/stream.mjpg)"
   } | tee -a "$LOG_FILE"
@@ -94,6 +101,9 @@ run_hough() {
     nohup env PYTHONPATH="$PYTHONPATH" "$py" -u -m src.tools.test_hough_redline \
       --config "$config" \
       --source "$source" \
+      --width "$width" \
+      --height "$height" \
+      --window-scale "$window_scale" \
       --mjpeg-port "$port" \
       --mjpeg-host "$host" \
       --no-display >>"$LOG_FILE" 2>&1 &
@@ -109,6 +119,9 @@ run_hough() {
   "$py" -u -m src.tools.test_hough_redline \
     --config "$config" \
     --source "$source" \
+    --width "$width" \
+    --height "$height" \
+    --window-scale "$window_scale" \
     --mjpeg-port "$port" \
     --mjpeg-host "$host" \
     --no-display 2>&1 | tee -a "$LOG_FILE"

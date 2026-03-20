@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import threading
 import urllib.request
@@ -27,6 +28,9 @@ class HTTPSender:
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         self.url = url.rstrip("/")
         self.timeout = timeout
+        mode_raw = (os.environ.get("PERCEPTION_HTTP_MODE") or "").strip().lower()
+        direct_raw = (os.environ.get("PERCEPTION_HTTP_DIRECT_CONTROL") or "").strip().lower()
+        self.direct_control = mode_raw == "control" or direct_raw in {"1", "true", "yes", "on"}
 
     def send_line(self, text: str) -> None:
         try:
@@ -43,6 +47,30 @@ class HTTPSender:
         target_detected = bool(data.get("target_detected", False))
         target_px = data.get("target_px", 0.0)
         target_py = data.get("target_py", 0.0)
+        if self.direct_control:
+            detected = bool(path_detected)
+            steer_x = float(line_error_x)
+            steer_y = float(line_error_y)
+            if not detected:
+                steer_x = 0.0
+                steer_y = 0.0
+                speed = 0.0
+            else:
+                speed = min(1.0, float((steer_x * steer_x + steer_y * steer_y) ** 0.5))
+            payload = {
+                "x": steer_x,
+                "y": steer_y,
+                "speed": speed,
+            }
+            body = json.dumps(payload).encode("utf-8")
+            print(f"[perception] send_control: {body.decode('utf-8')}", file=sys.stderr)
+            t = threading.Thread(
+                target=_send_post,
+                args=(self.url, body, self.timeout),
+                daemon=True,
+            )
+            t.start()
+            return
         # State machine reads red_line or black_line (prefers black_line when present).
         line_key = "black_line" if path_mask_key == "black" else "red_line"
         payload = {

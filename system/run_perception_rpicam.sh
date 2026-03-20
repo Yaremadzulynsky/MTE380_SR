@@ -69,6 +69,14 @@ export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 STATE_MACHINE_INPUT_URL="${STATE_MACHINE_INPUT_URL:-http://localhost:8000/inputs}"
 CONTROL_COMM_CONTROL_URL="${CONTROL_COMM_CONTROL_URL:-http://localhost:5001/control}"
+PERCEPTION_BYPASS_STATE_MACHINE="${PERCEPTION_BYPASS_STATE_MACHINE:-1}"
+if [[ "${PERCEPTION_BYPASS_STATE_MACHINE}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+  STATE_MACHINE_INPUT_URL="${CONTROL_COMM_CONTROL_URL}"
+  export PERCEPTION_HTTP_DIRECT_CONTROL=1
+  export PERCEPTION_HTTP_MODE=control
+else
+  export PERCEPTION_HTTP_DIRECT_CONTROL=0
+fi
 export STATE_MACHINE_INPUT_URL
 export CONTROL_COMM_CONTROL_URL
 PERCEPTION_VIEW_MODE="${PERCEPTION_VIEW_MODE:-auto}"
@@ -352,6 +360,7 @@ echo "  e: show recent error/warning logs"
 echo "  q: quit script (also stops perception)"
 echo "[run_perception_rpicam] stream mode: ${STREAM_PUBLISH_MODE} (rtsp => camera owned by RTSP publisher)"
 echo "[run_perception_rpicam] rtsp url: ${MEDIAMTX_RTSP_URL}"
+echo "[run_perception_rpicam] bypass state machine: ${PERCEPTION_BYPASS_STATE_MACHINE} (http target: ${STATE_MACHINE_INPUT_URL})"
 echo "[run_perception_rpicam] view mode: ${PERCEPTION_VIEW_MODE} (1=test GUI, 0=production headless, auto=detect display)"
 echo "[run_perception_rpicam] logs dir: ${PERCEPTION_LOG_DIR}"
 

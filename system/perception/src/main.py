@@ -92,11 +92,17 @@ def _parse_source(source: str, cfg: AppConfig) -> int | str:
 
 
 def _send_zero_http_inputs(url: str, timeout_s: float = 0.5) -> None:
-    payload = {
-        "black_line": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
-        "red_line": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
-        "target": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
-    }
+    mode_raw = (os.environ.get("PERCEPTION_HTTP_MODE") or "").strip().lower()
+    direct_raw = (os.environ.get("PERCEPTION_HTTP_DIRECT_CONTROL") or "").strip().lower()
+    direct_control = mode_raw == "control" or direct_raw in {"1", "true", "yes", "on"}
+    if direct_control:
+        payload = {"x": 0.0, "y": 0.0, "speed": 0.0}
+    else:
+        payload = {
+            "black_line": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
+            "red_line": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
+            "target": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
+        }
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,

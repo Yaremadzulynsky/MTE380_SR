@@ -334,12 +334,7 @@ def _draw_full_overlay(
     line_error_x: float,
     heading_deg: float,
     path_detected: bool,
-    gamma: float,
-    fps: float,
     zone: str,
-    err_raw: float,
-    err_med: float,
-    err_filt: float,
 ) -> Any:
     out = roi.copy()
     h, w = out.shape[:2]
@@ -371,37 +366,37 @@ def _draw_full_overlay(
         cv2.circle(out, (sx2, sy2), 5, (0, 255, 255), -1)
 
     # Guidance vectors from robot origin (bottom center)
-    arrow_len = int(min(h, w) * 0.35)
+    arrow_len = int(min(h, w) * 0.42)
     ox, oy = origin
-    cv2.circle(out, (ox, oy), 4, (255, 255, 255), -1)
+    cv2.circle(out, (ox, oy), 6, (255, 255, 255), -1)
 
     # 1) Path direction along the line (cyan)
     ptx = int(ox + path_vec[0] * arrow_len)
     pty = int(oy + path_vec[1] * arrow_len)
-    cv2.arrowedLine(out, (ox, oy), (ptx, pty), (255, 255, 0), 3, tipLength=0.24)
+    cv2.arrowedLine(out, (ox, oy), (ptx, pty), (255, 255, 0), 4, tipLength=0.24)
 
     # 2) Return-to-line vector (yellow)
     rtx = int(ox + return_vec[0] * int(arrow_len * 0.85))
     rty = int(oy + return_vec[1] * int(arrow_len * 0.85))
-    cv2.arrowedLine(out, (ox, oy), (rtx, rty), (0, 255, 255), 3, tipLength=0.24)
+    cv2.arrowedLine(out, (ox, oy), (rtx, rty), (0, 255, 255), 4, tipLength=0.24)
 
     # 3) Lateral-only correction vector (magenta), proportional to |line_error_x|.
     lateral_len = int(arrow_len * 0.75)
     ltx = int(ox + _clamp(float(lateral_vec[0]), -1.0, 1.0) * lateral_len)
     lty = oy
-    cv2.arrowedLine(out, (ox, oy), (ltx, lty), (255, 0, 255), 3, tipLength=0.24)
+    cv2.arrowedLine(out, (ox, oy), (ltx, lty), (255, 0, 255), 4, tipLength=0.24)
 
     # Draw nearest point used for correction and connector.
-    cv2.circle(out, nearest_point, 5, (0, 255, 255), -1)
-    cv2.line(out, (ox, oy), nearest_point, (0, 255, 255), 1)
+    cv2.circle(out, nearest_point, 6, (0, 255, 255), -1)
+    cv2.line(out, (ox, oy), nearest_point, (0, 255, 255), 2)
 
     # Lateral error bar at bottom
     bar_y = h - 4
     bar_half = w // 2
     err_px = int(line_error_x * bar_half)
     bar_color = (0, 255, 0) if abs(line_error_x) < 0.15 else (0, 165, 255) if abs(line_error_x) < 0.4 else (0, 0, 255)
-    cv2.rectangle(out, (cx, bar_y - 6), (cx + err_px, bar_y), bar_color, -1)
-    cv2.line(out, (cx, bar_y - 8), (cx, bar_y + 2), (255, 255, 255), 1)
+    cv2.rectangle(out, (cx, bar_y - 10), (cx + err_px, bar_y), bar_color, -1)
+    cv2.line(out, (cx, bar_y - 12), (cx, bar_y + 2), (255, 255, 255), 2)
 
     # Steering label
     if abs(heading_deg) < 5:
@@ -414,34 +409,20 @@ def _draw_full_overlay(
         steer = f"LEFT {abs(heading_deg):.0f} deg"
         steer_color = (0, 165, 255)
 
-    # Text HUD (top area)
+    # Minimal text HUD (no rapidly-changing numeric clutter).
     font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(out, f"FPS: {fps:.1f}  Zone: {zone}", (8, 18), font, 0.5, (255, 255, 255), 1)
-    cv2.putText(out, f"Detected: {path_detected}  Segments: {len(segments)}", (8, 38), font, 0.5, (255, 255, 255), 1)
-    cv2.putText(
-        out,
-        f"PathVec: ({path_vec[0]:+.3f}, {path_vec[1]:+.3f})  Angle: {heading_deg:+.1f} deg",
-        (8, 58),
-        font,
-        0.5,
-        (255, 255, 0),
-        1,
-    )
-    cv2.putText(out, f"Lateral Error(filt): {line_error_x:+.3f}  Gamma: {gamma:.2f}", (8, 78), font, 0.5, (0, 255, 255), 1)
-    cv2.putText(out, f"Nearest source: {debug.get('nearest_source', 'na')}", (8, 98), font, 0.5, (200, 220, 255), 1)
-    cv2.putText(out, f"ReturnVec: ({return_vec[0]:+.3f}, {return_vec[1]:+.3f})", (8, 118), font, 0.5, (0, 255, 255), 1)
-    cv2.putText(out, f"LateralVec: ({lateral_vec[0]:+.3f}, {lateral_vec[1]:+.3f})", (8, 138), font, 0.5, (255, 0, 255), 1)
-    cv2.putText(out, f"Err raw/med/filt: {err_raw:+.3f} / {err_med:+.3f} / {err_filt:+.3f}", (8, 158), font, 0.5, (200, 255, 200), 1)
-    cv2.putText(out, steer, (8, h - 16), font, 0.7, steer_color, 2)
+    status = "LINE FOUND" if path_detected else "LINE LOST"
+    status_color = (0, 255, 0) if path_detected else (0, 0, 255)
+    cv2.putText(out, f"{status}  ({zone})", (10, 32), font, 0.85, status_color, 2)
+    cv2.putText(out, steer, (10, h - 22), font, 1.0, steer_color, 3)
 
     # Legend (bottom-right)
-    lx = w - 170
-    cv2.putText(out, "-- candidates", (lx, h - 60), font, 0.4, (0, 200, 0), 1)
-    cv2.putText(out, "-- selected", (lx, h - 44), font, 0.4, (0, 0, 255), 1)
-    cv2.putText(out, "-> path vec", (lx, h - 28), font, 0.4, (255, 255, 0), 1)
-    cv2.putText(out, "-> return vec", (lx, h - 12), font, 0.4, (0, 255, 255), 1)
-    cv2.putText(out, "-> lateral vec", (lx, h - 76), font, 0.4, (255, 0, 255), 1)
-    cv2.putText(out, "[] lat error", (lx, h - 92), font, 0.4, bar_color, 1)
+    lx = w - 210
+    cv2.putText(out, "GREEN: candidates", (lx, h - 90), font, 0.45, (0, 200, 0), 1)
+    cv2.putText(out, "RED: selected path", (lx, h - 72), font, 0.45, (0, 0, 255), 1)
+    cv2.putText(out, "CYAN: path vector", (lx, h - 54), font, 0.45, (255, 255, 0), 1)
+    cv2.putText(out, "YELLOW: return vector", (lx, h - 36), font, 0.45, (0, 255, 255), 1)
+    cv2.putText(out, "MAGENTA: lateral fix", (lx, h - 18), font, 0.45, (255, 0, 255), 1)
 
     return out
 
@@ -456,6 +437,8 @@ def main() -> None:
     )
     parser.add_argument("--webcam-index", type=int, default=None, help="Override camera.webcam_index (e.g. 10 for virtual cam)")
     parser.add_argument("--fps", type=float, default=None)
+    parser.add_argument("--width", type=int, default=None, help="Override capture width for clearer debugging stream.")
+    parser.add_argument("--height", type=int, default=None, help="Override capture height for clearer debugging stream.")
     parser.add_argument("--csv", default=None, help="Optional CSV output path for metrics")
     parser.add_argument(
         "--proc-scale",
@@ -471,7 +454,7 @@ def main() -> None:
     parser.add_argument(
         "--window-scale",
         type=float,
-        default=1.0,
+        default=2.0,
         help="Display scale for OpenCV windows (e.g. 1.5 or 2.0)",
     )
     parser.add_argument(
@@ -532,6 +515,10 @@ def main() -> None:
     cfg = load_config(args.config)
     if args.fps is not None:
         cfg.fps = float(args.fps)
+    if args.width is not None:
+        cfg.camera.width = int(max(160, args.width))
+    if args.height is not None:
+        cfg.camera.height = int(max(120, args.height))
     proc_scale = max(0.25, min(1.0, float(args.proc_scale)))
     source = _parse_source(args.source, cfg, webcam_index=args.webcam_index)
     backend = "gstreamer" if isinstance(source, str) and source != "rpicam" else cfg.camera.backend
@@ -671,12 +658,7 @@ def main() -> None:
                 line_error_x=float(out.line_error_x),
                 heading_deg=heading_deg,
                 path_detected=out.path_detected,
-                gamma=float(out.gamma),
-                fps=fps_ema,
                 zone=out.zone,
-                err_raw=float(smoothing.get("line_error_raw", out.line_error_x)),
-                err_med=float(smoothing.get("line_error_median", out.line_error_x)),
-                err_filt=float(smoothing.get("line_error_filtered", out.line_error_x)),
             )
 
             if show_masks:
