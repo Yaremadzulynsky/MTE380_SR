@@ -13,12 +13,21 @@ const elements = {
   currentP: document.getElementById('currentP'),
   currentI: document.getElementById('currentI'),
   currentD: document.getElementById('currentD'),
+  currentSpeedP: document.getElementById('currentSpeedP'),
+  currentSpeedI: document.getElementById('currentSpeedI'),
+  currentSpeedD: document.getElementById('currentSpeedD'),
   inputP: document.getElementById('inputP'),
   inputI: document.getElementById('inputI'),
   inputD: document.getElementById('inputD'),
+  inputSpeedP: document.getElementById('inputSpeedP'),
+  inputSpeedI: document.getElementById('inputSpeedI'),
+  inputSpeedD: document.getElementById('inputSpeedD'),
   hintP: document.getElementById('hintP'),
   hintI: document.getElementById('hintI'),
   hintD: document.getElementById('hintD'),
+  hintSpeedP: document.getElementById('hintSpeedP'),
+  hintSpeedI: document.getElementById('hintSpeedI'),
+  hintSpeedD: document.getElementById('hintSpeedD'),
   lineFeedback: document.getElementById('lineFeedback'),
   lfKp: document.getElementById('lfKp'),
   lfKpRange: document.getElementById('lfKpRange'),
@@ -70,9 +79,12 @@ const elements = {
   applyStateBtn: document.getElementById('applyStateBtn'),
   fsmFeedback: document.getElementById('fsmFeedback'),
   feedback: document.getElementById('feedback'),
+  speedFeedback: document.getElementById('speedFeedback'),
   pidForm: document.getElementById('pidForm'),
+  speedPidForm: document.getElementById('speedPidForm'),
   refreshBtn: document.getElementById('refreshBtn'),
-  applyBtn: document.getElementById('applyBtn')
+  applyBtn: document.getElementById('applyBtn'),
+  applySpeedBtn: document.getElementById('applySpeedBtn')
 };
 
 const lineFields = [
@@ -102,7 +114,8 @@ async function initialize() {
 }
 
 function bindEvents() {
-  elements.pidForm.addEventListener('submit', handleSubmit);
+  elements.pidForm.addEventListener('submit', (event) => handleSubmit(event, 'heading'));
+  elements.speedPidForm?.addEventListener('submit', (event) => handleSubmit(event, 'speed'));
   elements.refreshBtn.addEventListener('click', refreshValues);
   elements.refreshStatesBtn?.addEventListener('click', refreshStateOptions);
   elements.applyStateBtn?.addEventListener('click', handleSetState);
@@ -208,6 +221,9 @@ function updateRangeHints() {
   elements.hintP.textContent = formatRangeHint(ranges.p);
   elements.hintI.textContent = formatRangeHint(ranges.i);
   elements.hintD.textContent = formatRangeHint(ranges.d);
+  elements.hintSpeedP.textContent = formatRangeHint(ranges.speed_p || ranges.p);
+  elements.hintSpeedI.textContent = formatRangeHint(ranges.speed_i || ranges.i);
+  elements.hintSpeedD.textContent = formatRangeHint(ranges.speed_d || ranges.d);
 
   const lineRanges = state.linePidRanges || {};
   for (const [key, inputKey, rangeKey, hintKey] of lineFields) {
@@ -288,42 +304,65 @@ async function refreshValues() {
 }
 
 function updateCurrentValues(values) {
-  elements.currentP.textContent = formatNumber(values.p);
-  elements.currentI.textContent = formatNumber(values.i);
-  elements.currentD.textContent = formatNumber(values.d);
+  const heading = values.heading || values;
+  const speed = values.speed || {};
+  if (heading.p !== undefined) elements.currentP.textContent = formatNumber(heading.p);
+  if (heading.i !== undefined) elements.currentI.textContent = formatNumber(heading.i);
+  if (heading.d !== undefined) elements.currentD.textContent = formatNumber(heading.d);
+  if (speed.p !== undefined) elements.currentSpeedP.textContent = formatNumber(speed.p);
+  if (speed.i !== undefined) elements.currentSpeedI.textContent = formatNumber(speed.i);
+  if (speed.d !== undefined) elements.currentSpeedD.textContent = formatNumber(speed.d);
 }
 
 function fillInputs(values) {
-  if (values.p !== undefined) {
-    elements.inputP.value = values.p;
+  const heading = values.heading || values;
+  const speed = values.speed || {};
+  if (heading.p !== undefined) {
+    elements.inputP.value = heading.p;
   }
-  if (values.i !== undefined) {
-    elements.inputI.value = values.i;
+  if (heading.i !== undefined) {
+    elements.inputI.value = heading.i;
   }
-  if (values.d !== undefined) {
-    elements.inputD.value = values.d;
+  if (heading.d !== undefined) {
+    elements.inputD.value = heading.d;
+  }
+  if (speed.p !== undefined) {
+    elements.inputSpeedP.value = speed.p;
+  }
+  if (speed.i !== undefined) {
+    elements.inputSpeedI.value = speed.i;
+  }
+  if (speed.d !== undefined) {
+    elements.inputSpeedD.value = speed.d;
   }
 }
 
-async function handleSubmit(event) {
+async function handleSubmit(event, section) {
   event.preventDefault();
-  clearInputErrors();
+  clearInputErrors(section);
 
-  const payload = {
-    p: elements.inputP.value,
-    i: elements.inputI.value,
-    d: elements.inputD.value
-  };
+  const isSpeed = section === 'speed';
+  const payload = isSpeed
+    ? {
+        speed_p: elements.inputSpeedP.value,
+        speed_i: elements.inputSpeedI.value,
+        speed_d: elements.inputSpeedD.value
+      }
+    : {
+        p: elements.inputP.value,
+        i: elements.inputI.value,
+        d: elements.inputD.value
+      };
 
   const validationErrors = validateInputs(payload);
   if (Object.keys(validationErrors).length > 0) {
-    setFeedback('Check the highlighted fields and try again.', 'error');
-    markInputErrors(validationErrors);
+    setSectionFeedback(section, 'Check the highlighted fields and try again.', 'error');
+    markInputErrors(validationErrors, section);
     return;
   }
 
-  setLoading(true);
-  setFeedback('Sending update...', 'info');
+  setLoading(true, section);
+  setSectionFeedback(section, 'Sending update...', 'info');
 
   const result = await requestJson('/api/pid', {
     method: 'POST',
@@ -336,20 +375,33 @@ async function handleSubmit(event) {
     const message = result.data && result.data.message
       ? result.data.message
       : 'Update failed on control communication service.';
-    setFeedback(message, 'error');
-    setLoading(false);
+    setSectionFeedback(section, message, 'error');
+    setLoading(false, section);
     return;
   }
 
   await refreshBridgeStatus(true);
   const updated = result.data.updated || {};
-  updateCurrentValues({
-    p: updated.p ?? Number(payload.p),
-    i: updated.i ?? Number(payload.i),
-    d: updated.d ?? Number(payload.d)
-  });
-  setFeedback('PID gains updated successfully.', 'success');
-  setLoading(false);
+  if (isSpeed) {
+    updateCurrentValues({
+      speed: {
+        p: updated.speed_p ?? Number(payload.speed_p),
+        i: updated.speed_i ?? Number(payload.speed_i),
+        d: updated.speed_d ?? Number(payload.speed_d)
+      }
+    });
+    setSectionFeedback(section, 'Speed PID gains updated successfully.', 'success');
+  } else {
+    updateCurrentValues({
+      heading: {
+        p: updated.p ?? Number(payload.p),
+        i: updated.i ?? Number(payload.i),
+        d: updated.d ?? Number(payload.d)
+      }
+    });
+    setSectionFeedback(section, 'PID gains updated successfully.', 'success');
+  }
+  setLoading(false, section);
 }
 
 function validateInputs(payload) {
@@ -377,21 +429,24 @@ function validateInputs(payload) {
 }
 
 function markInputErrors(errors) {
-  if (errors.p) {
-    elements.inputP.classList.add('input-error');
-  }
-  if (errors.i) {
-    elements.inputI.classList.add('input-error');
-  }
-  if (errors.d) {
-    elements.inputD.classList.add('input-error');
-  }
+  const fieldMap = {
+    p: elements.inputP,
+    i: elements.inputI,
+    d: elements.inputD,
+    speed_p: elements.inputSpeedP,
+    speed_i: elements.inputSpeedI,
+    speed_d: elements.inputSpeedD
+  };
+  Object.entries(errors).forEach(([key]) => {
+    fieldMap[key]?.classList.add('input-error');
+  });
 }
 
-function clearInputErrors() {
-  elements.inputP.classList.remove('input-error');
-  elements.inputI.classList.remove('input-error');
-  elements.inputD.classList.remove('input-error');
+function clearInputErrors(section) {
+  const inputs = section === 'speed'
+    ? [elements.inputSpeedP, elements.inputSpeedI, elements.inputSpeedD]
+    : [elements.inputP, elements.inputI, elements.inputD];
+  inputs.forEach((input) => input?.classList.remove('input-error'));
 }
 
 function fillLineInputs(values) {
@@ -526,13 +581,19 @@ function updateBridgeStatus(statusPayload, fallbackOnline) {
 }
 
 function setFeedback(message, tone) {
-  elements.feedback.textContent = message;
-  elements.feedback.classList.remove('success', 'error');
+  setSectionFeedback('heading', message, tone);
+}
+
+function setSectionFeedback(section, message, tone) {
+  const target = section === 'speed' ? elements.speedFeedback : elements.feedback;
+  if (!target) return;
+  target.textContent = message;
+  target.classList.remove('success', 'error');
 
   if (tone === 'success') {
-    elements.feedback.classList.add('success');
+    target.classList.add('success');
   } else if (tone === 'error') {
-    elements.feedback.classList.add('error');
+    target.classList.add('error');
   }
 }
 
@@ -547,9 +608,16 @@ function setLineFeedback(message, tone) {
   }
 }
 
-function setLoading(isLoading) {
-  elements.refreshBtn.disabled = isLoading;
-  elements.applyBtn.disabled = isLoading;
+function setLoading(isLoading, section) {
+  if (!section || section === 'heading') {
+    elements.refreshBtn.disabled = isLoading;
+    elements.applyBtn.disabled = isLoading;
+  }
+  if (!section || section === 'speed') {
+    if (elements.applySpeedBtn) {
+      elements.applySpeedBtn.disabled = isLoading;
+    }
+  }
 }
 
 function setStateLoading(isLoading) {

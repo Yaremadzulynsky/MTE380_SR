@@ -102,6 +102,11 @@ class Robot:
         self._speed_pid.set_gains(kp, ki, kd)
         log.info('speed PID gains → kp=%.3f ki=%.3f kd=%.3f', kp, ki, kd)
 
+    def get_speed_gains(self) -> tuple[float, float, float]:
+        """Return (kp, ki, kd) for speed PID."""
+        pid = self._speed_pid._pid
+        return pid.kp, pid.ki, pid.kd
+
     def set_heading_feedback(self, radians: float):
         with self._lock:
             self._heading_fb = radians
@@ -335,10 +340,11 @@ class Robot:
                 self._bridge.send_drive(*override)
             elif abs(speed_scale) < 1e-6:
                 self._heading_pid.reset()
+                self._speed_pid.reset()
                 self._bridge.send_drive(0.0, 0.0)
             else:
                 angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
-                linear_x  = speed_scale
+                linear_x  = self._speed_pid.update(speed_scale * MAX_SPEED, self._linear_speed)
 
                 left  = max(-1.0, min(1.0, linear_x - angular_z))
                 right = max(-1.0, min(1.0, linear_x + angular_z))
