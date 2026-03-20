@@ -202,7 +202,8 @@ class LineDetector:
         self._source          = source
         self._backend         = backend
         self._debug           = debug
-        self._pixels_per_meter = pixels_per_meter
+        self._pixels_per_meter = (pixels_per_meter
+                                  or _config.get()['vision'].get('pixels_per_meter'))
         self._picam   = None   # Picamera2 instance (Pi path)
         self._cap     = None   # cv2.VideoCapture instance (fallback path)
         self._lock    = threading.Lock()
@@ -498,7 +499,7 @@ class LineDetector:
                 ((0, 180, 180),   '(0) CONTOUR EDGES'),
                 ((0, 255, 255),   '(1) CENTROID'),
                 ((0, 230, 0),     '(2) TANGENT (fitLine on edges)'),
-                ((255, 220, 0),   f'(3) LATERAL (deadzone={DEADZONE}px)'),
+                ((255, 220, 0),   f'(3) LATERAL (deadzone={DEADZONE_M}m)'),
                 ((0, 100, 255),   '(4) TARGET heading'),
             ]
             for i, (colour, text) in enumerate(legend):

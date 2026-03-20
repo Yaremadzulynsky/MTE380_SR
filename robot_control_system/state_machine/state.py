@@ -25,13 +25,22 @@ class State:
     name: str = ''
 
     def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
-              odometry: Optional['Odometry']) -> None:
+              odometry: Optional['Odometry'],
+              target_heading: Optional[float] = None) -> None:
         """Called once when the machine transitions into this state."""
 
     def tick(self, robot: 'Robot', detector: Optional['LineDetector'],
-             odometry: Optional['Odometry']) -> Optional[str]:
+             odometry: Optional['Odometry'],
+             target_heading: Optional[float] = None) -> Optional[str]:
         """
         Called every tick by the state machine.
+
+        Parameters
+        ----------
+        target_heading : float | None
+            World-frame heading the robot should drive toward (radians),
+            computed by the state machine from line angle + lateral correction.
+            None when no line is detected.
 
         Returns
         -------
@@ -43,5 +52,6 @@ class State:
         return None
 
     def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
-             odometry: Optional['Odometry']) -> None:
+             odometry: Optional['Odometry'],
+             target_heading: Optional[float] = None) -> None:
         """Called once when the machine transitions out of this state."""

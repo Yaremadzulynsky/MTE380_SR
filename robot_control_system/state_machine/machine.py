@@ -145,9 +145,11 @@ class StateMachine:
             log.error('Transition to unknown state %r — ignoring', name)
             return
         if self._current is not None:
-            self._current.exit(self._robot, self._detector, self._odometry)
+            self._current.exit(self._robot, self._detector, self._odometry,
+                               self._target_heading)
         self._current = self._states[name]
-        self._current.enter(self._robot, self._detector, self._odometry)
+        self._current.enter(self._robot, self._detector, self._odometry,
+                            self._target_heading)
         log.info('State → %s', name)
 
     def _update_target_heading(self) -> None:
@@ -191,7 +193,8 @@ class StateMachine:
 
             # Tick the active state
             if self._current is not None:
-                next_state = self._current.tick(self._robot, self._detector, self._odometry)
+                next_state = self._current.tick(self._robot, self._detector,
+                                                self._odometry, self._target_heading)
                 if next_state is not None:
                     self._transition(next_state)
 

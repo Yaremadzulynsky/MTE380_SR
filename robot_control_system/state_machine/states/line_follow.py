@@ -3,19 +3,16 @@ state_machine/states/line_follow.py
 
 Follow a red line using the camera.
 
-Each tick:
-  1. Read the latest LineResult from the detector.
-  2. Compute target direction = line tangent + lateral correction toward the line
-     (same formula used by the camera overlay and odometry canvas).
-  3. Feed the direction to robot.add_direction() so the heading PID steers toward it.
-  4. Drive forward at follow_speed.
+Each tick the state machine passes in `target_heading` — the world-frame heading
+the robot should drive toward, already computed from line angle + lateral
+correction.  This state converts that to a robot-frame direction and feeds it to
+robot.add_direction().
 
-If the line is lost the robot stops (motors to zero) but stays in this state so
-it can resume automatically when the line reappears.
+If the line is lost the robot stops but stays in this state so it resumes when
+the line reappears.
 
 Config (config.yaml → line_follow):
-    follow_speed   : forward speed [0, 1] while following
-    lateral_deadzone_m : metres of lateral error ignored before correction kicks in
+    follow_speed : forward speed [0, 1] while line is visible
 """
 
 from __future__ import annotations
@@ -41,29 +38,25 @@ class LineFollow(State):
     name = 'line_follow'
 
     def __init__(self):
-        _lf = _config.get()['line_follow']
-        _vc = _config.get()['vision']
-        self._follow_speed     = float(_lf.get('follow_speed',        0.35))
-        self._deadzone_m       = float(_lf.get('lateral_deadzone_m',  0.01))
-        self._cam_fwd_m        = float(_vc.get('camera_forward_m',    0.15))
-        self._line_lost        = False
+        self._follow_speed = float(_config.get()['line_follow'].get('follow_speed', 0.35))
+        self._line_lost    = False
 
     def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
-              odometry: Optional['Odometry']) -> None:
+              odometry: Optional['Odometry'],
+              target_heading: Optional[float] = None) -> None:
         self._line_lost = False
         if robot is not None:
             robot.set_speed(0.0)
-        log.info('Entered LINE_FOLLOW  speed=%.2f  deadzone=%.3fm',
-                 self._follow_speed, self._deadzone_m)
+        log.info('Entered LINE_FOLLOW  speed=%.2f', self._follow_speed)
 
     def tick(self, robot: 'Robot', detector: Optional['LineDetector'],
-             odometry: Optional['Odometry']) -> Optional[str]:
-        if robot is None or detector is None:
+             odometry: Optional['Odometry'],
+             target_heading: Optional[float] = None) -> Optional[str]:
+        if robot is None:
             return None
 
-        result = detector.get_result()
-
-        if result is None:
+        if target_heading is None:
+            # No line detected
             if not self._line_lost:
                 log.warning('Line lost — stopping')
                 self._line_lost = True
@@ -75,24 +68,17 @@ class LineFollow(State):
             log.info('Line reacquired')
             self._line_lost = False
 
-        # Compute right-turn angle in robot frame (matches camera and canvas views):
-        #   theta = line_angle + atan2(lat_m, cam_fwd_m)
-        angle_rad = math.radians(result.angle_deg)
-        lat_m     = result.lateral_distance_m
-
-        if lat_m is not None and abs(lat_m) >= self._deadzone_m:
-            lat_corr = math.atan2(lat_m, self._cam_fwd_m)
-        else:
-            lat_corr = 0.0
-
-        theta = angle_rad + lat_corr
-
+        # Convert world-frame target heading to a robot-frame direction vector.
+        # theta = how far right of current heading the target is.
+        # robot.add_direction(sin θ, cos θ) steers the heading PID toward it.
+        theta = odometry.heading - target_heading
         robot.add_direction(math.sin(theta), math.cos(theta))
         robot.set_speed(self._follow_speed)
         return None
 
     def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
-             odometry: Optional['Odometry']) -> None:
+             odometry: Optional['Odometry'],
+             target_heading: Optional[float] = None) -> None:
         if robot is not None:
             robot.set_speed(0.0)
             robot.set_motors(0.0, 0.0)
