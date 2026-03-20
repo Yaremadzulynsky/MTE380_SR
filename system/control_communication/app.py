@@ -299,7 +299,7 @@ def publish_feedback_metrics() -> None:
 def _feedback_metrics_loop() -> None:
     while True:
         publish_feedback_metrics()
-        time.sleep(0.2)
+        time.sleep(0.05)
 
 
 def _set_current_state_metric(state: str) -> None:
