@@ -391,6 +391,12 @@ class LineDetector:
             robot_pt = (int(px), int(py))
             foot_pt  = (int(foot_x), int(foot_y))
 
+            # ── (0b) ROBOT FORWARD — straight up from robot reference point ──
+            fwd_end = (int(px), int(py - ARROW_LEN))
+            cv2.arrowedLine(annotated, robot_pt, fwd_end, (255, 255, 255), 2, tipLength=0.2)
+            cv2.putText(annotated, 'FWD', (fwd_end[0] + 4, fwd_end[1]),
+                        FONT, FONT_SCALE, (255, 255, 255), THICKNESS)
+
             # ── (1) TANGENT — direction of the line at the robot's position ──
             # Drawn from the robot reference point along (vx, vy).
             # Green: robot is being told to go this way if it were on the line.
@@ -454,9 +460,10 @@ class LineDetector:
 
             # ── Legend ────────────────────────────────────────────────────────
             legend = [
-                ((0, 230, 0),   '(1) TANGENT            - line direction'),
-                ((255, 220, 0), f'(2) LATERAL CORRECTION - scales w/ dist (deadzone={DEADZONE}px)'),
-                ((80, 80, 255), '(3) TARGET HEADING      - blended command'),
+                ((255, 255, 255), '(0) ROBOT FORWARD      - straight ahead'),
+                ((0, 230, 0),     '(1) TANGENT            - line direction'),
+                ((255, 220, 0),   f'(2) LATERAL CORRECTION - scales w/ dist (deadzone={DEADZONE}px)'),
+                ((80, 80, 255),   '(3) TARGET HEADING      - blended command'),
             ]
             for i, (colour, text) in enumerate(legend):
                 y = h - 12 - i * 16

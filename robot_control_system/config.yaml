@@ -30,9 +30,9 @@ vision:
   pixels_per_meter: 10000   # calibrate: measure a known distance on the ground in pixels
   camera_forward_m: 0.10   # camera is this far ahead of the wheel base centre
   red_hsv:
-    lower1: [0,   100,  60]
-    upper1: [10,  255, 255]
-    lower2: [170, 100,  60]
+    lower1: [0,   50,  40]
+    upper1: [12,  255, 255]
+    lower2: [168, 50,  40]
     upper2: [180, 255, 255]
 
 line_follow:
