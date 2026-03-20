@@ -69,6 +69,7 @@ last_sent: Optional[dict[str, Any]] = None
 
 COMMAND_X = Gauge("robot_command_x", "Latest commanded x axis.")
 COMMAND_Y = Gauge("robot_command_y", "Latest commanded y axis.")
+COMMAND_MAGNITUDE = Gauge("robot_command_magnitude", "Latest commanded vector magnitude from x and y.")
 COMMAND_SPEED = Gauge("robot_command_speed", "Latest commanded speed.")
 COMMAND_SERVO_DEG = Gauge("robot_command_servo_deg", "Latest commanded servo angle in degrees.")
 COMMAND_TARGET_HEADING_RAD = Gauge("robot_command_target_heading_rad", "Latest commanded target heading in radians.")
@@ -264,6 +265,7 @@ def publish_command_metrics(
 ) -> None:
     COMMAND_X.set(x)
     COMMAND_Y.set(y)
+    COMMAND_MAGNITUDE.set(math.hypot(x, y))
     COMMAND_SPEED.set(speed)
     COMMAND_SERVO_DEG.set(servo_deg)
     COMMAND_LEFT.set(left)
