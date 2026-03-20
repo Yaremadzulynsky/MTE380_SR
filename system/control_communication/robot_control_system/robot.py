@@ -11,6 +11,7 @@ from .speed_pid   import SpeedPID
 
 RATE_HZ   = 20.0
 MAX_SPEED = 0.2
+ONE_WHEEL_TURN_THRESHOLD = 0.5
 
 HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
 
@@ -345,11 +346,12 @@ class Robot:
                 right = linear_x + angular_z
 
                 # For aggressive forward line-follow corrections, stop the inner wheel
-                # instead of reversing it so the robot corners tighter on one wheel.
-                if linear_x > 0.0 and left < 0.0 <= right:
+                # early so the robot corners on one wheel instead of waiting for the
+                # inner wheel command to cross through reverse.
+                if linear_x > 0.0 and (angular_z >= ONE_WHEEL_TURN_THRESHOLD or left < 0.0 <= right):
                     left = 0.0
                     right = _clamp_unit(linear_x + abs(angular_z))
-                elif linear_x > 0.0 and right < 0.0 <= left:
+                elif linear_x > 0.0 and (angular_z <= -ONE_WHEEL_TURN_THRESHOLD or right < 0.0 <= left):
                     right = 0.0
                     left = _clamp_unit(linear_x + abs(angular_z))
                 else:
