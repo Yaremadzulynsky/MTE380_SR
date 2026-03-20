@@ -28,6 +28,8 @@ from src.config import (
 from src.debug_stream import DebugStreamServer
 from src.pipeline import PipelineOutput, PipelineState, draw_overlay, run_pipeline
 
+DIRECT_VECTOR_SPEED = 0.01
+
 
 def _find_macos_camera_index(pattern: str) -> int:
     probe = pattern.strip().lower()
@@ -518,25 +520,13 @@ class RuntimePerceptionConfig:
         return True
 
 
-def _vector_payload(detected: bool, x: float, y: float) -> dict[str, float | bool]:
-    return {"detected": detected, "x": float(x), "y": float(y)}
-
-
-def _build_payload(output: PipelineOutput, path_mask_key: str) -> dict[str, object]:
-    line_key = f"{path_mask_key}_line"
-    line = _vector_payload(output.path_detected, output.robot_vector[0], output.robot_vector[1])
-    empty = _vector_payload(False, 0.0, 0.0)
+def _build_payload(output: PipelineOutput) -> dict[str, float]:
+    if not output.path_detected:
+        return {"x": 0.0, "y": 0.0, "speed": 0.0}
     return {
-        line_key: line,
-        "line_error": line,
-        "line": line,
-        "target": empty,
-        "safe_zone": empty,
-        "danger_zone": empty,
-        "path_detected": output.path_detected,
-        "path_mask_key": path_mask_key,
-        "zone": output.zone,
-        "gamma": output.gamma,
+        "x": float(output.lookahead_robot_vector[0]),
+        "y": float(output.lookahead_robot_vector[1]),
+        "speed": DIRECT_VECTOR_SPEED,
     }
 
 
@@ -627,7 +617,7 @@ def main() -> None:
 
             loop_cfg = runtime_cfg.snapshot()
             output = run_pipeline(frame, state, loop_cfg)
-            payload = _build_payload(output, loop_cfg.path_mask_key)
+            payload = _build_payload(output)
 
             if sender is not None:
                 sender.submit(payload)

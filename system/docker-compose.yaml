@@ -77,6 +77,9 @@ services:
       ROBOT_MOCK_CONTROL_URL: "http://localhost:8200/api/sim-control"
       SERIAL_PORT: "/dev/ttyACM0"
       SERIAL_BAUDRATE: "115200"
+      SERVO_MIN_DEG: "0"
+      SERVO_MAX_DEG: "90"
+      SERVO_DEFAULT_DEG: "45"
       LOG_PATH: "/var/log/control-communication/control-communication.log"
     volumes:
       - metrics-pipe:/var/run/metrics
@@ -96,6 +99,8 @@ services:
       CONTROL_COMM_CONTROL_PATH: "/control"
       STATE_MACHINE_BASE_URL: "http://localhost:8000"
       STATE_MACHINE_INPUT_PATH: "/inputs"
+      SERVO_MIN_DEG: "0"
+      SERVO_MAX_DEG: "90"
       PERCEPTION_BASE_URL: "http://localhost:8081"
       PERCEPTION_TUNING_PATH: "/tuning/perception"
       PID_P_MIN: "-1000"
@@ -137,6 +142,9 @@ services:
     environment:
       LOG_PATH: "/var/log/state-machine/state-machine.log"
       CONTROL_COMM_BASE_URL: "http://localhost:5001"
+      SERVO_MIN_DEG: "0"
+      SERVO_MAX_DEG: "90"
+      SERVO_CENTER_DEG: "45"
       LINE_PID_SETTINGS_PATH: "/var/log/state-machine/line-follow-pid.json"
       TICK_INTERVAL: "0.01"
       FAILED_PICKUP_LIMIT: "3"

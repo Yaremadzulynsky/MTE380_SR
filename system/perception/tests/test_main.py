@@ -1,10 +1,11 @@
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 from src.config import AppConfig
-from src.main import RuntimePerceptionConfig
-from src.pipeline import PipelineState
+from src.main import DIRECT_VECTOR_SPEED, RuntimePerceptionConfig, _build_payload
+from src.pipeline import PipelineOutput, PipelineState
 
 
 def test_runtime_perception_config_updates_and_persists(tmp_path: Path) -> None:
@@ -64,3 +65,43 @@ def test_runtime_perception_config_rejects_invalid_speed_bounds(tmp_path: Path) 
     assert status == 400
     assert payload["message"] == "Invalid speed bounds."
     assert "min_speed" in payload["errors"]
+
+
+def test_build_payload_posts_direct_vector_with_low_speed() -> None:
+    output = PipelineOutput(
+        roi_bgr=np.zeros((1, 1, 3), dtype=np.uint8),
+        mask=np.zeros((1, 1), dtype=np.uint8),
+        path_detected=True,
+        image_vector=np.zeros(2, dtype=np.float32),
+        robot_vector=np.zeros(2, dtype=np.float32),
+        lookahead_image_vector=np.zeros(2, dtype=np.float32),
+        lookahead_robot_vector=np.asarray([0.2, 0.6], dtype=np.float32),
+        tangent_vector=np.zeros(2, dtype=np.float32),
+        zone="PATH",
+        gamma=1.0,
+        debug={},
+    )
+
+    payload = _build_payload(output)
+
+    assert payload == {"x": 0.2, "y": 0.6, "speed": DIRECT_VECTOR_SPEED}
+
+
+def test_build_payload_stops_when_path_is_missing() -> None:
+    output = PipelineOutput(
+        roi_bgr=np.zeros((1, 1, 3), dtype=np.uint8),
+        mask=np.zeros((1, 1), dtype=np.uint8),
+        path_detected=False,
+        image_vector=np.zeros(2, dtype=np.float32),
+        robot_vector=np.zeros(2, dtype=np.float32),
+        lookahead_image_vector=np.zeros(2, dtype=np.float32),
+        lookahead_robot_vector=np.asarray([0.2, 0.6], dtype=np.float32),
+        tangent_vector=np.zeros(2, dtype=np.float32),
+        zone="NONE",
+        gamma=0.0,
+        debug={},
+    )
+
+    payload = _build_payload(output)
+
+    assert payload == {"x": 0.0, "y": 0.0, "speed": 0.0}

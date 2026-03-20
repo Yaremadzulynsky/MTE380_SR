@@ -83,7 +83,7 @@ class OutputConfig:
     method: str = "http"
     url: str = ""
     timeout_s: float = 0.5
-    send_hz: float = 10.0
+    send_hz: float = 100.0
 
 
 @dataclass
@@ -177,8 +177,8 @@ class AppConfig:
     def output_url(self) -> str:
         if self.output.url:
             return self.output.url
-        base = os.getenv("STATE_MACHINE_BASE_URL", "http://state-machine:8000").rstrip("/")
-        path = os.getenv("STATE_MACHINE_INPUT_PATH", "/inputs")
+        base = os.getenv("CONTROL_COMM_BASE_URL", "http://100.72.60.28:5001").rstrip("/")
+        path = os.getenv("CONTROL_COMM_VECTOR_PATH", "/vector")
         return f"{base}/{path.lstrip('/')}"
 
 

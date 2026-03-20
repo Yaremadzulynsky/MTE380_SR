@@ -16,7 +16,7 @@ fi
 export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
 
 STATE_MACHINE_INPUT_URL="${STATE_MACHINE_INPUT_URL:-http://localhost:8000/inputs}"
-CONTROL_COMM_CONTROL_URL="${CONTROL_COMM_CONTROL_URL:-http://localhost:5001/control}"
+CONTROL_COMM_VECTOR_URL="${CONTROL_COMM_VECTOR_URL:-http://100.72.60.28:5001/vector}"
 PERCEPTION_VIEW_MODE="${PERCEPTION_VIEW_MODE:-auto}"
 PERCEPTION_LOG_DIR="${PERCEPTION_LOG_DIR:-$(pwd)/logs}"
 
@@ -80,7 +80,7 @@ send_zero_vector() {
       curl -sS -X POST "$STATE_MACHINE_INPUT_URL" \
         -H "Content-Type: application/json" \
         -d "$sm_payload" >/dev/null || true
-      curl -sS -X POST "$CONTROL_COMM_CONTROL_URL" \
+      curl -sS -X POST "$CONTROL_COMM_VECTOR_URL" \
         -H "Content-Type: application/json" \
         -d "$control_payload" >/dev/null || true
       sleep 0.1
