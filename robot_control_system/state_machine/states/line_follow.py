@@ -39,12 +39,10 @@ class LineFollow(State):
 
     def __init__(self):
         self._follow_speed = float(_config.get()['line_follow'].get('follow_speed', 0.35))
-        self._line_lost    = False
 
     def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
               odometry: Optional['Odometry'],
               target_heading: Optional[float] = None) -> None:
-        self._line_lost = False
         if robot is not None:
             robot.set_speed(0.0)
         log.info('Entered LINE_FOLLOW  speed=%.2f', self._follow_speed)
@@ -56,17 +54,8 @@ class LineFollow(State):
             return None
 
         if target_heading is None:
-            # No line detected
-            if not self._line_lost:
-                log.warning('Line lost — stopping')
-                self._line_lost = True
-            robot.set_speed(0.0)
-            robot.set_motors(0.0, 0.0)
-            return None
-
-        if self._line_lost:
-            log.info('Line reacquired')
-            self._line_lost = False
+            log.warning('Line lost — switching to find_line')
+            return 'find_line'
 
         # Convert world-frame target heading to a robot-frame direction vector.
         # theta = how far right of current heading the target is.

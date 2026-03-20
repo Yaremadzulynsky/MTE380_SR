@@ -55,6 +55,11 @@ line_follow:
   follow_speed: 0.35
   lateral_deadzone_m: 0.01
 
+find_line:
+  follow_speed: 0.30   # forward speed while sweeping
+  turn_x: 0.5          # lateral steering strength while sweeping [0=straight, 1=hard turn]
+  timeout_s: 3.0
+
 line_follow_p:
   follow_speed: 0.35
   kp: 0.005            # lateral correction per pixel: higher = more aggressive
