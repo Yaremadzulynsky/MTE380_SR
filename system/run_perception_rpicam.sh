@@ -84,17 +84,12 @@ PERCEPTION_LOG_DIR="${PERCEPTION_LOG_DIR:-$(pwd)/logs}"
 RPICAM_WIDTH="${RPICAM_WIDTH:-480}"
 RPICAM_HEIGHT="${RPICAM_HEIGHT:-320}"
 RPICAM_FPS="${RPICAM_FPS:-60}"
-MEDIAMTX_RTSP_URL="${MEDIAMTX_RTSP_URL:-rtsp://127.0.0.1:8554/rpicam}"
-STREAM_PUBLISH_MODE="${STREAM_PUBLISH_MODE:-rtsp}"
-RTSP_READY_TIMEOUT_S="${RTSP_READY_TIMEOUT_S:-12}"
-STREAMER_PID=""
-STREAMER_LOG_FILE=""
 
 PERCEPTION_ARGS_PROD=(
   -m src.main
   --mode production
   --config configs/docker-rpicam.yaml
-  --source "${MEDIAMTX_RTSP_URL}"
+  --source rpicam
   --fps "${RPICAM_FPS}"
   --comms http
 )
@@ -102,7 +97,7 @@ PERCEPTION_ARGS_VIEW=(
   -m src.main
   --mode test
   --config configs/docker-rpicam.yaml
-  --source "${MEDIAMTX_RTSP_URL}"
+  --source rpicam
   --fps "${RPICAM_FPS}"
   --comms http
 )
@@ -142,17 +137,6 @@ show_log_view() {
   esac
 }
 
-ensure_streaming_deps() {
-  if ! command -v rpicam-vid >/dev/null 2>&1; then
-    echo "[run_perception_rpicam] error: rpicam-vid not found; install rpicam-apps" >&2
-    exit 1
-  fi
-  if ! command -v ffmpeg >/dev/null 2>&1; then
-    echo "[run_perception_rpicam] error: ffmpeg not found; required for RTSP publishing" >&2
-    exit 1
-  fi
-}
-
 send_zero_vector() {
   local sm_payload control_payload
   sm_payload='{"black_line":{"detected":false,"vector":{"x":0.0,"y":0.0}},"red_line":{"detected":false,"vector":{"x":0.0,"y":0.0}},"target":{"detected":false,"vector":{"x":0.0,"y":0.0}}}'
@@ -171,103 +155,6 @@ send_zero_vector() {
   else
     echo "[run_perception_rpicam] warning: curl not found; could not send stop commands"
   fi
-}
-
-start_streamer() {
-  local ts
-  if [ "${STREAM_PUBLISH_MODE}" != "rtsp" ]; then
-    return
-  fi
-  if [ -n "${STREAMER_PID}" ] && kill -0 "${STREAMER_PID}" 2>/dev/null; then
-    return
-  fi
-
-  ensure_streaming_deps
-  mkdir -p "$PERCEPTION_LOG_DIR"
-  ts="$(date +%Y%m%d-%H%M%S)"
-  STREAMER_LOG_FILE="${PERCEPTION_LOG_DIR}/streamer-${ts}.log"
-  echo "[run_perception_rpicam] starting RTSP publisher -> ${MEDIAMTX_RTSP_URL}"
-  echo "[run_perception_rpicam] streamer log: ${STREAMER_LOG_FILE}"
-
-  (
-    set -euo pipefail
-    rpicam-vid \
-      -t 0 \
-      -n \
-      --flush \
-      --inline \
-      --codec libav \
-      --libav-format mpegts \
-      --width "${RPICAM_WIDTH}" \
-      --height "${RPICAM_HEIGHT}" \
-      --framerate "${RPICAM_FPS}" \
-      -o - \
-    | ffmpeg \
-      -loglevel warning \
-      -fflags nobuffer \
-      -flags low_delay \
-      -avioflags direct \
-      -analyzeduration 0 \
-      -probesize 32 \
-      -f mpegts \
-      -i - \
-      -an \
-      -c:v copy \
-      -muxdelay 0 \
-      -muxpreload 0 \
-      -flush_packets 1 \
-      -f rtsp \
-      -rtsp_transport tcp \
-      "${MEDIAMTX_RTSP_URL}"
-  ) >>"${STREAMER_LOG_FILE}" 2>&1 &
-
-  STREAMER_PID=$!
-  sleep 0.4
-  if ! kill -0 "${STREAMER_PID}" 2>/dev/null; then
-    echo "[run_perception_rpicam] error: streamer failed to start; check ${STREAMER_LOG_FILE}" >&2
-    exit 1
-  fi
-}
-
-stop_streamer() {
-  if [ -z "${STREAMER_PID}" ] || ! kill -0 "${STREAMER_PID}" 2>/dev/null; then
-    STREAMER_PID=""
-    return
-  fi
-  kill -TERM "${STREAMER_PID}" 2>/dev/null || true
-  wait "${STREAMER_PID}" 2>/dev/null || true
-  echo "[run_perception_rpicam] stopped RTSP publisher"
-  STREAMER_PID=""
-}
-
-wait_for_rtsp_ready() {
-  local start now elapsed
-  if [ "${STREAM_PUBLISH_MODE}" != "rtsp" ]; then
-    return
-  fi
-  if ! command -v ffprobe >/dev/null 2>&1; then
-    echo "[run_perception_rpicam] warning: ffprobe not found; skipping RTSP readiness check"
-    return
-  fi
-  start="$(date +%s)"
-  echo "[run_perception_rpicam] waiting for RTSP stream to become ready (${MEDIAMTX_RTSP_URL})"
-  while true; do
-    if ! kill -0 "${STREAMER_PID}" 2>/dev/null; then
-      echo "[run_perception_rpicam] error: streamer exited before RTSP became ready; check ${STREAMER_LOG_FILE}" >&2
-      exit 1
-    fi
-    if ffprobe -v error -rtsp_transport tcp -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "${MEDIAMTX_RTSP_URL}" >/dev/null 2>&1; then
-      echo "[run_perception_rpicam] RTSP stream is ready"
-      return
-    fi
-    now="$(date +%s)"
-    elapsed=$((now - start))
-    if [ "${elapsed}" -ge "${RTSP_READY_TIMEOUT_S}" ]; then
-      echo "[run_perception_rpicam] error: RTSP stream not ready after ${RTSP_READY_TIMEOUT_S}s; check ${STREAMER_LOG_FILE}" >&2
-      exit 1
-    fi
-    sleep 0.3
-  done
 }
 
 monitor_perception_exit() {
@@ -291,8 +178,6 @@ start_perception() {
     echo "[run_perception_rpicam] perception already running (pid ${PERCEPTION_PID})"
     return
   fi
-  start_streamer
-  wait_for_rtsp_ready
   mkdir -p "$PERCEPTION_LOG_DIR"
   ts="$(date +%Y%m%d-%H%M%S)"
   PERCEPTION_LOG_FILE="${PERCEPTION_LOG_DIR}/perception-${ts}.log"
@@ -345,16 +230,13 @@ stop_perception() {
 
 cleanup() {
   stop_perception
-  stop_streamer
   send_zero_vector
 }
 trap cleanup EXIT INT TERM
 
 # Keep old behavior for non-interactive callers (e.g., systemd button controller).
 if ! [ -t 0 ]; then
-  start_streamer
-  wait_for_rtsp_ready
-  trap 'stop_streamer; send_zero_vector' EXIT INT TERM
+  trap 'send_zero_vector' EXIT INT TERM
   exec "$PYTHON_BIN" "${PERCEPTION_ARGS_PROD[@]}"
 fi
 
@@ -365,8 +247,6 @@ echo "  a: show recent all logs"
 echo "  p: show recent packet/control logs"
 echo "  e: show recent error/warning logs"
 echo "  q: quit script (also stops perception)"
-echo "[run_perception_rpicam] stream mode: ${STREAM_PUBLISH_MODE} (rtsp => camera owned by RTSP publisher)"
-echo "[run_perception_rpicam] rtsp url: ${MEDIAMTX_RTSP_URL}"
 echo "[run_perception_rpicam] bypass state machine: ${PERCEPTION_BYPASS_STATE_MACHINE} (http target: ${STATE_MACHINE_INPUT_URL})"
 echo "[run_perception_rpicam] view mode: ${PERCEPTION_VIEW_MODE} (1=test GUI, 0=production headless, auto=detect display)"
 echo "[run_perception_rpicam] logs dir: ${PERCEPTION_LOG_DIR}"

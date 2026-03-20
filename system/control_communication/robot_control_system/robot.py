@@ -14,6 +14,7 @@ MAX_SPEED = 0.2
 
 HEARTBEAT_TIMEOUT = 3.0   # seconds before warning
 
+#TODO IMPLEMENT LAG CONTROLLER FOR TURNING SPEED
 
 # ── Wheel geometry (update these for your robot) ──────────────────────────────
 TICKS_PER_REV    = 680    # encoder ticks per full wheel revolution
