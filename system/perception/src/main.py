@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import queue
 import threading
 import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -77,9 +79,36 @@ def _parse_source(source: str, cfg: AppConfig) -> int | str:
         return cfg.camera.webcam_index
     if source == "rpicam":
         return "rpicam"
+    if source.startswith(("rtsp://", "http://", "https://", "udp://", "tcp://")):
+        return source
     if source.startswith("video:"):
         return source.split("video:", 1)[1]
-    raise ValueError("source must be webcam, rpicam, or video:/path/to/file")
+    src_path = Path(source)
+    if src_path.exists():
+        return str(src_path)
+    raise ValueError(
+        "source must be webcam, rpicam, video:/path/to/file, network URL (rtsp/http/udp/tcp), or an existing file path"
+    )
+
+
+def _send_zero_http_inputs(url: str, timeout_s: float = 0.5) -> None:
+    payload = {
+        "black_line": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
+        "red_line": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
+        "target": {"detected": False, "vector": {"x": 0.0, "y": 0.0}},
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s):
+            pass
+    except Exception as exc:
+        log("perception_zero_vector_send_failed", error=str(exc), url=url)
 
 
 def main() -> None:
@@ -138,7 +167,12 @@ def main() -> None:
         state.path_mask_key = "red"
         log("path_mask_red", reason="test clip uses red line")
 
-    backend = "gstreamer" if isinstance(source, str) and source != "rpicam" else cfg.camera.backend
+    backend = cfg.camera.backend
+    if isinstance(source, str) and source != "rpicam":
+        if source.startswith(("rtsp://", "http://", "https://", "udp://", "tcp://")):
+            backend = "ffmpeg"
+        else:
+            backend = "gstreamer"
     try:
         if source == "rpicam":
             cam = RpicamVidCamera(
@@ -283,6 +317,8 @@ def main() -> None:
         capture_thread.join(timeout=1.0)
         worker_thread.join(timeout=1.0)
         cam.release()
+        if cfg.comms.method == "http" and cfg.comms.http_url:
+            _send_zero_http_inputs(cfg.comms.http_url)
         if sender is not None:
             sender.close()
         cv2.destroyAllWindows()
