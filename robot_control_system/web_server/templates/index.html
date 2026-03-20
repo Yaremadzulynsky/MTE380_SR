@@ -768,13 +768,26 @@
   const odoCtx     = odoCanvas.getContext('2d');
   const ODO_MAX_PATH = 3000;
 
+  let robotGeometry = null;
+  fetch('/api/geometry').then(r => r.json()).then(d => { robotGeometry = d; }).catch(() => {});
+
   let odoPath         = [];       // [{x, y}] in metres
   let odoRobot        = null;     // {x, y, heading_rad}
   let odoLineSeg      = null;     // {cx, cy, dx, dy} line centre + unit tangent in world
   let odoLineHist     = [];       // [{cx, cy}] sampled line centre positions over time
   let odoLineSplatter = [];       // [{x, y}] world-space red pixel cloud
+  let odoZoom         = 1.0;
 
   const ODO_MAX_SPLATTER = 6000;
+
+  odoCanvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    odoZoom *= e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    odoZoom  = Math.max(0.1, Math.min(50, odoZoom));
+    drawOdometry();
+  }, { passive: false });
+
+  odoCanvas.addEventListener('dblclick', () => { odoZoom = 1.0; drawOdometry(); });
 
   function resetOdoPath() {
     odoPath         = [];
@@ -856,7 +869,7 @@
     const spanY  = Math.max(maxY - minY, 1.5);
     const maxSpan = Math.max(spanX, spanY) * 1.4;
 
-    const scale  = Math.min(W, H) / maxSpan;   // px per metre
+    const scale  = Math.min(W, H) / maxSpan * odoZoom;   // px per metre
     const originX = W / 2 - cx * scale;
     const originY = H / 2 + cy * scale;         // flip Y (world Y up, canvas Y down)
 
@@ -887,10 +900,17 @@
     // Grid labels
     odoCtx.fillStyle  = '#2a2a50';
     odoCtx.font       = '9px Courier New';
-    odoCtx.textAlign  = 'left';
+
+    odoCtx.textAlign = 'left';
     for (let gx = gx0; gx < cx + maxSpan; gx += gridStep) {
       const [px] = toC(gx, 0);
       if (px > 0 && px < W) odoCtx.fillText(gx.toFixed(1) + 'm', px + 2, H - 4);
+    }
+
+    odoCtx.textAlign = 'left';
+    for (let gy = gy0; gy < cy + maxSpan; gy += gridStep) {
+      const [, py] = toC(0, gy);
+      if (py > 10 && py < H - 10) odoCtx.fillText(gy.toFixed(1) + 'm', 4, py - 2);
     }
 
     // ── World axes ────────────────────────────────────────────
@@ -1015,6 +1035,40 @@
       odoCtx.strokeStyle = '#30e88a';
       odoCtx.lineWidth   = 2;
       odoCtx.stroke();
+
+      // Wheel positions and camera — only drawn once geometry is loaded from config
+      if (!robotGeometry) return;
+
+      // Wheel positions — green dots connected by an axle line
+      // Robot frame: left wheel at (-base/2, 0), right wheel at (+base/2, 0)
+      // World: fwd dir = (cos h, sin h), right dir = (sin h, -cos h)
+      const half = robotGeometry.wheel_base_m / 2;
+      const lx = odoRobot.x - half * Math.sin(h);
+      const ly = odoRobot.y + half * Math.cos(h);
+      const rx2 = odoRobot.x + half * Math.sin(h);
+      const ry2 = odoRobot.y - half * Math.cos(h);
+      const [lwx, lwy] = toC(lx, ly);
+      const [rwx, rwy] = toC(rx2, ry2);
+
+      odoCtx.beginPath(); odoCtx.moveTo(lwx, lwy); odoCtx.lineTo(rwx, rwy);
+      odoCtx.strokeStyle = '#30e88a'; odoCtx.lineWidth = 1.5; odoCtx.stroke();
+
+      for (const [wx2, wy2] of [[lwx, lwy], [rwx, rwy]]) {
+        odoCtx.beginPath(); odoCtx.arc(wx2, wy2, 3, 0, Math.PI * 2);
+        odoCtx.fillStyle = '#30e88a'; odoCtx.fill();
+      }
+
+      // Camera position — purple dot
+      const camFwd = robotGeometry.camera_forward_m;
+      const camWx  = odoRobot.x + camFwd * Math.cos(h);
+      const camWy  = odoRobot.y + camFwd * Math.sin(h);
+      const [camCx, camCy] = toC(camWx, camWy);
+      odoCtx.beginPath(); odoCtx.arc(camCx, camCy, 3, 0, Math.PI * 2);
+      odoCtx.fillStyle   = '#c060ff';
+      odoCtx.fill();
+      odoCtx.strokeStyle = '#9030cc';
+      odoCtx.lineWidth   = 1;
+      odoCtx.stroke();
     }
 
     // ── HUD overlay ───────────────────────────────────────────
@@ -1026,7 +1080,7 @@
     if (odoRobot) {
       const hdgDeg = (odoRobot.heading * 180 / Math.PI).toFixed(1);
       odoCtx.fillText(
-        `x=${odoRobot.x.toFixed(3)}m  y=${odoRobot.y.toFixed(3)}m  hdg=${hdgDeg}°  path=${odoPath.length}pts  1grid=${gridStep}m`,
+        `x=${odoRobot.x.toFixed(3)}m  y=${odoRobot.y.toFixed(3)}m  hdg=${hdgDeg}°  path=${odoPath.length}pts  grid=${gridStep}m  zoom=${odoZoom.toFixed(2)}x`,
         8, 14
       );
     } else {
@@ -1035,9 +1089,11 @@
 
     // Legend
     odoCtx.textAlign = 'right';
-    odoCtx.fillStyle = '#4af0ff'; odoCtx.fillText('● robot path', W - 8, 14);
+    odoCtx.fillStyle = '#4af0ff'; odoCtx.fillText('● path', W - 8, 14);
+    odoCtx.fillStyle = '#30e88a'; odoCtx.fillText('● wheels', W - 62, 14);
+    odoCtx.fillStyle = '#c060ff'; odoCtx.fillText('● cam', W - 126, 14);
     if (odoLineSeg || odoLineHist.length > 0 || odoLineSplatter.length > 0) {
-      odoCtx.fillStyle = '#f04060'; odoCtx.fillText('● line', W - 90, 14);
+      odoCtx.fillStyle = '#f04060'; odoCtx.fillText('● line', W - 178, 14);
     }
   }
 

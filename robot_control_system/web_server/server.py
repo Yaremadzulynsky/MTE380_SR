@@ -209,6 +209,15 @@ class WebServer:
                 robot.set_speed_gains(float(kp), float(ki), float(kd))
             return jsonify(robot.get_gains())
 
+        @app.route('/api/geometry', methods=['GET'])
+        def get_geometry():
+            import config as _cfg
+            cfg = _cfg.get()
+            return jsonify({
+                'wheel_base_m':    cfg['wheel']['base_m'],
+                'camera_forward_m': cfg['vision']['camera_forward_m'],
+            })
+
         @app.route('/api/limits', methods=['GET'])
         def get_limits():
             import state_machine.hardware.robot as _hw
