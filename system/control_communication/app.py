@@ -213,8 +213,8 @@ line_follow_settings: dict[str, float] = {
     "line_lag_enabled": 1.0 if str(os.getenv("LINE_FOLLOW_LAG_ENABLED", "1")).strip().lower() in {"1", "true", "yes", "on"} else 0.0,
     # Compatibility keys used by dashboard/state-machine UI (not used in control-comm bypass loop).
     "follow_max_speed": _clampf(float(os.getenv("LINE_FOLLOW_FOLLOW_MAX_SPEED", "0.3")), 0.0, 1.0),
-    "turn_slowdown": abs(float(os.getenv("LINE_FOLLOW_TURN_SLOWDOWN", "0.0"))),
-    "error_slowdown": abs(float(os.getenv("LINE_FOLLOW_ERROR_SLOWDOWN", "0.0"))),
+    "turn_slowdown": abs(float(os.getenv("LINE_FOLLOW_TURN_SLOWDOWN", "0.45"))),
+    "error_slowdown": abs(float(os.getenv("LINE_FOLLOW_ERROR_SLOWDOWN", "0.2"))),
 }
 if line_follow_settings["min_speed"] > line_follow_settings["max_speed"]:
     line_follow_settings["min_speed"], line_follow_settings["max_speed"] = (
@@ -588,8 +588,8 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
     if error:
         return {"ok": False, **error, "payload": payload}, 400
     control_mode = str(payload.get("control_mode", "manual")).strip().lower()
-    speed_value = encoded["speed"] if encoded["speed"] is not None else line_follow_settings["base_speed"]
-    speed_value = _clampf(speed_value, line_follow_settings["min_speed"], line_follow_settings["max_speed"])
+    requested_speed = encoded["speed"] if encoded["speed"] is not None else line_follow_settings["base_speed"]
+    speed_value = _clampf(requested_speed, line_follow_settings["min_speed"], line_follow_settings["max_speed"])
     line_error_x = float(payload.get("line_error_x", encoded["x_input"]))
     line_pid_turn = 0.0
     cmd_x = float(encoded["x_input"])
@@ -604,6 +604,21 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
         cmd_x = _clampf(line_pid_turn, -1.0, 1.0)
         cmd_y = 1.0
         rotation_scale = float(line_follow_settings["rotation_scale"])
+        speed_limit = min(
+            line_follow_settings["max_speed"],
+            line_follow_settings["follow_max_speed"],
+            requested_speed if encoded["speed"] is not None else line_follow_settings["follow_max_speed"],
+        )
+        speed_base = min(line_follow_settings["base_speed"], speed_limit)
+        speed_value = (
+            speed_base
+            - line_follow_settings["turn_slowdown"] * abs(line_pid_turn)
+            - line_follow_settings["error_slowdown"] * abs(line_error_x)
+        )
+        if speed_limit <= line_follow_settings["min_speed"]:
+            speed_value = _clampf(speed_value, 0.0, speed_limit)
+        else:
+            speed_value = _clampf(speed_value, line_follow_settings["min_speed"], speed_limit)
     sim_payload = {
         "x": cmd_x,
         "y": cmd_y,

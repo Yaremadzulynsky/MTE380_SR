@@ -25,6 +25,10 @@ const CONTROL_COMM_TURN_TEST_PATH =
   process.env.CONTROL_COMM_TURN_TEST_PATH || '/turn-test';
 const CONTROL_COMM_LINE_FOLLOW_PID_PATH =
   process.env.CONTROL_COMM_LINE_FOLLOW_PID_PATH || '/line-follow-pid';
+const PERCEPTION_BASE_URL =
+  process.env.PERCEPTION_BASE_URL || 'http://localhost:4000';
+const PERCEPTION_RUNTIME_SETTINGS_PATH =
+  process.env.PERCEPTION_RUNTIME_SETTINGS_PATH || '/runtime-settings';
 const STATE_MACHINE_BASE_URL =
   process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
 const STATE_MACHINE_INPUT_PATH =
@@ -72,7 +76,13 @@ const linePidRanges = {
   deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1),
   rotation_scale: buildRange(process.env.LINE_PID_ROTATION_SCALE_MIN, process.env.LINE_PID_ROTATION_SCALE_MAX, 0, 1),
   line_lag_tau: buildRange(process.env.LINE_PID_LAG_TAU_MIN, process.env.LINE_PID_LAG_TAU_MAX, 0, 2),
-  line_lag_enabled: buildRange(process.env.LINE_PID_LAG_ENABLED_MIN, process.env.LINE_PID_LAG_ENABLED_MAX, 0, 1)
+  line_lag_enabled: buildRange(process.env.LINE_PID_LAG_ENABLED_MIN, process.env.LINE_PID_LAG_ENABLED_MAX, 0, 1),
+  centerline_lookahead_ratio: buildRange(
+    process.env.PERCEPTION_LOOKAHEAD_MIN,
+    process.env.PERCEPTION_LOOKAHEAD_MAX,
+    0.05,
+    0.9
+  )
 };
 
 const perceptionRunner = createPerceptionRunner();
@@ -922,6 +932,10 @@ function getControlCommLineFollowPidUrl() {
   return new URL(CONTROL_COMM_LINE_FOLLOW_PID_PATH, CONTROL_COMM_BASE_URL).toString();
 }
 
+function getPerceptionRuntimeSettingsUrl() {
+  return new URL(PERCEPTION_RUNTIME_SETTINGS_PATH, PERCEPTION_BASE_URL).toString();
+}
+
 function getStateMachineStatesUrl() {
   return new URL(STATE_MACHINE_STATES_PATH, STATE_MACHINE_BASE_URL).toString();
 }
@@ -1163,51 +1177,104 @@ async function postJson(url, payload) {
 }
 
 async function fetchLineFollowPidSettings() {
-  const url = getControlCommLineFollowPidUrl();
-  try {
-    const response = await fetch(url, {
+  const [controlResult, perceptionResult] = await Promise.all([
+    fetch(getControlCommLineFollowPidUrl(), {
       method: 'GET',
       headers: { Accept: 'application/json, text/plain' }
-    });
-    const body = await response.text();
-    if (!response.ok) {
-      return { error: `Upstream status ${response.status}`, detail: body };
-    }
-    const parsed = safeJsonParse(body);
-    if (!parsed || typeof parsed !== 'object' || !parsed.values) {
-      return { error: 'Upstream returned invalid line-follow payload.', detail: body };
-    }
+    }).then(async (response) => ({ ok: response.ok, status: response.status, body: await response.text() })).catch((err) => ({ ok: false, error: err.message })),
+    fetch(getPerceptionRuntimeSettingsUrl(), {
+      method: 'GET',
+      headers: { Accept: 'application/json, text/plain' }
+    }).then(async (response) => ({ ok: response.ok, status: response.status, body: await response.text() })).catch((err) => ({ ok: false, error: err.message }))
+  ]);
+
+  if (!controlResult.ok) {
     return {
-      values: parsed.values,
-      bounds: parsed.bounds || linePidRanges
+      error: controlResult.error || `Upstream status ${controlResult.status}`,
+      detail: controlResult.body
     };
-  } catch (err) {
-    return { error: err.message };
   }
+
+  const controlParsed = safeJsonParse(controlResult.body);
+  if (!controlParsed || typeof controlParsed !== 'object' || !controlParsed.values) {
+    return { error: 'Upstream returned invalid line-follow payload.', detail: controlResult.body };
+  }
+
+  const values = { ...controlParsed.values };
+  if (perceptionResult.ok) {
+    const perceptionParsed = safeJsonParse(perceptionResult.body);
+    if (perceptionParsed && typeof perceptionParsed === 'object' && perceptionParsed.values) {
+      Object.assign(values, perceptionParsed.values);
+    }
+  }
+
+  return {
+    values,
+    bounds: linePidRanges
+  };
 }
 
 async function setLineFollowPidSettings(updates) {
-  const url = getControlCommLineFollowPidUrl();
+  const controlUpdates = { ...updates };
+  const perceptionUpdates = {};
+  if (Object.prototype.hasOwnProperty.call(controlUpdates, 'centerline_lookahead_ratio')) {
+    perceptionUpdates.centerline_lookahead_ratio = controlUpdates.centerline_lookahead_ratio;
+    delete controlUpdates.centerline_lookahead_ratio;
+  }
+
+  const requests = [];
+  if (Object.keys(controlUpdates).length > 0) {
+    requests.push(
+      fetch(getControlCommLineFollowPidUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/plain'
+        },
+        body: JSON.stringify(controlUpdates)
+      }).then(async (response) => ({ target: 'control', ok: response.ok, status: response.status, body: await response.text() })).catch((err) => ({ target: 'control', ok: false, error: err.message }))
+    );
+  }
+  if (Object.keys(perceptionUpdates).length > 0) {
+    requests.push(
+      fetch(getPerceptionRuntimeSettingsUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/plain'
+        },
+        body: JSON.stringify(perceptionUpdates)
+      }).then(async (response) => ({ target: 'perception', ok: response.ok, status: response.status, body: await response.text() })).catch((err) => ({ target: 'perception', ok: false, error: err.message }))
+    );
+  }
+
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/plain'
-      },
-      body: JSON.stringify(updates)
-    });
-    const body = await response.text();
-    if (!response.ok) {
-      return { error: `Upstream status ${response.status}`, detail: body };
+    const results = await Promise.all(requests);
+    for (const result of results) {
+      if (!result.ok) {
+        return {
+          error: result.error || `Upstream status ${result.status}`,
+          detail: result.body
+        };
+      }
     }
-    const parsed = safeJsonParse(body);
-    if (!parsed || typeof parsed !== 'object') {
-      return { values: updates };
+
+    const values = {};
+    const updated = {};
+    for (const result of results) {
+      const parsed = safeJsonParse(result.body);
+      if (!parsed || typeof parsed !== 'object') continue;
+      if (parsed.values && typeof parsed.values === 'object') {
+        Object.assign(values, parsed.values);
+      }
+      if (parsed.updated && typeof parsed.updated === 'object') {
+        Object.assign(updated, parsed.updated);
+      }
     }
+    Object.assign(updated, perceptionUpdates);
     return {
-      values: parsed.values || updates,
-      updated: parsed.updated || updates
+      values: Object.keys(values).length > 0 ? values : updates,
+      updated: Object.keys(updated).length > 0 ? updated : updates
     };
   } catch (err) {
     return { error: err.message };
