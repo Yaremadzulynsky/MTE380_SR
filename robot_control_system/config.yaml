@@ -38,7 +38,6 @@ vision:
 line_follow:
   follow_speed: 0.35
   deadzone_px: 20.0
-  correction_scale_px: 100.0
 
 line_follow_p:
   follow_speed: 0.35

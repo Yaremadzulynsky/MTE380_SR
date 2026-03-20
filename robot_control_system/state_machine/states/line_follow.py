@@ -8,17 +8,18 @@ Control logic
 Each tick:
   1. Read the latest LineResult from the detector.
   2. If no line is found, stop and transition to STOPPED.
-  3. Compute a blended direction:
-       - Start with the line tangent direction (always points along the line).
-       - Add a lateral correction component proportional to how far the robot
-         has drifted from the line, using a deadzone to prevent oscillation
-         when the robot is already on the line.
-  4. Pass the blended direction to robot.add_direction() and drive forward.
+  3. Compute a geometric look-ahead direction:
+       - The rotation origin (wheel-base centre) is behind the camera by
+         cam_fwd_m.  The direction from the origin to the line's observed
+         position at the camera is (lat_px, d_px) where d_px = cam_fwd_m * ppm.
+       - add_direction computes delta = atan2(lat_px, d_px), which naturally
+         reduces angular sensitivity when d_px is large, avoiding over-steering.
+       - A deadzone suppresses small lateral errors to prevent oscillation.
+  4. Pass the direction to robot.add_direction() and drive forward.
 """
 
 from __future__ import annotations
 import logging
-import math
 from typing import TYPE_CHECKING, Optional
 
 from state_machine.state import State
@@ -34,39 +35,38 @@ log = logging.getLogger(__name__)
 
 # ── Tuning (from config.yaml) ─────────────────────────────────────────────────
 _lf = _config.get()['line_follow']
-FOLLOW_SPEED:        float = _lf['follow_speed']
-DEADZONE_PX:         float = _lf['deadzone_px']
-CORRECTION_SCALE_PX: float = _lf['correction_scale_px']
+FOLLOW_SPEED: float = _lf['follow_speed']
+DEADZONE_PX:  float = _lf['deadzone_px']
 
 
 def compute_target_direction(result) -> tuple[float, float]:
-    """Compute the blended direction vector from a LineResult (tangent + lateral correction).
+    """Compute the geometric look-ahead direction from a LineResult.
 
-    Accounts for the camera being mounted ahead of the wheel base: the lateral
-    distance measured at the camera position is projected back to the wheel-base
-    pivot using the tangent vector's lateral component.
+    Returns the direction vector from the rotation origin (wheel-base centre)
+    to the observed line position at the camera: (lat_px, d_px) where
+    d_px = cam_fwd_m * ppm.  add_direction computes atan2(lat_px, d_px),
+    so the large d_px naturally reduces angular sensitivity (the farther the
+    camera is ahead of the origin, the smaller the steering angle for the same
+    lateral error).
+
+    Falls back to (lat_px, 1.0) if vision is not calibrated.
     """
-    tx, ty   = result.direction
-    lat_px   = result.lateral_distance_px
+    lat_px = result.lateral_distance_px
 
-    # Project lateral distance from camera plane back to wheel-base pivot.
-    # Geometry: camera is d metres ahead of wheel base. Line passes through
-    # (lat_px/ppm, d) in robot frame with direction (tx, ty). Setting y=0
-    # gives lateral_at_wheelbase = lat_px - d * ppm * tx / ty.
+    # Deadzone: suppress tiny errors to prevent oscillation
+    if abs(lat_px) < DEADZONE_PX:
+        lat_px = 0.0
+
     _vc = _config.get()['vision']
-    ppm = _vc.get('pixels_per_meter')          # None until calibrated
+    ppm       = _vc.get('pixels_per_meter')
     cam_fwd_m = _vc.get('camera_forward_m', 0.0)
-    if ppm and cam_fwd_m and abs(ty) > 1e-3:
-        lat_px = lat_px - cam_fwd_m * ppm * tx / ty
 
-    weight   = min(1.0, max(0.0, abs(lat_px) - DEADZONE_PX) / CORRECTION_SCALE_PX)
-    corr_x   = math.copysign(weight, lat_px)
-    bx, by   = tx + corr_x, ty
-    length   = math.hypot(bx, by)
-    if length > 1e-6:
-        bx /= length
-        by /= length
-    return bx, by
+    if ppm and cam_fwd_m:
+        d_px = cam_fwd_m * ppm
+        return lat_px, d_px
+
+    # Fallback: not calibrated — proportional correction with unit forward
+    return lat_px, 1.0
 
 
 class LineFollow(State):
@@ -89,15 +89,14 @@ class LineFollow(State):
             log.debug('LINE_FOLLOW: line lost')
             return 'stopped'
 
-        tx, ty = result.direction
         bx, by = compute_target_direction(result)
 
         robot.add_direction(bx, by)
         robot.set_speed(FOLLOW_SPEED)
 
         log.debug(
-            'LINE_FOLLOW: lat=%.1fpx tangent=(%.2f,%.2f) cmd=(%.2f,%.2f)',
-            result.lateral_distance_px, tx, ty, bx, by,
+            'LINE_FOLLOW: lat=%.1fpx dir=(%.1f,%.1f)',
+            result.lateral_distance_px, bx, by,
         )
         return None
 
