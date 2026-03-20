@@ -26,15 +26,6 @@ except Exception:  # pragma: no cover
     HEADING_KP, HEADING_KI, HEADING_KD = 2.0, 0.1, 0.0
 
 try:
-    from robot_control_system.speed_pid import (
-        SPEED_KP,
-        SPEED_KI,
-        SPEED_KD,
-    )
-except Exception:  # pragma: no cover
-    SPEED_KP, SPEED_KI, SPEED_KD = 1.0, 0.0, 0.0
-
-try:
     from robot_control_system.robot import Robot as _Robot
 except Exception as _robot_import_err:
     print(f"ts={time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} event=robot_import_fail error={_robot_import_err!r}", flush=True)
@@ -340,17 +331,12 @@ def _persist_tuning_settings() -> None:
         return
     if robot is None:
         heading_kp, heading_ki, heading_kd = float(HEADING_KP), float(HEADING_KI), float(HEADING_KD)
-        speed_kp, speed_ki, speed_kd = float(SPEED_KP), float(SPEED_KI), float(SPEED_KD)
     else:
         heading_kp, heading_ki, heading_kd = robot.get_heading_gains()
-        speed_kp, speed_ki, speed_kd = robot.get_speed_gains()
     rows = {
         "heading_kp": float(heading_kp),
         "heading_ki": float(heading_ki),
         "heading_kd": float(heading_kd),
-        "speed_kp": float(speed_kp),
-        "speed_ki": float(speed_ki),
-        "speed_kd": float(speed_kd),
         "line_kp": float(line_follow_settings["kp"]),
         "line_ki": float(line_follow_settings["ki"]),
         "line_kd": float(line_follow_settings["kd"]),
@@ -442,11 +428,6 @@ def _load_tuning_settings() -> None:
         hd = parsed.get("heading_kd")
         if hk is not None and hi is not None and hd is not None:
             robot.set_gains(float(hk), float(hi), float(hd))
-        sk = parsed.get("speed_kp")
-        si = parsed.get("speed_ki")
-        sd = parsed.get("speed_kd")
-        if sk is not None and si is not None and sd is not None:
-            robot.set_speed_gains(float(sk), float(si), float(sd))
 
 
 def close_robot() -> None:
@@ -764,16 +745,6 @@ def _heading_pid_triplet() -> tuple[float, float, float]:
     return robot.get_heading_gains()
 
 
-def _speed_pid_triplet() -> tuple[float, float, float]:
-    if robot is None:
-        return (
-            float(SPEED_KP),
-            float(SPEED_KI),
-            float(SPEED_KD),
-        )
-    return robot.get_speed_gains()
-
-
 @app.get("/pid/proportional")
 def get_pid_p():
     kp, _, _ = _heading_pid_triplet()
@@ -833,69 +804,6 @@ def post_pid_d():
     kp, ki, _ = robot.get_heading_gains()
     robot.set_gains(kp, ki, float(val))
     _append_pid_audit("heading_d", float(val), source_ip=request.remote_addr)
-    _persist_tuning_settings()
-    return jsonify(float(val))
-
-
-@app.get("/pid/speed/proportional")
-def get_speed_pid_p():
-    kp, _, _ = _speed_pid_triplet()
-    return jsonify(kp)
-
-
-@app.post("/pid/speed/proportional")
-def post_speed_pid_p():
-    if robot is None:
-        return jsonify({"ok": False, "message": "Robot is not active."}), 503
-    payload = request.get_json(silent=True) or {}
-    val, err = parse_numeric(payload, "value")
-    if err:
-        return jsonify({"ok": False, "message": err}), 400
-    _, ki, kd = robot.get_speed_gains()
-    robot.set_speed_gains(float(val), ki, kd)
-    _append_pid_audit("speed_p", float(val), source_ip=request.remote_addr)
-    _persist_tuning_settings()
-    return jsonify(float(val))
-
-
-@app.get("/pid/speed/integral")
-def get_speed_pid_i():
-    _, ki, _ = _speed_pid_triplet()
-    return jsonify(ki)
-
-
-@app.post("/pid/speed/integral")
-def post_speed_pid_i():
-    if robot is None:
-        return jsonify({"ok": False, "message": "Robot is not active."}), 503
-    payload = request.get_json(silent=True) or {}
-    val, err = parse_numeric(payload, "value")
-    if err:
-        return jsonify({"ok": False, "message": err}), 400
-    kp, _, kd = robot.get_speed_gains()
-    robot.set_speed_gains(kp, float(val), kd)
-    _append_pid_audit("speed_i", float(val), source_ip=request.remote_addr)
-    _persist_tuning_settings()
-    return jsonify(float(val))
-
-
-@app.get("/pid/speed/derivative")
-def get_speed_pid_d():
-    _, _, kd = _speed_pid_triplet()
-    return jsonify(kd)
-
-
-@app.post("/pid/speed/derivative")
-def post_speed_pid_d():
-    if robot is None:
-        return jsonify({"ok": False, "message": "Robot is not active."}), 503
-    payload = request.get_json(silent=True) or {}
-    val, err = parse_numeric(payload, "value")
-    if err:
-        return jsonify({"ok": False, "message": err}), 400
-    kp, ki, _ = robot.get_speed_gains()
-    robot.set_speed_gains(kp, ki, float(val))
-    _append_pid_audit("speed_d", float(val), source_ip=request.remote_addr)
     _persist_tuning_settings()
     return jsonify(float(val))
 

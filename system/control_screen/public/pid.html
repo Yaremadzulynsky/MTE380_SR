@@ -52,24 +52,6 @@
         </div>
       </section>
 
-      <section class="panel current-values" data-animate>
-        <h2>Current Speed Gains</h2>
-        <div class="grid">
-          <div class="metric">
-            <span class="metric-label">Proportional (P)</span>
-            <span class="metric-value" id="currentSpeedP">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Integral (I)</span>
-            <span class="metric-value" id="currentSpeedI">--</span>
-          </div>
-          <div class="metric">
-            <span class="metric-label">Derivative (D)</span>
-            <span class="metric-value" id="currentSpeedD">--</span>
-          </div>
-        </div>
-      </section>
-
       <section class="panel tune-panel" data-animate>
         <h2>Update Gains</h2>
         <form id="pidForm" novalidate>
@@ -126,37 +108,6 @@
           </div>
 
           <div class="feedback" id="feedback" role="status" aria-live="polite">
-            Ready.
-          </div>
-        </form>
-      </section>
-
-      <section class="panel tune-panel" data-animate>
-        <h2>Update Speed Gains</h2>
-        <form id="speedPidForm" novalidate>
-          <div class="field-grid">
-            <label class="field" for="inputSpeedP">
-              <span class="field-label">P gain</span>
-              <input id="inputSpeedP" name="speed_p" type="number" step="0.001" placeholder="0.0" autocomplete="off" inputmode="decimal" required />
-              <span class="hint" id="hintSpeedP">Range: --</span>
-            </label>
-            <label class="field" for="inputSpeedI">
-              <span class="field-label">I gain</span>
-              <input id="inputSpeedI" name="speed_i" type="number" step="0.001" placeholder="0.0" autocomplete="off" inputmode="decimal" required />
-              <span class="hint" id="hintSpeedI">Range: --</span>
-            </label>
-            <label class="field" for="inputSpeedD">
-              <span class="field-label">D gain</span>
-              <input id="inputSpeedD" name="speed_d" type="number" step="0.001" placeholder="0.0" autocomplete="off" inputmode="decimal" required />
-              <span class="hint" id="hintSpeedD">Range: --</span>
-            </label>
-          </div>
-
-          <div class="actions">
-            <button type="submit" id="applySpeedBtn">Apply speed update</button>
-          </div>
-
-          <div class="feedback" id="speedFeedback" role="status" aria-live="polite">
             Ready.
           </div>
         </form>

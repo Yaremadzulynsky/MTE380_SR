@@ -17,12 +17,6 @@ const CONTROL_COMM_I_PATH =
   process.env.CONTROL_COMM_I_PATH || '/pid/integral';
 const CONTROL_COMM_D_PATH =
   process.env.CONTROL_COMM_D_PATH || '/pid/derivative';
-const CONTROL_COMM_SPEED_P_PATH =
-  process.env.CONTROL_COMM_SPEED_P_PATH || '/pid/speed/proportional';
-const CONTROL_COMM_SPEED_I_PATH =
-  process.env.CONTROL_COMM_SPEED_I_PATH || '/pid/speed/integral';
-const CONTROL_COMM_SPEED_D_PATH =
-  process.env.CONTROL_COMM_SPEED_D_PATH || '/pid/speed/derivative';
 const CONTROL_COMM_HEALTH_PATH =
   process.env.CONTROL_COMM_HEALTH_PATH || '/health';
 const CONTROL_COMM_CONTROL_PATH =
@@ -60,10 +54,7 @@ const DEFAULT_RANGE = { min: -1000, max: 1000 };
 const pidRanges = {
   p: buildRange(process.env.PID_P_MIN, process.env.PID_P_MAX),
   i: buildRange(process.env.PID_I_MIN, process.env.PID_I_MAX),
-  d: buildRange(process.env.PID_D_MIN, process.env.PID_D_MAX),
-  speed_p: buildRange(process.env.PID_P_MIN, process.env.PID_P_MAX),
-  speed_i: buildRange(process.env.PID_I_MIN, process.env.PID_I_MAX),
-  speed_d: buildRange(process.env.PID_D_MIN, process.env.PID_D_MAX)
+  d: buildRange(process.env.PID_D_MIN, process.env.PID_D_MAX)
 };
 
 const linePidRanges = {
@@ -113,9 +104,6 @@ app.get('/api/config', (req, res) => {
         p: CONTROL_COMM_P_PATH,
         i: CONTROL_COMM_I_PATH,
         d: CONTROL_COMM_D_PATH,
-        speedP: CONTROL_COMM_SPEED_P_PATH,
-        speedI: CONTROL_COMM_SPEED_I_PATH,
-        speedD: CONTROL_COMM_SPEED_D_PATH,
         control: CONTROL_COMM_CONTROL_PATH
       }
     },
@@ -132,55 +120,31 @@ app.get('/api/config', (req, res) => {
 });
 
 app.get('/api/pid', async (req, res) => {
-  const [pResult, iResult, dResult, speedPResult, speedIResult, speedDResult] = await Promise.all([
+  const [pResult, iResult, dResult] = await Promise.all([
     fetchPidValue('p'),
     fetchPidValue('i'),
-    fetchPidValue('d'),
-    fetchPidValue('speed_p'),
-    fetchPidValue('speed_i'),
-    fetchPidValue('speed_d')
+    fetchPidValue('d')
   ]);
 
-  const values = { heading: {}, speed: {} };
+  const values = {};
   const errors = {};
 
   if (pResult.error) {
     errors.p = pResult.error;
   } else {
-    values.heading.p = pResult.value;
     values.p = pResult.value;
   }
 
   if (iResult.error) {
     errors.i = iResult.error;
   } else {
-    values.heading.i = iResult.value;
     values.i = iResult.value;
   }
 
   if (dResult.error) {
     errors.d = dResult.error;
   } else {
-    values.heading.d = dResult.value;
     values.d = dResult.value;
-  }
-
-  if (speedPResult.error) {
-    errors.speed_p = speedPResult.error;
-  } else {
-    values.speed.p = speedPResult.value;
-  }
-
-  if (speedIResult.error) {
-    errors.speed_i = speedIResult.error;
-  } else {
-    values.speed.i = speedIResult.value;
-  }
-
-  if (speedDResult.error) {
-    errors.speed_d = speedDResult.error;
-  } else {
-    values.speed.d = speedDResult.value;
   }
 
   if (Object.keys(errors).length > 0) {
@@ -213,16 +177,13 @@ app.get('/api/status', async (req, res) => {
 });
 
 app.post('/api/pid', async (req, res) => {
-  const { p, i, d, speed_p, speed_i, speed_d } = req.body || {};
+  const { p, i, d } = req.body || {};
   const updates = {};
   const validationErrors = {};
 
   collectUpdate('p', p, updates, validationErrors);
   collectUpdate('i', i, updates, validationErrors);
   collectUpdate('d', d, updates, validationErrors);
-  collectUpdate('speed_p', speed_p, updates, validationErrors);
-  collectUpdate('speed_i', speed_i, updates, validationErrors);
-  collectUpdate('speed_d', speed_d, updates, validationErrors);
 
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({
@@ -940,12 +901,6 @@ function getControlCommUrl(kind) {
     pathPart = CONTROL_COMM_I_PATH;
   } else if (kind === 'd') {
     pathPart = CONTROL_COMM_D_PATH;
-  } else if (kind === 'speed_p') {
-    pathPart = CONTROL_COMM_SPEED_P_PATH;
-  } else if (kind === 'speed_i') {
-    pathPart = CONTROL_COMM_SPEED_I_PATH;
-  } else if (kind === 'speed_d') {
-    pathPart = CONTROL_COMM_SPEED_D_PATH;
   }
 
   return new URL(pathPart, CONTROL_COMM_BASE_URL).toString();
