@@ -16,9 +16,9 @@ cd "${REPO_ROOT}"
 git checkout "${BASE_BRANCH}"
 git fetch origin
 git checkout "${TARGET_BRANCH}"
-git pull --ff-only
+git pull
 
 cd "${SYSTEM_DIR}"
-docker compose up -d
+docker compose up state-machine control-screen control-communication 
 
 echo "[update_and_start] done"
