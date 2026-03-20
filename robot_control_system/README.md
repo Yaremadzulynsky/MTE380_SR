@@ -16,17 +16,17 @@ sudo apt install -y python3-opencv python3-picamera2 rpicam-apps
 
 ### Full robot (state machine + web server + camera)
 ```bash
-python -m state_machine.main --port /dev/ttyACM1 --camera pi
+python -m cli.main serve --port /dev/ttyACM1 --camera pi
 ```
 
 ### Full robot without camera
 ```bash
-python -m state_machine.main --port /dev/ttyACM1
+python -m cli.main serve --port /dev/ttyACM1
 ```
 
 ### Web server + camera only (no robot/serial)
 ```bash
-python -m web_server.main --no-robot --camera pi
+python -m cli.main serve --no-robot --camera pi
 ```
 
 ### Hardware REPL (interactive serial terminal)

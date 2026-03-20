@@ -303,10 +303,20 @@ class WebServer:
     # ── Status collection ──────────────────────────────────────────────────────
 
     def _collect_status(self) -> dict:
+        import math as _math
         status: dict = {
             'ts':    round(time.time(), 3),
             'state': self._state_machine.current_state if self._state_machine else None,
         }
+
+        sm = self._state_machine
+        if sm is not None:
+            x, y, heading = sm.odometry.pose()
+            status['odometry'] = {
+                'x_m':        round(x, 4),
+                'y_m':        round(y, 4),
+                'heading_deg': round(_math.degrees(heading), 2),
+            }
 
         if self._robot is not None:
             info = self._robot.get_debug_info()
@@ -335,7 +345,6 @@ class WebServer:
         if self._detector is not None:
             result = self._detector.get_result()
             if result is not None:
-                import math as _math
                 import config as _cfg
                 _vc = _cfg.get()['vision']
                 _ppm       = _vc.get('pixels_per_meter', 0)
@@ -365,7 +374,6 @@ class WebServer:
             status['vision'] = self._detector.get_stats()
 
         # State transition log
-        sm = self._state_machine
         if sm is not None:
             current = sm.current_state
             if not self._state_log or self._state_log[-1]['state'] != current:

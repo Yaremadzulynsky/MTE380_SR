@@ -1,0 +1,3 @@
+- detect line edges and find centroid
+- robot odometry model for debugging
+- speed pid?
