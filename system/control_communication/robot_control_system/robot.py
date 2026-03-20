@@ -46,7 +46,8 @@ class Robot:
         self._speed_pid   = SpeedPID()
 
         self._lock = threading.Lock()
-        self._target_heading = 0.0  # radians — updated incrementally via set_direction
+        self._heading_error_rad = 0.0  # radians — latest vision-derived heading error
+        self._lateral_error_x  = 0.0  # latest lateral offset from vision/control input
         self._speed_scale    = 0.0  # [-1, 1] direct motor speed
         self._rotation_scale = 1.0  # [0, 1] multiplier applied to angular_z
         self._motor_override: tuple[float, float] | None = None  # (left, right)
@@ -63,20 +64,15 @@ class Robot:
     # ── Public API ────────────────────────────────────────────────────────────
 
     def set_direction(self, x: float, y: float):
-        """Update target heading relative to current heading.
-
-        delta = atan2(-x, abs(y))
-        target_heading = current_heading + delta
-
-        x=0, y=1  → delta=0°, hold heading
-        x=1, y=0  → delta=-90°
-        x=0, y=0  → no update, hold heading
-        """
+        """Store the latest instantaneous steering vector as heading/lateral error."""
         with self._lock:
             self._motor_override = None
-            if abs(x) > 1e-6 or abs(y) > 1e-6:
-                delta = math.atan2(-x, abs(y))
-                self._target_heading = self._heading_fb + delta
+            if abs(x) < 1e-6 and abs(y) < 1e-6:
+                self._heading_error_rad = 0.0
+                self._lateral_error_x = 0.0
+            else:
+                self._lateral_error_x = float(x)
+                self._heading_error_rad = math.atan2(-x, abs(y))
 
     def set_speed(self, speed: float):
         """Set forward/backward speed. -1 = full reverse, 0 = stop, 1 = full forward."""
@@ -109,7 +105,8 @@ class Robot:
     def get_heading(self) -> tuple[float, float]:
         """Return (current_heading_deg, target_heading_deg)."""
         with self._lock:
-            return math.degrees(self._heading_fb), math.degrees(self._target_heading)
+            target_heading = self._heading_fb + self._heading_error_rad
+            return math.degrees(self._heading_fb), math.degrees(target_heading)
 
     def get_encoders(self) -> tuple[int, int]:
         """Return (left_ticks, right_ticks)."""
@@ -119,10 +116,13 @@ class Robot:
     def get_feedback_snapshot(self) -> dict[str, float | int]:
         """Return the latest control/odometry feedback for external publishers."""
         with self._lock:
+            target_heading = self._heading_fb + self._heading_error_rad
             return {
-                "target_heading_rad": self._target_heading,
+                "target_heading_rad": target_heading,
                 "heading_rad": self._heading_fb,
+                "heading_error_rad": self._heading_error_rad,
                 "linear_speed_mps": self._linear_speed,
+                "lateral_error_x": self._lateral_error_x,
                 "enc_left_ticks": self._enc_left,
                 "enc_right_ticks": self._enc_right,
                 "speed_scale": self._speed_scale,
@@ -212,11 +212,9 @@ class Robot:
 
         with self._lock:
             start_heading = float(self._heading_fb)
-            start_target = float(self._target_heading)
             start_left = int(self._enc_left)
             start_right = int(self._enc_right)
             target_heading = _wrap_pi(start_heading + req_rad)
-            self._target_heading = target_heading
             self._speed_scale = 0.0
             self._rotation_scale = 1.0
 
@@ -252,7 +250,6 @@ class Robot:
                 end_heading = float(self._heading_fb)
                 end_left = int(self._enc_left)
                 end_right = int(self._enc_right)
-                self._target_heading = start_target
                 self._speed_scale = 0.0
             self._bridge.send_drive(0.0, 0.0)
 
@@ -325,7 +322,7 @@ class Robot:
             t0 = time.monotonic()
 
             with self._lock:
-                target_heading = self._target_heading
+                heading_error = self._heading_error_rad
                 speed_scale    = self._speed_scale
                 rotation_scale = self._rotation_scale
                 hdg_fb         = self._heading_fb
@@ -337,14 +334,14 @@ class Robot:
                 self._heading_pid.reset()
                 self._bridge.send_drive(0.0, 0.0)
             else:
-                angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
+                angular_z = self._heading_pid.update(heading_error, rotation_scale)
                 linear_x  = speed_scale
 
                 left  = max(-1.0, min(1.0, linear_x - angular_z))
                 right = max(-1.0, min(1.0, linear_x + angular_z))
                 self._bridge.send_drive(left, right)
 
-            log.debug('target_hdg=%.1f° hdg_fb=%.1f° speed=%.2f', math.degrees(target_heading), math.degrees(hdg_fb), speed_scale)
+            log.debug('heading_err=%.1f° hdg_fb=%.1f° speed=%.2f', math.degrees(heading_error), math.degrees(hdg_fb), speed_scale)
 
             elapsed = time.monotonic() - t0
             time.sleep(max(0.0, interval - elapsed))

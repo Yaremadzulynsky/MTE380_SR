@@ -30,7 +30,7 @@ class SpeedPID:
         if abs(error) < SPEED_DEADBAND:
             self._pid.reset()
             return 0.0
-        raw = self._pid.update(setpoint, current_speed)
+        raw = self._pid.update(error, 0.0)
         if abs(raw) < 1e-6:
             return 0.0
         import math

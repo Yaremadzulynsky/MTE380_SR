@@ -5,7 +5,7 @@ import math
 
 from .pid import PID
 
-HEADING_KP, HEADING_KI, HEADING_KD = 1, 0.1, 0 #0.5, 0.3 #0.5, 0.1
+HEADING_KP, HEADING_KI, HEADING_KD = 1, 0.0, 0.05
 MOTOR_DEADBAND   = 0.015  # minimum output to actually move the motors
 HEADING_DEADBAND = 0.005  # heading error (rad) below which correction stops (~0.3°)
 
@@ -36,9 +36,9 @@ class HeadingPID:
     def reset(self):
         self._pid.reset()
 
-    def update(self, desired_heading: float, current_heading: float, scale: float = 1.0) -> float:
-        """Return angular_z given desired and current heading in radians."""
-        error = _wrap(desired_heading - current_heading)
+    def update(self, error_rad: float, scale: float = 1.0) -> float:
+        """Return angular_z given a precomputed heading error in radians."""
+        error = _wrap(float(error_rad))
         if abs(error) < HEADING_DEADBAND:
             self._pid.reset()
             return 0.0
