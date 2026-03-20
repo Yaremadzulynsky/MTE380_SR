@@ -43,6 +43,9 @@ line_follow_p:
   follow_speed: 0.35
   kp: 0.005            # lateral correction per pixel: higher = more aggressive
 
+line_follow_angle:
+  follow_speed: 0.35   # forward speed while following
+
 web_server:
   jpeg_quality: 70
   stream_fps: 20

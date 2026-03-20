@@ -19,7 +19,7 @@ from hardware.robot              import Robot, MAX_SPEED, MAX_ROT_SPEED
 import hardware.robot as _robot_module
 from vision.line_detector        import LineDetector
 from state_machine.machine       import StateMachine
-from state_machine.states        import Stopped, LineFollow, LineFollowP
+from state_machine.states        import Stopped, LineFollow, LineFollowP, LineFollowAngle
 from web_server.server           import WebServer
 from web_server.main             import _find_droidcam_index
 
@@ -99,6 +99,7 @@ def main():
         .register(Stopped())
         .register(LineFollow())
         .register(LineFollowP())
+        .register(LineFollowAngle())
     )
 
     # ── Web server (debug dashboard) ──────────────────────────────────────────

@@ -249,9 +249,10 @@
 
 <div id="control-bar">
   <span id="state-badge">&#9679; &mdash;</span>
-  <button class="ctrl-btn" id="btn-start"   onclick="setState('line_follow')">&#9654; START</button>
-  <button class="ctrl-btn" id="btn-start-p" onclick="setState('line_follow_p')" style="color:var(--warning);">&#9654; START P</button>
-  <button class="ctrl-btn" id="btn-stop"    onclick="setState('stopped')">&#9632; STOP</button>
+  <button class="ctrl-btn" id="btn-start"       onclick="setState('line_follow')">&#9654; START</button>
+  <button class="ctrl-btn" id="btn-start-p"     onclick="setState('line_follow_p')" style="color:var(--warning);">&#9654; START P</button>
+  <button class="ctrl-btn" id="btn-start-angle" onclick="setState('line_follow_angle')" style="color:var(--accent);">&#9654; START &#x03B8;</button>
+  <button class="ctrl-btn" id="btn-stop"        onclick="setState('stopped')">&#9632; STOP</button>
 </div>
 
 <main>
@@ -288,6 +289,10 @@
       <div class="row">
         <span class="lbl">Direction vec</span>
         <span class="val accent" id="line-dir">&mdash;</span>
+      </div>
+      <div class="row">
+        <span class="lbl">&#x03B4; angle</span>
+        <span class="val accent" id="line-delta-angle">&mdash;</span>
       </div>
     </div>
 
@@ -606,12 +611,22 @@
       set('line-dir',
           '(' + fmt(ln.direction[0], 3, true) + ',\u2009' + fmt(ln.direction[1], 3) + ')',
           'accent');
+
+      // Delta angle — colour-code by magnitude (green < 5°, yellow < 15°, red beyond)
+      if (ln.delta_angle_deg !== null && ln.delta_angle_deg !== undefined) {
+        const absDA  = Math.abs(ln.delta_angle_deg);
+        const daCls  = absDA < 5 ? 'success' : absDA < 15 ? 'warning' : 'danger';
+        set('line-delta-angle', fmt(ln.delta_angle_deg, 2, true) + '\u00b0', daCls);
+      } else {
+        set('line-delta-angle', 'n/a', '');
+      }
     } else {
-      set('line-status',  '\u25CB NOT FOUND', 'danger');
-      set('line-angle',   '—', '');
-      set('line-lat-px',  '—', '');
-      set('line-lat-m',   '—', '');
-      set('line-dir',     '—', '');
+      set('line-status',       '\u25CB NOT FOUND', 'danger');
+      set('line-angle',        '—', '');
+      set('line-lat-px',       '—', '');
+      set('line-lat-m',        '—', '');
+      set('line-dir',          '—', '');
+      set('line-delta-angle',  '—', '');
     }
   }
 

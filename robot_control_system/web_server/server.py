@@ -335,6 +335,16 @@ class WebServer:
         if self._detector is not None:
             result = self._detector.get_result()
             if result is not None:
+                import math as _math
+                import config as _cfg
+                _vc = _cfg.get()['vision']
+                _ppm       = _vc.get('pixels_per_meter', 0)
+                _cam_fwd_m = _vc.get('camera_forward_m', 0.0)
+                if _ppm and _cam_fwd_m:
+                    _lat_m = result.lateral_distance_px / _ppm
+                    _delta_rad = _math.atan2(_lat_m, _cam_fwd_m)
+                else:
+                    _delta_rad = None
                 status['line'] = {
                     'found':                True,
                     'angle_deg':            round(result.angle_deg, 2),
@@ -342,6 +352,8 @@ class WebServer:
                     'lateral_distance_m':   (round(result.lateral_distance_m, 4)
                                              if result.lateral_distance_m is not None
                                              else None),
+                    'delta_angle_deg':      (round(_math.degrees(_delta_rad), 2)
+                                             if _delta_rad is not None else None),
                     'direction':            [
                         round(result.direction[0], 3),
                         round(result.direction[1], 3),
