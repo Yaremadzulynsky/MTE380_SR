@@ -103,6 +103,7 @@ PERCEPTION_ARGS_VIEW=(
 )
 PERCEPTION_PID=""
 PERCEPTION_LOG_FILE=""
+LOG_TAIL_PID=""
 
 show_log_view() {
   local mode="$1"
@@ -137,6 +138,25 @@ show_log_view() {
   esac
 }
 
+stop_log_tail() {
+  if [ -n "${LOG_TAIL_PID}" ] && kill -0 "${LOG_TAIL_PID}" 2>/dev/null; then
+    kill -TERM "${LOG_TAIL_PID}" 2>/dev/null || true
+    wait "${LOG_TAIL_PID}" 2>/dev/null || true
+  fi
+  LOG_TAIL_PID=""
+}
+
+start_log_tail() {
+  if [ -z "${PERCEPTION_LOG_FILE}" ] || [ ! -f "${PERCEPTION_LOG_FILE}" ]; then
+    echo "[run_perception_rpicam] no active log file to tail yet"
+    return
+  fi
+  stop_log_tail
+  echo "[run_perception_rpicam] tailing logs from ${PERCEPTION_LOG_FILE} (Ctrl+C to stop script)"
+  tail -n 40 -f "${PERCEPTION_LOG_FILE}" &
+  LOG_TAIL_PID=$!
+}
+
 send_zero_vector() {
   local sm_payload control_payload
   sm_payload='{"black_line":{"detected":false,"vector":{"x":0.0,"y":0.0}},"red_line":{"detected":false,"vector":{"x":0.0,"y":0.0}},"target":{"detected":false,"vector":{"x":0.0,"y":0.0}}}'
@@ -167,6 +187,7 @@ monitor_perception_exit() {
   wait "${PERCEPTION_PID}" 2>/dev/null || true
   echo "[run_perception_rpicam] perception exited unexpectedly; sending explicit stop vectors"
   PERCEPTION_PID=""
+  stop_log_tail
   send_zero_vector
 }
 
@@ -224,11 +245,13 @@ stop_perception() {
   fi
   kill -TERM "${PERCEPTION_PID}" 2>/dev/null || true
   wait "${PERCEPTION_PID}" 2>/dev/null || true
+  stop_log_tail
   echo "[run_perception_rpicam] stopped perception"
   PERCEPTION_PID=""
 }
 
 cleanup() {
+  stop_log_tail
   stop_perception
   send_zero_vector
 }
@@ -241,7 +264,7 @@ if ! [ -t 0 ]; then
 fi
 
 echo "[run_perception_rpicam] Interactive controls:"
-echo "  g: start/resume sending perception vectors"
+echo "  g: start/resume sending perception vectors + start live log tail"
 echo "  s: stop sending + send explicit stop commands"
 echo "  a: show recent all logs"
 echo "  p: show recent packet/control logs"
@@ -260,6 +283,7 @@ while true; do
   case "$key" in
     g|G)
       start_perception
+      start_log_tail
       ;;
     s|S)
       stop_perception

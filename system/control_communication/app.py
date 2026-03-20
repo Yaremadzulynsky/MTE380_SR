@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import atexit
+from datetime import datetime
 import json
 import math
 import os
@@ -52,6 +53,10 @@ SIM_CONTROL_URL = (
     os.getenv("SIM_CONTROL_URL")
     or ""
 ).strip()
+PID_AUDIT_LOG_PATH = (
+    os.getenv("PID_AUDIT_LOG_PATH")
+    or "/var/log/control-communication/pid-changes.txt"
+).strip()
 
 app = Flask(__name__)
 
@@ -79,6 +84,24 @@ def log_line(event: str, fields: dict[str, Any]) -> None:
     for key, value in fields.items():
         parts.append(f"{key}={value}")
     print(" ".join(parts), flush=True)
+
+
+def _append_pid_audit(kind: str, value: float, *, source_ip: str | None) -> None:
+    path = (PID_AUDIT_LOG_PATH or "").strip()
+    if not path:
+        return
+    line = (
+        f"{datetime.utcnow().isoformat(timespec='seconds')}Z "
+        f"kind={kind} value={float(value):.6f} source={source_ip or 'unknown'}\n"
+    )
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(line)
+    except OSError as exc:
+        log_line("pid_audit_write_failed", {"path": path, "error": repr(exc)})
 
 
 def close_robot() -> None:
@@ -354,6 +377,7 @@ def post_pid_p():
         return jsonify({"ok": False, "message": err}), 400
     _, ki, kd = robot.get_heading_gains()
     robot.set_gains(float(val), ki, kd)
+    _append_pid_audit("heading_p", float(val), source_ip=request.remote_addr)
     return jsonify(float(val))
 
 
@@ -373,6 +397,7 @@ def post_pid_i():
         return jsonify({"ok": False, "message": err}), 400
     kp, _, kd = robot.get_heading_gains()
     robot.set_gains(kp, float(val), kd)
+    _append_pid_audit("heading_i", float(val), source_ip=request.remote_addr)
     return jsonify(float(val))
 
 
@@ -392,6 +417,7 @@ def post_pid_d():
         return jsonify({"ok": False, "message": err}), 400
     kp, ki, _ = robot.get_heading_gains()
     robot.set_gains(kp, ki, float(val))
+    _append_pid_audit("heading_d", float(val), source_ip=request.remote_addr)
     return jsonify(float(val))
 
 
