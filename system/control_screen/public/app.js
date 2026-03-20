@@ -44,6 +44,12 @@ const elements = {
   lfErrorSlowdownRange: document.getElementById('lfErrorSlowdownRange'),
   lfDeadband: document.getElementById('lfDeadband'),
   lfDeadbandRange: document.getElementById('lfDeadbandRange'),
+  lfRotationScale: document.getElementById('lfRotationScale'),
+  lfRotationScaleRange: document.getElementById('lfRotationScaleRange'),
+  lfLineLagTau: document.getElementById('lfLineLagTau'),
+  lfLineLagTauRange: document.getElementById('lfLineLagTauRange'),
+  lfLineLagEnabled: document.getElementById('lfLineLagEnabled'),
+  lfLineLagEnabledRange: document.getElementById('lfLineLagEnabledRange'),
   hintLfKp: document.getElementById('hintLfKp'),
   hintLfKi: document.getElementById('hintLfKi'),
   hintLfKd: document.getElementById('hintLfKd'),
@@ -56,6 +62,9 @@ const elements = {
   hintLfTurnSlowdown: document.getElementById('hintLfTurnSlowdown'),
   hintLfErrorSlowdown: document.getElementById('hintLfErrorSlowdown'),
   hintLfDeadband: document.getElementById('hintLfDeadband'),
+  hintLfRotationScale: document.getElementById('hintLfRotationScale'),
+  hintLfLineLagTau: document.getElementById('hintLfLineLagTau'),
+  hintLfLineLagEnabled: document.getElementById('hintLfLineLagEnabled'),
   fsmStateSelect: document.getElementById('fsmStateSelect'),
   refreshStatesBtn: document.getElementById('refreshStatesBtn'),
   applyStateBtn: document.getElementById('applyStateBtn'),
@@ -78,7 +87,10 @@ const lineFields = [
   ['follow_max_speed', 'lfFollowMaxSpeed', 'lfFollowMaxSpeedRange', 'hintLfFollowMaxSpeed'],
   ['turn_slowdown', 'lfTurnSlowdown', 'lfTurnSlowdownRange', 'hintLfTurnSlowdown'],
   ['error_slowdown', 'lfErrorSlowdown', 'lfErrorSlowdownRange', 'hintLfErrorSlowdown'],
-  ['deadband', 'lfDeadband', 'lfDeadbandRange', 'hintLfDeadband']
+  ['deadband', 'lfDeadband', 'lfDeadbandRange', 'hintLfDeadband'],
+  ['rotation_scale', 'lfRotationScale', 'lfRotationScaleRange', 'hintLfRotationScale'],
+  ['line_lag_tau', 'lfLineLagTau', 'lfLineLagTauRange', 'hintLfLineLagTau'],
+  ['line_lag_enabled', 'lfLineLagEnabled', 'lfLineLagEnabledRange', 'hintLfLineLagEnabled']
 ];
 
 initialize();

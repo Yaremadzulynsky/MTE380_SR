@@ -6,9 +6,36 @@ from threading import Event, Thread
 from sm_api import create_app
 from sm_input_buffer import InputBuffer
 from sm_logging import create_logger, log_event
+from sm_models import Inputs, Vector
 from sm_state_machine import LINE_FOLLOW_PID_BOUNDS, StateMachine
 
 logger = create_logger()
+MAX_INPUT_AGE_S = max(float(os.getenv("MAX_INPUT_AGE_S", "0.25")), 0.01)
+
+
+def _stale_safe_inputs(inputs: Inputs) -> Inputs:
+    stale_vec = Vector(detected=False, x=0.0, y=0.0)
+    return Inputs(
+        lego_detected=False,
+        target_detected=False,
+        safe_zone_detected=False,
+        danger_zone_detected=False,
+        aligned_for_retrieve=False,
+        aligned_for_place=False,
+        placing=False,
+        pick_up_success=False,
+        place_success=False,
+        failed_pickup=False,
+        at_home=False,
+        heading_rad=inputs.heading_rad,
+        speed=0.0,
+        red_line=stale_vec,
+        line_error=stale_vec,
+        home=stale_vec,
+        danger_zone=stale_vec,
+        target=stale_vec,
+        safe_zone=stale_vec,
+    )
 
 
 def load_pid_settings(path: str) -> dict:
@@ -80,7 +107,21 @@ def main() -> None:
 
     def state_worker() -> None:
         while not stop_event.is_set():
-            state_machine.step(input_buffer.latest_inputs())
+            inputs, _payload, updated_at = input_buffer.snapshot()
+            now = time.time()
+            stale = updated_at is None or (now - updated_at) > MAX_INPUT_AGE_S
+            if stale:
+                inputs = _stale_safe_inputs(inputs)
+                log_event(
+                    logger,
+                    "input_stale_safe_mode",
+                    {
+                        "max_input_age_s": MAX_INPUT_AGE_S,
+                        "updated_at": updated_at,
+                        "age_s": None if updated_at is None else round(now - updated_at, 3),
+                    },
+                )
+            state_machine.step(inputs)
             time.sleep(state_machine.tick_interval)
 
     loop_thread = Thread(

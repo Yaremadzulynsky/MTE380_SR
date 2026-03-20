@@ -212,6 +212,30 @@
             </div>
             <span class="hint" id="hintLfDeadband">Range: --</span>
           </label>
+          <label class="field" for="lfRotationScale">
+            <span class="field-label">Rotation Scale</span>
+            <div class="slider-control">
+              <input id="lfRotationScaleRange" name="rotation_scale_range" type="range" step="0.001" />
+              <input id="lfRotationScale" name="rotation_scale" type="number" step="0.001" placeholder="1.0" autocomplete="off" inputmode="decimal" />
+            </div>
+            <span class="hint" id="hintLfRotationScale">Range: --</span>
+          </label>
+          <label class="field" for="lfLineLagTau">
+            <span class="field-label">Lag Tau (s)</span>
+            <div class="slider-control">
+              <input id="lfLineLagTauRange" name="line_lag_tau_range" type="range" step="0.001" />
+              <input id="lfLineLagTau" name="line_lag_tau" type="number" step="0.001" placeholder="0.10" autocomplete="off" inputmode="decimal" />
+            </div>
+            <span class="hint" id="hintLfLineLagTau">Range: --</span>
+          </label>
+          <label class="field" for="lfLineLagEnabled">
+            <span class="field-label">Lag Enabled (0/1)</span>
+            <div class="slider-control">
+              <input id="lfLineLagEnabledRange" name="line_lag_enabled_range" type="range" step="1" />
+              <input id="lfLineLagEnabled" name="line_lag_enabled" type="number" step="1" placeholder="1" autocomplete="off" inputmode="numeric" />
+            </div>
+            <span class="hint" id="hintLfLineLagEnabled">Range: --</span>
+          </label>
         </div>
         <div class="feedback" id="lineFeedback" role="status" aria-live="polite">
           Live tuning idle.

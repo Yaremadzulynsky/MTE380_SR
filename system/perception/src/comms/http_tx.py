@@ -87,6 +87,8 @@ class HTTPSender:
                 "x": steer_x,
                 "y": steer_y,
                 "speed": speed,
+                "line_error_x": float(line_error_x),
+                "control_mode": "line_follow",
             }
             body = json.dumps(payload).encode("utf-8")
             print(f"[perception] send_control: {body.decode('utf-8')}", file=sys.stderr)

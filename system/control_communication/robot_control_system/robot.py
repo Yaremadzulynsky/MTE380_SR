@@ -65,11 +65,11 @@ class Robot:
     def set_direction(self, x: float, y: float):
         """Update target heading relative to current heading.
 
-        delta = atan2(x, abs(y))
+        delta = atan2(-x, abs(y))
         target_heading = current_heading + delta
 
         x=0, y=1  → delta=0°, hold heading
-        x=1, y=0  → delta=+90°, turn right
+        x=1, y=0  → delta=-90°
         x=0, y=0  → no update, hold heading
         """
         with self._lock:

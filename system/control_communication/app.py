@@ -57,10 +57,126 @@ PID_AUDIT_LOG_PATH = (
     os.getenv("PID_AUDIT_LOG_PATH")
     or "/var/log/control-communication/pid-changes.txt"
 ).strip()
+LINE_FOLLOW_TUNING_PATH = (
+    os.getenv("LINE_FOLLOW_TUNING_PATH")
+    or "/var/log/control-communication/line-follow-tuning.txt"
+).strip()
 
 app = Flask(__name__)
 
 last_sent: Optional[dict[str, Any]] = None
+
+
+def _clampf(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, float(value)))
+
+
+class LineFollowPID:
+    def __init__(self, kp: float, ki: float, kd: float, i_max: float, out_max: float, deadband: float):
+        self.kp = float(kp)
+        self.ki = float(ki)
+        self.kd = float(kd)
+        self.i_max = abs(float(i_max))
+        self.out_max = abs(float(out_max))
+        self.deadband = abs(float(deadband))
+        self._integral = 0.0
+        self._prev_error = 0.0
+        self._prev_t: float | None = None
+
+    def reset(self) -> None:
+        self._integral = 0.0
+        self._prev_error = 0.0
+        self._prev_t = None
+
+    def configure(self, *, kp: float, ki: float, kd: float, i_max: float, out_max: float, deadband: float) -> None:
+        self.kp = float(kp)
+        self.ki = float(ki)
+        self.kd = float(kd)
+        self.i_max = abs(float(i_max))
+        self.out_max = abs(float(out_max))
+        self.deadband = abs(float(deadband))
+        self.reset()
+
+    def update(self, error: float) -> float:
+        e = float(error)
+        if abs(e) < self.deadband:
+            e = 0.0
+        now = time.monotonic()
+        dt = (now - self._prev_t) if self._prev_t is not None else 0.0
+        if dt > 0.0:
+            self._integral = _clampf(self._integral + e * dt, -self.i_max, self.i_max)
+            derivative = (e - self._prev_error) / dt
+        else:
+            derivative = 0.0
+        self._prev_error = e
+        self._prev_t = now
+        raw = self.kp * e + self.ki * self._integral + self.kd * derivative
+        return _clampf(raw, -self.out_max, self.out_max)
+
+
+class FirstOrderLag:
+    def __init__(self, tau_s: float):
+        self.tau_s = max(0.0, float(tau_s))
+        self._value = 0.0
+        self._prev_t: float | None = None
+
+    def configure(self, tau_s: float) -> None:
+        self.tau_s = max(0.0, float(tau_s))
+        self.reset()
+
+    def reset(self) -> None:
+        self._value = 0.0
+        self._prev_t = None
+
+    def filter(self, raw: float) -> float:
+        raw_value = float(raw)
+        if self.tau_s <= 1e-9:
+            self._value = raw_value
+            self._prev_t = time.monotonic()
+            return raw_value
+        now = time.monotonic()
+        dt = (now - self._prev_t) if self._prev_t is not None else 0.0
+        self._prev_t = now
+        if dt <= 0.0:
+            self._value = raw_value
+            return self._value
+        alpha = dt / (self.tau_s + dt)
+        self._value = self._value + alpha * (raw_value - self._value)
+        return self._value
+
+
+line_follow_settings: dict[str, float] = {
+    "kp": float(os.getenv("LINE_FOLLOW_KP", "0.2")),
+    "ki": float(os.getenv("LINE_FOLLOW_KI", "0.04")),
+    "kd": float(os.getenv("LINE_FOLLOW_KD", "1.92")),
+    "i_max": abs(float(os.getenv("LINE_FOLLOW_I_MAX", "1.0"))),
+    "out_max": abs(float(os.getenv("LINE_FOLLOW_OUT_MAX", "1.0"))),
+    "deadband": abs(float(os.getenv("LINE_FOLLOW_DEADBAND", "0.01"))),
+    "base_speed": _clampf(float(os.getenv("LINE_FOLLOW_BASE_SPEED", "0.2")), 0.0, 1.0),
+    "min_speed": _clampf(float(os.getenv("LINE_FOLLOW_MIN_SPEED", "0.05")), 0.0, 1.0),
+    "max_speed": _clampf(float(os.getenv("LINE_FOLLOW_MAX_SPEED", "0.3")), 0.0, 1.0),
+    "rotation_scale": _clampf(float(os.getenv("LINE_FOLLOW_ROTATION_SCALE", "1.0")), 0.0, 1.0),
+    "line_lag_tau": max(0.0, float(os.getenv("LINE_FOLLOW_LAG_TAU", "0.1"))),
+    "line_lag_enabled": 1.0 if str(os.getenv("LINE_FOLLOW_LAG_ENABLED", "1")).strip().lower() in {"1", "true", "yes", "on"} else 0.0,
+    # Compatibility keys used by dashboard/state-machine UI (not used in control-comm bypass loop).
+    "follow_max_speed": _clampf(float(os.getenv("LINE_FOLLOW_FOLLOW_MAX_SPEED", "0.3")), 0.0, 1.0),
+    "turn_slowdown": abs(float(os.getenv("LINE_FOLLOW_TURN_SLOWDOWN", "0.0"))),
+    "error_slowdown": abs(float(os.getenv("LINE_FOLLOW_ERROR_SLOWDOWN", "0.0"))),
+}
+if line_follow_settings["min_speed"] > line_follow_settings["max_speed"]:
+    line_follow_settings["min_speed"], line_follow_settings["max_speed"] = (
+        line_follow_settings["max_speed"],
+        line_follow_settings["min_speed"],
+    )
+line_follow_pid = LineFollowPID(
+    kp=line_follow_settings["kp"],
+    ki=line_follow_settings["ki"],
+    kd=line_follow_settings["kd"],
+    i_max=line_follow_settings["i_max"],
+    out_max=line_follow_settings["out_max"],
+    deadband=line_follow_settings["deadband"],
+)
+line_follow_lag = FirstOrderLag(line_follow_settings["line_lag_tau"])
 
 if _Robot is not None:
     try:
@@ -102,6 +218,111 @@ def _append_pid_audit(kind: str, value: float, *, source_ip: str | None) -> None
             handle.write(line)
     except OSError as exc:
         log_line("pid_audit_write_failed", {"path": path, "error": repr(exc)})
+
+
+def _persist_tuning_settings() -> None:
+    path = (LINE_FOLLOW_TUNING_PATH or "").strip()
+    if not path:
+        return
+    if robot is None:
+        heading_kp, heading_ki, heading_kd = float(HEADING_KP), float(HEADING_KI), float(HEADING_KD)
+    else:
+        heading_kp, heading_ki, heading_kd = robot.get_heading_gains()
+    rows = {
+        "heading_kp": float(heading_kp),
+        "heading_ki": float(heading_ki),
+        "heading_kd": float(heading_kd),
+        "line_kp": float(line_follow_settings["kp"]),
+        "line_ki": float(line_follow_settings["ki"]),
+        "line_kd": float(line_follow_settings["kd"]),
+        "line_i_max": float(line_follow_settings["i_max"]),
+        "line_out_max": float(line_follow_settings["out_max"]),
+        "line_deadband": float(line_follow_settings["deadband"]),
+        "line_base_speed": float(line_follow_settings["base_speed"]),
+        "line_min_speed": float(line_follow_settings["min_speed"]),
+        "line_max_speed": float(line_follow_settings["max_speed"]),
+        "line_rotation_scale": float(line_follow_settings["rotation_scale"]),
+        "line_lag_tau": float(line_follow_settings["line_lag_tau"]),
+        "line_lag_enabled": float(line_follow_settings["line_lag_enabled"]),
+        "line_follow_max_speed": float(line_follow_settings["follow_max_speed"]),
+        "line_turn_slowdown": float(line_follow_settings["turn_slowdown"]),
+        "line_error_slowdown": float(line_follow_settings["error_slowdown"]),
+        "updated_at": now_iso(),
+    }
+    try:
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            for key, value in rows.items():
+                handle.write(f"{key}={value}\n")
+    except OSError as exc:
+        log_line("line_follow_tuning_write_failed", {"path": path, "error": repr(exc)})
+
+
+def _load_tuning_settings() -> None:
+    path = (LINE_FOLLOW_TUNING_PATH or "").strip()
+    if not path:
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            lines = handle.readlines()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        log_line("line_follow_tuning_read_failed", {"path": path, "error": repr(exc)})
+        return
+
+    parsed: dict[str, float] = {}
+    for raw in lines:
+        row = raw.strip()
+        if not row or "=" not in row:
+            continue
+        key, value = row.split("=", 1)
+        try:
+            parsed[key.strip()] = float(value.strip())
+        except ValueError:
+            continue
+    if not parsed:
+        return
+
+    line_follow_settings["kp"] = float(parsed.get("line_kp", line_follow_settings["kp"]))
+    line_follow_settings["ki"] = float(parsed.get("line_ki", line_follow_settings["ki"]))
+    line_follow_settings["kd"] = float(parsed.get("line_kd", line_follow_settings["kd"]))
+    line_follow_settings["i_max"] = abs(float(parsed.get("line_i_max", line_follow_settings["i_max"])))
+    line_follow_settings["out_max"] = abs(float(parsed.get("line_out_max", line_follow_settings["out_max"])))
+    line_follow_settings["deadband"] = abs(float(parsed.get("line_deadband", line_follow_settings["deadband"])))
+    line_follow_settings["base_speed"] = _clampf(parsed.get("line_base_speed", line_follow_settings["base_speed"]), 0.0, 1.0)
+    line_follow_settings["min_speed"] = _clampf(parsed.get("line_min_speed", line_follow_settings["min_speed"]), 0.0, 1.0)
+    line_follow_settings["max_speed"] = _clampf(parsed.get("line_max_speed", line_follow_settings["max_speed"]), 0.0, 1.0)
+    line_follow_settings["rotation_scale"] = _clampf(parsed.get("line_rotation_scale", line_follow_settings["rotation_scale"]), 0.0, 1.0)
+    line_follow_settings["line_lag_tau"] = max(0.0, float(parsed.get("line_lag_tau", line_follow_settings["line_lag_tau"])))
+    line_follow_settings["line_lag_enabled"] = 1.0 if float(parsed.get("line_lag_enabled", line_follow_settings["line_lag_enabled"])) >= 0.5 else 0.0
+    line_follow_settings["follow_max_speed"] = _clampf(parsed.get("line_follow_max_speed", line_follow_settings["follow_max_speed"]), 0.0, 1.0)
+    line_follow_settings["turn_slowdown"] = abs(float(parsed.get("line_turn_slowdown", line_follow_settings["turn_slowdown"])))
+    line_follow_settings["error_slowdown"] = abs(float(parsed.get("line_error_slowdown", line_follow_settings["error_slowdown"])))
+    if line_follow_settings["min_speed"] > line_follow_settings["max_speed"]:
+        line_follow_settings["min_speed"], line_follow_settings["max_speed"] = (
+            line_follow_settings["max_speed"],
+            line_follow_settings["min_speed"],
+        )
+
+    line_follow_pid.configure(
+        kp=line_follow_settings["kp"],
+        ki=line_follow_settings["ki"],
+        kd=line_follow_settings["kd"],
+        i_max=line_follow_settings["i_max"],
+        out_max=line_follow_settings["out_max"],
+        deadband=line_follow_settings["deadband"],
+    )
+    line_follow_lag.configure(line_follow_settings["line_lag_tau"])
+
+    if robot is not None:
+        hk = parsed.get("heading_kp")
+        hi = parsed.get("heading_ki")
+        hd = parsed.get("heading_kd")
+        if hk is not None and hi is not None and hd is not None:
+            robot.set_gains(float(hk), float(hi), float(hd))
 
 
 def close_robot() -> None:
@@ -261,20 +482,47 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
     encoded, error = encode_payload(payload)
     if error:
         return {"ok": False, **error, "payload": payload}, 400
-    speed_value = encoded["speed"] if encoded["speed"] is not None else 0.0
+    control_mode = str(payload.get("control_mode", "manual")).strip().lower()
+    speed_value = encoded["speed"] if encoded["speed"] is not None else line_follow_settings["base_speed"]
+    speed_value = _clampf(speed_value, line_follow_settings["min_speed"], line_follow_settings["max_speed"])
+    line_error_x = float(payload.get("line_error_x", encoded["x_input"]))
+    line_pid_turn = 0.0
+    cmd_x = float(encoded["x_input"])
+    cmd_y = float(encoded["y_input"])
+    rotation_scale = 0.5
+    if control_mode == "line_follow":
+        line_pid_turn = line_follow_pid.update(line_error_x)
+        if line_follow_settings["line_lag_enabled"] >= 0.5:
+            line_pid_turn = line_follow_lag.filter(line_pid_turn)
+        else:
+            line_follow_lag.reset()
+        cmd_x = _clampf(line_pid_turn, -1.0, 1.0)
+        cmd_y = 1.0
+        rotation_scale = float(line_follow_settings["rotation_scale"])
     sim_payload = {
-        "x": encoded["x_input"],
-        "y": encoded["y_input"],
+        "x": cmd_x,
+        "y": cmd_y,
         "speed": speed_value,
         "servo": encoded["servo_deg"],
     }
     sim_result = post_to_simulator(sim_payload)
 
     if robot is not None:
-        robot.set_rotation_scale(0.5)
-        robot.set_direction(encoded["x_input"], encoded["y_input"])
-        robot.set_speed(clamp(speed_value, -0.3, 0.3))
-        log_line("robot_command", {"x": encoded["x_input"], "y": encoded["y_input"], "speed": speed_value})
+        robot.set_rotation_scale(rotation_scale)
+        robot.set_direction(cmd_x, cmd_y)
+        robot.set_speed(clamp(speed_value, -1.0, 1.0))
+        log_line(
+            "robot_command",
+            {
+                "mode": control_mode,
+                "x": cmd_x,
+                "y": cmd_y,
+                "speed": speed_value,
+                "line_error_x": line_error_x,
+                "line_pid_turn": line_pid_turn,
+                "rotation_scale": rotation_scale,
+            },
+        )
 
     ts = now_iso()
     last_sent = {
@@ -283,7 +531,12 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
         "format": encoded["format"],
         "x_input": encoded["x_input"],
         "y_input": encoded["y_input"],
+        "x_applied": cmd_x,
+        "y_applied": cmd_y,
         "speed": speed_value,
+        "control_mode": control_mode,
+        "line_error_x": line_error_x,
+        "line_pid_turn": line_pid_turn,
         "servo_deg": encoded["servo_deg"],
         "x_int8": encoded["x_int8"],
         "y_int8": encoded["y_int8"],
@@ -298,7 +551,12 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "client": request.remote_addr,
             "x": encoded["x_input"],
             "y": encoded["y_input"],
+            "x_applied": cmd_x,
+            "y_applied": cmd_y,
             "speed": speed_value,
+            "mode": control_mode,
+            "line_error_x": line_error_x,
+            "line_pid_turn": line_pid_turn,
             "x_int8": encoded["x_int8"],
             "y_int8": encoded["y_int8"],
             "servo_deg": encoded["servo_deg"],
@@ -314,7 +572,12 @@ def process_vector_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], int
             "command": {
                 "x": encoded["x_input"],
                 "y": encoded["y_input"],
+                "x_applied": cmd_x,
+                "y_applied": cmd_y,
                 "speed": speed_value,
+                "mode": control_mode,
+                "line_error_x": line_error_x,
+                "line_pid_turn": line_pid_turn,
                 "servo": encoded["servo_deg"],
                 "left": encoded["left_int8"] / 127.0,
                 "right": encoded["right_int8"] / 127.0,
@@ -378,6 +641,7 @@ def post_pid_p():
     _, ki, kd = robot.get_heading_gains()
     robot.set_gains(float(val), ki, kd)
     _append_pid_audit("heading_p", float(val), source_ip=request.remote_addr)
+    _persist_tuning_settings()
     return jsonify(float(val))
 
 
@@ -398,6 +662,7 @@ def post_pid_i():
     kp, _, kd = robot.get_heading_gains()
     robot.set_gains(kp, float(val), kd)
     _append_pid_audit("heading_i", float(val), source_ip=request.remote_addr)
+    _persist_tuning_settings()
     return jsonify(float(val))
 
 
@@ -418,7 +683,89 @@ def post_pid_d():
     kp, ki, _ = robot.get_heading_gains()
     robot.set_gains(kp, ki, float(val))
     _append_pid_audit("heading_d", float(val), source_ip=request.remote_addr)
+    _persist_tuning_settings()
     return jsonify(float(val))
+
+
+@app.get("/line-follow-pid")
+def get_line_follow_pid():
+    return jsonify(
+        {
+            "ok": True,
+            "values": dict(line_follow_settings),
+            "path": LINE_FOLLOW_TUNING_PATH,
+        }
+    )
+
+
+@app.post("/line-follow-pid")
+def post_line_follow_pid():
+    payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "message": "JSON payload must be an object."}), 400
+
+    allowed = set(line_follow_settings.keys())
+    updates: dict[str, float] = {}
+    errors: dict[str, str] = {}
+    for key, value in payload.items():
+        if key not in allowed:
+            errors[key] = "Unknown setting."
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            errors[key] = "Value must be numeric."
+            continue
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            errors[key] = "Value must be finite."
+            continue
+        updates[key] = numeric
+
+    if errors:
+        return jsonify({"ok": False, "message": "Invalid payload.", "errors": errors}), 400
+    if not updates:
+        return jsonify({"ok": False, "message": "No settings provided."}), 400
+
+    for key, val in updates.items():
+        if key in {"i_max", "out_max", "deadband"}:
+            line_follow_settings[key] = abs(float(val))
+        elif key in {"base_speed", "min_speed", "max_speed"}:
+            line_follow_settings[key] = _clampf(val, 0.0, 1.0)
+        elif key == "rotation_scale":
+            line_follow_settings[key] = _clampf(val, 0.0, 1.0)
+        elif key == "line_lag_tau":
+            line_follow_settings[key] = max(0.0, float(val))
+        elif key == "line_lag_enabled":
+            line_follow_settings[key] = 1.0 if float(val) >= 0.5 else 0.0
+        elif key == "follow_max_speed":
+            line_follow_settings[key] = _clampf(val, 0.0, 1.0)
+        elif key in {"turn_slowdown", "error_slowdown"}:
+            line_follow_settings[key] = abs(float(val))
+        else:
+            line_follow_settings[key] = float(val)
+
+    if line_follow_settings["min_speed"] > line_follow_settings["max_speed"]:
+        return jsonify(
+            {
+                "ok": False,
+                "message": "Invalid speed range.",
+                "errors": {
+                    "min_speed": "min_speed must be <= max_speed",
+                    "max_speed": "max_speed must be >= min_speed",
+                },
+            }
+        ), 400
+
+    line_follow_pid.configure(
+        kp=line_follow_settings["kp"],
+        ki=line_follow_settings["ki"],
+        kd=line_follow_settings["kd"],
+        i_max=line_follow_settings["i_max"],
+        out_max=line_follow_settings["out_max"],
+        deadband=line_follow_settings["deadband"],
+    )
+    line_follow_lag.configure(line_follow_settings["line_lag_tau"])
+    _persist_tuning_settings()
+    return jsonify({"ok": True, "values": dict(line_follow_settings), "updated": updates})
 
 
 @app.get("/health")
@@ -558,6 +905,8 @@ def post_turn_test():
 
 
 def main() -> None:
+    _load_tuning_settings()
+    _persist_tuning_settings()
     log_line(
         "startup",
         {

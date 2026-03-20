@@ -23,6 +23,8 @@ const CONTROL_COMM_CONTROL_PATH =
   process.env.CONTROL_COMM_CONTROL_PATH || '/control';
 const CONTROL_COMM_TURN_TEST_PATH =
   process.env.CONTROL_COMM_TURN_TEST_PATH || '/turn-test';
+const CONTROL_COMM_LINE_FOLLOW_PID_PATH =
+  process.env.CONTROL_COMM_LINE_FOLLOW_PID_PATH || '/line-follow-pid';
 const STATE_MACHINE_BASE_URL =
   process.env.STATE_MACHINE_BASE_URL || 'http://localhost:8000';
 const STATE_MACHINE_INPUT_PATH =
@@ -67,7 +69,10 @@ const linePidRanges = {
   follow_max_speed: buildRange(process.env.LINE_PID_FOLLOW_MAX_SPEED_MIN, process.env.LINE_PID_FOLLOW_MAX_SPEED_MAX, 0, 5),
   turn_slowdown: buildRange(process.env.LINE_PID_TURN_SLOWDOWN_MIN, process.env.LINE_PID_TURN_SLOWDOWN_MAX, 0, 5),
   error_slowdown: buildRange(process.env.LINE_PID_ERROR_SLOWDOWN_MIN, process.env.LINE_PID_ERROR_SLOWDOWN_MAX, 0, 5),
-  deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1)
+  deadband: buildRange(process.env.LINE_PID_DEADBAND_MIN, process.env.LINE_PID_DEADBAND_MAX, 0, 1),
+  rotation_scale: buildRange(process.env.LINE_PID_ROTATION_SCALE_MIN, process.env.LINE_PID_ROTATION_SCALE_MAX, 0, 1),
+  line_lag_tau: buildRange(process.env.LINE_PID_LAG_TAU_MIN, process.env.LINE_PID_LAG_TAU_MAX, 0, 2),
+  line_lag_enabled: buildRange(process.env.LINE_PID_LAG_ENABLED_MIN, process.env.LINE_PID_LAG_ENABLED_MAX, 0, 1)
 };
 
 const perceptionRunner = createPerceptionRunner();
@@ -914,7 +919,7 @@ function getControlCommTurnTestUrl() {
 }
 
 function getControlCommLineFollowPidUrl() {
-  return new URL(STATE_MACHINE_LINE_FOLLOW_PID_PATH, STATE_MACHINE_BASE_URL).toString();
+  return new URL(CONTROL_COMM_LINE_FOLLOW_PID_PATH, CONTROL_COMM_BASE_URL).toString();
 }
 
 function getStateMachineStatesUrl() {

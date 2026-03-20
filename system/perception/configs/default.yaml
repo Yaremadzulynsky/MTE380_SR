@@ -51,7 +51,7 @@ hough:
   center_weight: 0.2
 
 smoothing:
-  window_size: 7
+  window_size: 5
   ema_alpha_path: 0.8
   ema_alpha_error: 0.85
   max_error_step: 0.2
