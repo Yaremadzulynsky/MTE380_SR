@@ -78,6 +78,7 @@ RPICAM_HEIGHT="${RPICAM_HEIGHT:-320}"
 RPICAM_FPS="${RPICAM_FPS:-60}"
 MEDIAMTX_RTSP_URL="${MEDIAMTX_RTSP_URL:-rtsp://127.0.0.1:8554/rpicam}"
 STREAM_PUBLISH_MODE="${STREAM_PUBLISH_MODE:-rtsp}"
+RTSP_READY_TIMEOUT_S="${RTSP_READY_TIMEOUT_S:-12}"
 STREAMER_PID=""
 STREAMER_LOG_FILE=""
 
@@ -223,6 +224,36 @@ stop_streamer() {
   STREAMER_PID=""
 }
 
+wait_for_rtsp_ready() {
+  local start now elapsed
+  if [ "${STREAM_PUBLISH_MODE}" != "rtsp" ]; then
+    return
+  fi
+  if ! command -v ffprobe >/dev/null 2>&1; then
+    echo "[run_perception_rpicam] warning: ffprobe not found; skipping RTSP readiness check"
+    return
+  fi
+  start="$(date +%s)"
+  echo "[run_perception_rpicam] waiting for RTSP stream to become ready (${MEDIAMTX_RTSP_URL})"
+  while true; do
+    if ! kill -0 "${STREAMER_PID}" 2>/dev/null; then
+      echo "[run_perception_rpicam] error: streamer exited before RTSP became ready; check ${STREAMER_LOG_FILE}" >&2
+      exit 1
+    fi
+    if ffprobe -v error -rtsp_transport tcp -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "${MEDIAMTX_RTSP_URL}" >/dev/null 2>&1; then
+      echo "[run_perception_rpicam] RTSP stream is ready"
+      return
+    fi
+    now="$(date +%s)"
+    elapsed=$((now - start))
+    if [ "${elapsed}" -ge "${RTSP_READY_TIMEOUT_S}" ]; then
+      echo "[run_perception_rpicam] error: RTSP stream not ready after ${RTSP_READY_TIMEOUT_S}s; check ${STREAMER_LOG_FILE}" >&2
+      exit 1
+    fi
+    sleep 0.3
+  done
+}
+
 monitor_perception_exit() {
   if [ -z "${PERCEPTION_PID}" ]; then
     return
@@ -245,6 +276,7 @@ start_perception() {
     return
   fi
   start_streamer
+  wait_for_rtsp_ready
   mkdir -p "$PERCEPTION_LOG_DIR"
   ts="$(date +%Y%m%d-%H%M%S)"
   PERCEPTION_LOG_FILE="${PERCEPTION_LOG_DIR}/perception-${ts}.log"
@@ -305,6 +337,7 @@ trap cleanup EXIT INT TERM
 # Keep old behavior for non-interactive callers (e.g., systemd button controller).
 if ! [ -t 0 ]; then
   start_streamer
+  wait_for_rtsp_ready
   trap 'stop_streamer; send_zero_vector' EXIT INT TERM
   exec "$PYTHON_BIN" "${PERCEPTION_ARGS_PROD[@]}"
 fi
