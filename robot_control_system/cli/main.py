@@ -369,7 +369,7 @@ def cmd_serve(args):
     from state_machine.hardware.robot       import Robot, MAX_SPEED, MAX_ROT_SPEED
     from state_machine.vision.line_detector import LineDetector
     from state_machine.machine              import StateMachine
-    from state_machine.states               import Idle
+    from state_machine.states               import Idle, LineFollow
     from web_server.server                  import WebServer
 
     log = logging.getLogger('cli.serve')
@@ -415,6 +415,7 @@ def cmd_serve(args):
     sm = (
         StateMachine(robot, detector)
         .register(Idle())
+        .register(LineFollow())
     )
 
     # ── Web server ────────────────────────────────────────────────────────────
