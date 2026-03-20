@@ -8,8 +8,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from hardware.robot       import Robot
-    from vision.line_detector import LineDetector
+    from hardware.robot            import Robot
+    from vision.line_detector      import LineDetector
+    from state_machine.odometry    import Odometry
 
 
 class State:
@@ -23,10 +24,12 @@ class State:
     #: Unique name used to register and look up this state in the machine.
     name: str = ''
 
-    def enter(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+    def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
+              odometry: Optional['Odometry']) -> None:
         """Called once when the machine transitions into this state."""
 
-    def tick(self, robot: 'Robot', detector: Optional['LineDetector']) -> Optional[str]:
+    def tick(self, robot: 'Robot', detector: Optional['LineDetector'],
+             odometry: Optional['Odometry']) -> Optional[str]:
         """
         Called every tick by the state machine.
 
@@ -39,5 +42,6 @@ class State:
         """
         return None
 
-    def exit(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+    def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
+             odometry: Optional['Odometry']) -> None:
         """Called once when the machine transitions out of this state."""

@@ -10,7 +10,8 @@ import threading
 import time
 from typing import Optional, TYPE_CHECKING
 
-from state_machine.state import State
+from state_machine.state     import State
+from state_machine.odometry  import Odometry
 
 if TYPE_CHECKING:
     from hardware.robot       import Robot
@@ -40,6 +41,7 @@ class StateMachine:
     def __init__(self, robot: 'Robot', detector: Optional['LineDetector'] = None):
         self._robot    = robot
         self._detector = detector
+        self._odometry = Odometry()
         self._states:  dict[str, State] = {}
         self._current: Optional[State]  = None
         self._pending: Optional[str]    = None
@@ -62,6 +64,7 @@ class StateMachine:
         """Start the tick loop in a background thread."""
         if initial_state not in self._states:
             raise ValueError(f'Unknown state: {initial_state!r}')
+        self._odometry.reset()
         self._transition(initial_state)
         self._running = True
         self._thread = threading.Thread(
@@ -91,6 +94,11 @@ class StateMachine:
         """Name of the currently active state."""
         return self._current.name if self._current else None
 
+    @property
+    def odometry(self) -> Odometry:
+        """Live pose estimate (x_m, y_m, heading_rad) from encoder dead-reckoning."""
+        return self._odometry
+
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _transition(self, name: str) -> None:
@@ -98,9 +106,9 @@ class StateMachine:
             log.error('Transition to unknown state %r — ignoring', name)
             return
         if self._current is not None:
-            self._current.exit(self._robot, self._detector)
+            self._current.exit(self._robot, self._detector, self._odometry)
         self._current = self._states[name]
-        self._current.enter(self._robot, self._detector)
+        self._current.enter(self._robot, self._detector, self._odometry)
         log.info('State → %s', name)
 
     def _loop(self) -> None:
@@ -115,9 +123,14 @@ class StateMachine:
             if pending:
                 self._transition(pending)
 
+            # Update odometry from latest encoder counts
+            if self._robot is not None:
+                left, right = self._robot.get_encoders()
+                self._odometry.update(left, right)
+
             # Tick the active state
             if self._current is not None:
-                next_state = self._current.tick(self._robot, self._detector)
+                next_state = self._current.tick(self._robot, self._detector, self._odometry)
                 if next_state is not None:
                     self._transition(next_state)
 

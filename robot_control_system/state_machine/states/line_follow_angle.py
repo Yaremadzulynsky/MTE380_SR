@@ -27,8 +27,9 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent.parent))
 import config as _config
 
 if TYPE_CHECKING:
-    from hardware.robot       import Robot
-    from vision.line_detector import LineDetector
+    from hardware.robot          import Robot
+    from vision.line_detector    import LineDetector
+    from state_machine.odometry  import Odometry
 
 log = logging.getLogger(__name__)
 
@@ -43,12 +44,14 @@ class LineFollowAngle(State):
         # Last computed delta angle (radians) — read by web server for telemetry
         self.delta_angle_rad: float = 0.0
 
-    def enter(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+    def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
+              odometry: Optional['Odometry']) -> None:
         self.delta_angle_rad = 0.0
         robot.set_speed(0.0)
         log.info('Entered LINE_FOLLOW_ANGLE  speed=%.2f', FOLLOW_SPEED)
 
-    def tick(self, robot: 'Robot', detector: Optional['LineDetector']) -> Optional[str]:
+    def tick(self, robot: 'Robot', detector: Optional['LineDetector'],
+             odometry: Optional['Odometry']) -> Optional[str]:
         if detector is None:
             log.warning('LINE_FOLLOW_ANGLE: no detector — stopping')
             return 'stopped'
@@ -90,7 +93,8 @@ class LineFollowAngle(State):
         )
         return None
 
-    def exit(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+    def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
+             odometry: Optional['Odometry']) -> None:
         self.delta_angle_rad = 0.0
         robot.set_speed(0.0)
         log.info('Leaving LINE_FOLLOW_ANGLE')

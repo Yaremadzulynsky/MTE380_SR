@@ -26,8 +26,9 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent.parent))
 import config as _config
 
 if TYPE_CHECKING:
-    from hardware.robot       import Robot
-    from vision.line_detector import LineDetector
+    from hardware.robot          import Robot
+    from vision.line_detector    import LineDetector
+    from state_machine.odometry  import Odometry
 
 log = logging.getLogger(__name__)
 
@@ -39,11 +40,13 @@ KP:           float = _lf['kp']
 class LineFollowP(State):
     name = 'line_follow_p'
 
-    def enter(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+    def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
+              odometry: Optional['Odometry']) -> None:
         robot.set_speed(0.0)
         log.info('Entered LINE_FOLLOW_P  speed=%.2f  kp=%.4f', FOLLOW_SPEED, KP)
 
-    def tick(self, robot: 'Robot', detector: Optional['LineDetector']) -> Optional[str]:
+    def tick(self, robot: 'Robot', detector: Optional['LineDetector'],
+             odometry: Optional['Odometry']) -> Optional[str]:
         if detector is None:
             log.warning('LINE_FOLLOW_P: no detector — stopping')
             return 'stopped'
@@ -69,6 +72,7 @@ class LineFollowP(State):
         log.debug('LINE_FOLLOW_P: lat=%.1fpx  cmd=(%.3f,%.3f)', lat_px, bx, by)
         return None
 
-    def exit(self, robot: 'Robot', detector: Optional['LineDetector']) -> None:
+    def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
+             odometry: Optional['Odometry']) -> None:
         robot.set_speed(0.0)
         log.info('Leaving LINE_FOLLOW_P')
