@@ -18,25 +18,27 @@ red2:
 # Speed tuning for higher FPS:
 # - Smaller ROI / resolution reduces per-frame pixel work.
 # - Cheaper morphology reduces mask cleanup cost.
+# Extra close helps fill pinholes so per-row center x isn’t noisy (wavy “centerline”).
 morph:
   kernel_size: 3
   open_iters: 1
-  close_iters: 1
+  close_iters: 2
 
 heading:
   min_area: 60.0
   use_centerline: true
 
+# ROI ~160px tall: min_line_length ~35–55 rejects short edge fragments.
 hough:
   canny_threshold1: 50
   canny_threshold2: 150
   rho: 1.0
   theta_deg: 1.0
-  threshold: 20
-  min_line_length: 30
-  max_line_gap: 25
-  min_abs_slope: 0.25
-  center_weight: 0.2
+  threshold: 18
+  min_line_length: 42
+  max_line_gap: 20
+  min_abs_slope: 0.3
+  center_weight: 0.25
 
 smoothing:
   window_size: 7

@@ -84,12 +84,10 @@ def _nearest_point_on_centerline(
     if smooth_x_vals.size == 0:
         return None, [], np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.float32), smooth_x_by_row
 
-    # Spatial smoothing: fit a polynomial through the centerline points so the
-    # rendered curve and lookahead point come from a smooth fit rather than the
-    # noisy per-row means.  Degree 1 (line) for short masks, 2 (parabola) when
-    # enough rows are present.
+    # Spatial smoothing: only linear x = a*y + b. Quadratic fits were removed —
+    # deg-2 polyfit on noisy per-row means bends straight tape into a visible arc.
     n_pts = len(smooth_y_vals)
-    poly_deg = 2 if n_pts >= 12 else (1 if n_pts >= 4 else 0)
+    poly_deg = 1 if n_pts >= 4 else 0
     if poly_deg > 0:
         try:
             coeffs = np.polyfit(smooth_y_vals, smooth_x_vals, poly_deg)

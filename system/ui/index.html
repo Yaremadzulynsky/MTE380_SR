@@ -302,9 +302,9 @@
 
   <span class="spacer"></span>
 
-  <button class="btn g" onclick="setStateApi('searching')">▶ SEARCHING</button>
-  <button class="btn g" onclick="setStateApi('remote_control')">▶ RC MODE</button>
-  <button class="btn r" onclick="doReset()">■ RESET</button>
+  <button class="btn g" id="btn-start" onclick="robotStart()">▶ START</button>
+  <button class="btn r" id="btn-stop"  onclick="robotStop()">■ STOP</button>
+  <button class="btn b" onclick="doReset()">↺ RESET</button>
 </header>
 
 <!-- ── Main ──────────────────────────────────────────────────────────────── -->
@@ -353,6 +353,13 @@
         <div id="speed-sliders"></div>
         <div class="apply-row">
           <button class="btn b" onclick="applyPid()">Apply Speed</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Lag Controller</div>
+        <div id="lag-sliders"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applyLag()">Apply Lag</button>
         </div>
       </div>
     </div>
@@ -501,6 +508,10 @@ const SM_DEFS = [
   { k:'retrieved_turn_tol_rad', label:'Turn Tol (rad)',        min:0.01, max:3.14, step:0.01  },
   { k:'tick_interval',          label:'Tick Interval (s)',     min:0.001,max:1,    step:0.001 },
 ];
+const LAG_DEFS = [
+  { k:'lag_turn',  label:'Turn Lag α',  hint:'smooths angular corrections — 0=off, 0.7=smooth, max 0.95', min:0, max:0.95, step:0.01 },
+  { k:'lag_speed', label:'Speed Lag α', hint:'smooths forward speed changes — 0=off, 0.7=smooth, max 0.95', min:0, max:0.95, step:0.01 },
+];
 
 // ── Build slider ──────────────────────────────────────────────────────────────
 function mkSlider(def, container) {
@@ -547,6 +558,7 @@ HW_SPEED_DEFS.forEach(d => mkSlider(d, document.getElementById('hw-speed-sliders
 SPEED_DEFS   .forEach(d => mkSlider(d, document.getElementById('speed-sliders')));
 PERC_DEFS .forEach(d => mkSlider(d, document.getElementById('perc-sliders')));
 LIMIT_DEFS.forEach(d => mkSlider(d, document.getElementById('limit-sliders')));
+LAG_DEFS  .forEach(d => mkSlider(d, document.getElementById('lag-sliders')));
 SERVO_DEFS.forEach(d => mkNum(d, document.getElementById('servo-inputs'),  servoVals));
 SM_DEFS   .forEach(d => mkNum(d, document.getElementById('sm-inputs'),     smVals));
 
@@ -594,6 +606,27 @@ async function applyRobotSpeed() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ max_speed: pidVals['hw_max_speed'] ?? 0.2 }),
+    });
+  } catch(e) {}
+}
+
+async function loadLag() {
+  try {
+    const d = await (await fetch('/api/lag')).json();
+    setSlider('lag_turn',  d.turn  ?? 0);
+    setSlider('lag_speed', d.speed ?? 0);
+  } catch(e) {}
+}
+
+async function applyLag() {
+  try {
+    await fetch('/api/lag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        turn:  pidVals['lag_turn']  ?? 0,
+        speed: pidVals['lag_speed'] ?? 0,
+      }),
     });
   } catch(e) {}
 }
@@ -712,6 +745,14 @@ async function doReset() {
   try { await fetch('/api/reset', { method: 'POST' }); } catch(e) {}
 }
 
+async function robotStart() {
+  await setStateApi('searching');
+}
+
+async function robotStop() {
+  try { await fetch('/api/stop', { method: 'POST' }); } catch(e) {}
+}
+
 // ── Rolling log ───────────────────────────────────────────────────────────────
 const LOG_MAX = 60;
 const _logRows = [];
@@ -788,6 +829,11 @@ async function pollStatus() {
       _curRobot = d.robot_active;
     }
 
+    // Start/Stop button highlight
+    const isRunning = d.sm_state !== 'remote_control';
+    document.getElementById('btn-start').style.opacity = isRunning ? '0.45' : '1';
+    document.getElementById('btn-stop').style.opacity  = isRunning ? '1'    : '0.45';
+
     // State grid highlight
     if (d.sm_state !== _curState) {
       document.querySelectorAll('.sg-btn').forEach(b => b.classList.remove('on'));
@@ -842,6 +888,7 @@ async function pollStatus() {
 loadPid();
 loadRobotSpeed();
 loadSmoothing();
+loadLag();
 loadServo();
 loadSmParams();
 loadTuningInfo();

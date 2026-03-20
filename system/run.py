@@ -331,7 +331,13 @@ def _apply_sm_params_payload(state_machine: StateMachine, payload: dict[str, Any
         setattr(state_machine, attr, val)
 
 
-def _ui_tuning_snapshot(state_machine: StateMachine, cfg: AppConfig) -> dict[str, Any]:
+def _lag_dict(robot: Any) -> dict[str, float]:
+    if robot is not None and hasattr(robot, "get_lag_params"):
+        return robot.get_lag_params()
+    return {"turn": 0.0, "speed": 0.0}
+
+
+def _ui_tuning_snapshot(state_machine: StateMachine, cfg: AppConfig, robot: Any = None) -> dict[str, Any]:
     return {
         "version": 1,
         "saved_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -343,15 +349,16 @@ def _ui_tuning_snapshot(state_machine: StateMachine, cfg: AppConfig) -> dict[str
             "center": int(sm_state_machine.SERVO_CENTER_DEG),
         },
         "sm_params": _sm_params_dict(state_machine),
+        "lag": _lag_dict(robot),
     }
 
 
-def _save_ui_tuning(path: Path, state_machine: StateMachine, cfg: AppConfig) -> None:
+def _save_ui_tuning(path: Path, state_machine: StateMachine, cfg: AppConfig, robot: Any = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     try:
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(_ui_tuning_snapshot(state_machine, cfg), f, indent=2)
+            json.dump(_ui_tuning_snapshot(state_machine, cfg, robot), f, indent=2)
         os.replace(tmp, path)
     except OSError as exc:
         print(f"[run] ui tuning save failed: {exc}", file=sys.stderr)
@@ -361,7 +368,7 @@ def _save_ui_tuning(path: Path, state_machine: StateMachine, cfg: AppConfig) -> 
             pass
 
 
-def _load_ui_tuning(path: Path, state_machine: StateMachine, cfg: AppConfig) -> bool:
+def _load_ui_tuning(path: Path, state_machine: StateMachine, cfg: AppConfig, robot: Any = None) -> bool:
     if not path.is_file():
         return False
     try:
@@ -388,6 +395,12 @@ def _load_ui_tuning(path: Path, state_machine: StateMachine, cfg: AppConfig) -> 
             sm_state_machine.SERVO_CENTER_DEG = int(sv["center"])
     if "sm_params" in data and isinstance(data["sm_params"], dict):
         _apply_sm_params_payload(state_machine, data["sm_params"])
+    if "lag" in data and isinstance(data["lag"], dict) and robot is not None:
+        lag = data["lag"]
+        if "turn" in lag:
+            robot.set_turn_lag(float(lag["turn"]))
+        if "speed" in lag:
+            robot.set_speed_lag(float(lag["speed"]))
     return True
 
 
@@ -657,7 +670,7 @@ def _build_app(
         if not persist_tuning:
             return
         with _UI_TUNING_SAVE_LOCK:
-            _save_ui_tuning(tuning_path, state_machine, cfg)
+            _save_ui_tuning(tuning_path, state_machine, cfg, robot)
 
     # ── Serve UI ──────────────────────────────────────────────────────────────
     @app.get("/")
@@ -694,7 +707,7 @@ def _build_app(
         return {
             "path": str(tuning_path),
             "persist_enabled": persist_tuning,
-            "data": _ui_tuning_snapshot(state_machine, cfg),
+            "data": _ui_tuning_snapshot(state_machine, cfg, robot),
         }
 
     # ── Line-follow PID ─────────────────────────────────────────────────────────
@@ -796,6 +809,16 @@ def _build_app(
         shared.set_sm_state(state_machine.state.value)
         return {"ok": True}
 
+    @app.post("/api/stop")
+    async def api_stop():
+        """Immediately halt motors and drop into remote_control state."""
+        from sm_models import State as _State
+        state_machine.force_state(_State.REMOTE_CONTROL)
+        shared.set_sm_state(state_machine.state.value)
+        if robot is not None:
+            robot.set_speed(0.0)
+        return {"ok": True}
+
     # ── Robot hardware speed cap ────────────────────────────────────────────────
     @app.get("/api/robot")
     async def api_get_robot():
@@ -812,6 +835,23 @@ def _build_app(
             "ok": True,
             "max_speed": robot.max_speed if robot is not None else 0.2,
         }
+
+    # ── Lag controller ───────────────────────────────────────────────────────────
+    @app.get("/api/lag")
+    async def api_get_lag():
+        params = robot.get_lag_params() if robot is not None else {"turn": 0.0, "speed": 0.0}
+        return {"ok": True, **params}
+
+    @app.post("/api/lag")
+    async def api_set_lag(payload: dict[str, Any] = Body(default_factory=dict)):
+        if robot is not None:
+            if "turn" in payload:
+                robot.set_turn_lag(float(payload["turn"]))
+            if "speed" in payload:
+                robot.set_speed_lag(float(payload["speed"]))
+        _persist_tuning()
+        params = robot.get_lag_params() if robot is not None else {"turn": 0.0, "speed": 0.0}
+        return {"ok": True, **params}
 
     app.mount("/ui", StaticFiles(directory=str(ui_dir)), name="ui")
 
@@ -875,7 +915,7 @@ def main() -> None:
     }
     if persist_ui_tuning:
         if tuning_path.is_file():
-            if _load_ui_tuning(tuning_path, state_machine, cfg):
+            if _load_ui_tuning(tuning_path, state_machine, cfg, robot):
                 print(f"[run] Restored UI tuning from {tuning_path}", flush=True)
             else:
                 print(f"[run] UI tuning file unreadable (using defaults): {tuning_path}", flush=True)

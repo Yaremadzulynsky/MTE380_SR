@@ -39,16 +39,21 @@ heading:
   min_area: 150.0
   use_centerline: true
 
+# Hough runs on Canny(path_mask). On a clean binary mask, edges are thin:
+# - threshold: accumulator votes (typ. 15–35); higher = fewer, longer segments
+# - min_line_length: px; set ~25–45% of ROI height to reject specks
+# - max_line_gap: bridge breaks in edges (10–25)
+# - min_abs_slope: |dy/dx| min so flat floor edges are ignored (0.2–0.45)
 hough:
   canny_threshold1: 50
   canny_threshold2: 150
   rho: 1.0
   theta_deg: 1.0
-  threshold: 25
-  min_line_length: 40
-  max_line_gap: 20
-  min_abs_slope: 0.3
-  center_weight: 0.2
+  threshold: 22
+  min_line_length: 45
+  max_line_gap: 18
+  min_abs_slope: 0.35
+  center_weight: 0.25
 
 smoothing:
   window_size: 5

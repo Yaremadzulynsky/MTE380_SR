@@ -62,6 +62,14 @@ class Robot:
         self._heading_fb = 0.0   # radians — encoder odometry and/or set_heading_feedback
         self._linear_speed = 0.0  # m/s — forward speed from encoders
 
+        # Lag controller coefficients (0 = off, 0.9 = heavy smoothing).
+        # turn_lag filters angular_z; speed_lag filters linear_x.
+        self._turn_lag_alpha:  float = 0.0
+        self._speed_lag_alpha: float = 0.0
+        # Lag filter state (running weighted averages).
+        self._angular_z_lag: float = 0.0
+        self._linear_x_lag:  float = 0.0
+
         self._enc_left      = 0
         self._enc_right     = 0
         self._last_enc_time = 0.0
@@ -124,6 +132,23 @@ class Robot:
             if abs(radians - self._heading_fb) > 0.14:  # ~8°
                 self._heading_pid.reset()
             self._heading_fb = float(radians)
+
+    def set_turn_lag(self, alpha: float) -> None:
+        """Set lag filter coefficient for angular (turn) output.
+        0 = no lag (pass-through), 0.5–0.8 = noticeable smoothing, max 0.95."""
+        with self._lock:
+            self._turn_lag_alpha = max(0.0, min(0.95, float(alpha)))
+
+    def set_speed_lag(self, alpha: float) -> None:
+        """Set lag filter coefficient for linear (speed) output.
+        0 = no lag (pass-through), 0.5–0.8 = noticeable smoothing, max 0.95."""
+        with self._lock:
+            self._speed_lag_alpha = max(0.0, min(0.95, float(alpha)))
+
+    def get_lag_params(self) -> dict[str, float]:
+        """Return current lag coefficients: {"turn": α, "speed": α}."""
+        with self._lock:
+            return {"turn": self._turn_lag_alpha, "speed": self._speed_lag_alpha}
 
     def set_use_encoder_heading_odometry(self, enabled: bool) -> None:
         """If True, integrate yaw from wheel encoders in _on_encoders. If False, only
@@ -351,20 +376,37 @@ class Robot:
             t0 = time.monotonic()
 
             with self._lock:
-                target_heading = self._target_heading
-                speed_scale    = self._speed_scale
-                rotation_scale = self._rotation_scale
-                hdg_fb         = self._heading_fb
-                override       = self._motor_override
+                target_heading   = self._target_heading
+                speed_scale      = self._speed_scale
+                rotation_scale   = self._rotation_scale
+                hdg_fb           = self._heading_fb
+                override         = self._motor_override
+                turn_lag_alpha   = self._turn_lag_alpha
+                speed_lag_alpha  = self._speed_lag_alpha
 
             if override is not None:
                 self._bridge.send_drive(*override)
             elif abs(speed_scale) < 1e-6:
                 self._heading_pid.reset()
+                self._angular_z_lag = 0.0
+                self._linear_x_lag  = 0.0
                 self._bridge.send_drive(0.0, 0.0)
             else:
                 angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
                 linear_x  = speed_scale
+
+                # Lag filters: y[k] = α·y[k-1] + (1−α)·u[k]
+                if turn_lag_alpha > 1e-6:
+                    self._angular_z_lag = turn_lag_alpha * self._angular_z_lag + (1.0 - turn_lag_alpha) * angular_z
+                    angular_z = self._angular_z_lag
+                else:
+                    self._angular_z_lag = angular_z
+
+                if speed_lag_alpha > 1e-6:
+                    self._linear_x_lag = speed_lag_alpha * self._linear_x_lag + (1.0 - speed_lag_alpha) * linear_x
+                    linear_x = self._linear_x_lag
+                else:
+                    self._linear_x_lag = linear_x
 
                 # Cap total motor output to the commanded speed so the heading
                 # PID angular correction can't drive motors beyond MAX_SPEED.

@@ -255,8 +255,12 @@ class StateMachine:
 
     def _begin_follow_line_scan(self, now: float) -> None:
         self._reset_line_pid()
-        self._find_line_phase = self.FOLLOW_LINE_PHASE_SCAN_RIGHT if self._scan_next_right else self.FOLLOW_LINE_PHASE_SCAN_LEFT
-        self._scan_next_right = not self._scan_next_right
+        # Turn opposite to the last PID turn direction: if we were steering right
+        # when the line disappeared, turn left to come back to it.
+        if self._line_last_turn_sign >= 0.0:
+            self._find_line_phase = self.FOLLOW_LINE_PHASE_SCAN_LEFT
+        else:
+            self._find_line_phase = self.FOLLOW_LINE_PHASE_SCAN_RIGHT
         self._scan_started_at = now
         if self._line_lost_since <= 0.0:
             self._line_lost_since = now
