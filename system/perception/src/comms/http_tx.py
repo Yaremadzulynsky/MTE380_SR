@@ -8,7 +8,6 @@ import queue
 import sys
 import threading
 import urllib.request
-from collections import deque
 
 def _send_post(url: str, body: bytes, timeout: float = 30.0) -> None:
     req = urllib.request.Request(
@@ -33,11 +32,6 @@ class HTTPSender:
         mode_raw = (os.environ.get("PERCEPTION_HTTP_MODE") or "").strip().lower()
         direct_raw = (os.environ.get("PERCEPTION_HTTP_DIRECT_CONTROL") or "").strip().lower()
         self.direct_control = mode_raw == "control" or direct_raw in {"1", "true", "yes", "on"}
-        self._turn_hist: "deque[float]" = deque(maxlen=max(1, int(os.environ.get("PERCEPTION_HTTP_TURN_AVG_WINDOW", "4"))))
-        self._speed_hist: "deque[float]" = deque(maxlen=max(1, int(os.environ.get("PERCEPTION_HTTP_TURN_AVG_WINDOW", "4"))))
-        self._line_loss_hold_frames = max(0, int(os.environ.get("PERCEPTION_HTTP_LINE_LOSS_HOLD_FRAMES", "6")))
-        self._line_loss_decay = min(1.0, max(0.0, float(os.environ.get("PERCEPTION_HTTP_LINE_LOSS_DECAY", "0.88"))))
-        self._missed_line_frames = 0
         self._q: "queue.Queue[bytes]" = queue.Queue(maxsize=1)
         self._stop = threading.Event()
         self._worker = threading.Thread(target=self._worker_loop, daemon=True)
@@ -83,27 +77,17 @@ class HTTPSender:
             detected = bool(path_detected)
             steer_x = float(line_error_x)
             steer_y = float(line_error_y)
-            if detected:
-                speed = min(1.0, float((steer_x * steer_x + steer_y * steer_y) ** 0.5))
-                self._turn_hist.append(steer_x)
-                self._speed_hist.append(speed)
-                self._missed_line_frames = 0
-            elif self._turn_hist and self._missed_line_frames < self._line_loss_hold_frames:
-                self._missed_line_frames += 1
-                decay = self._line_loss_decay ** self._missed_line_frames
-                steer_x = (sum(self._turn_hist) / len(self._turn_hist)) * decay
-                steer_y = 1.0
-                speed = min(1.0, (sum(self._speed_hist) / len(self._speed_hist)) * decay) if self._speed_hist else 0.0
-            else:
-                self._missed_line_frames = min(self._missed_line_frames + 1, self._line_loss_hold_frames + 1)
+            if not detected:
                 steer_x = 0.0
                 steer_y = 0.0
                 speed = 0.0
+            else:
+                speed = min(1.0, float((steer_x * steer_x + steer_y * steer_y) ** 0.5))
             payload = {
                 "x": steer_x,
                 "y": steer_y,
                 "speed": speed,
-                "line_error_x": steer_x,
+                "line_error_x": float(line_error_x),
                 "control_mode": "line_follow",
             }
             body = json.dumps(payload).encode("utf-8")
