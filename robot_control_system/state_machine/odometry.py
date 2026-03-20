@@ -66,6 +66,14 @@ class Odometry:
         self._prev_left   = None
         self._prev_right  = None
 
+    def reset_to(self, x: float, y: float, heading: float) -> None:
+        """Teleport to a specific pose (thread-safe: atomic float writes)."""
+        self._x           = float(x)
+        self._y           = float(y)
+        self._heading     = float(heading)
+        self._prev_left   = None
+        self._prev_right  = None
+
     @property
     def x(self) -> float:
         """X position in metres from origin."""

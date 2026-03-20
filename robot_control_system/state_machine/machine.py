@@ -8,9 +8,14 @@ and vision are accessed through it, not imported directly by outside code.
 
 from __future__ import annotations
 import logging
+import math
 import threading
 import time
 from typing import Optional, TYPE_CHECKING
+
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).parent.parent))
+import config as _config
 
 from state_machine.state    import State
 from state_machine.odometry import Odometry
@@ -20,6 +25,8 @@ if TYPE_CHECKING:
     from state_machine.vision.line_detector import LineDetector
 
 log = logging.getLogger(__name__)
+
+_LATERAL_DEADZONE_M = 0.01   # metres — suppress lateral correction below this
 
 TICK_RATE_HZ = 20.0
 
@@ -55,6 +62,10 @@ class StateMachine:
         self._lock     = threading.Lock()
         self._running  = False
         self._thread:  Optional[threading.Thread] = None
+        self._target_heading: Optional[float] = None   # radians, world frame
+
+        _vc = _config.get()['vision']
+        self._cam_fwd_m: float = float(_vc.get('camera_forward_m', 0.15))
 
     # ── Public accessors ──────────────────────────────────────────────────────
 
@@ -77,6 +88,15 @@ class StateMachine:
     def current_state(self) -> Optional[str]:
         """Name of the currently active state."""
         return self._current.name if self._current else None
+
+    @property
+    def target_heading(self) -> Optional[float]:
+        """
+        World-frame heading the robot should drive toward, in radians.
+        Combines the line tangent angle and lateral-error correction.
+        None when no line is detected.
+        """
+        return self._target_heading
 
     # ── Registration ──────────────────────────────────────────────────────────
 
@@ -130,6 +150,25 @@ class StateMachine:
         self._current.enter(self._robot, self._detector, self._odometry)
         log.info('State → %s', name)
 
+    def _update_target_heading(self) -> None:
+        """Recompute world-frame target heading from the latest detector result."""
+        if self._detector is None:
+            self._target_heading = None
+            return
+        result = self._detector.get_result()
+        if result is None:
+            self._target_heading = None
+            return
+
+        h            = self._odometry.heading
+        line_angle   = math.radians(result.angle_deg)
+        lat_m        = result.lateral_distance_m
+        if lat_m is not None and abs(lat_m) >= _LATERAL_DEADZONE_M:
+            lat_corr = math.atan2(lat_m, self._cam_fwd_m)
+        else:
+            lat_corr = 0.0
+        self._target_heading = h - line_angle - lat_corr
+
     def _loop(self) -> None:
         interval = 1.0 / TICK_RATE_HZ
         while self._running:
@@ -146,6 +185,9 @@ class StateMachine:
             if self._robot is not None:
                 left, right = self._robot.get_encoders()
                 self._odometry.update(left, right)
+
+            # Compute target heading from line detection + current odometry
+            self._update_target_heading()
 
             # Tick the active state
             if self._current is not None:

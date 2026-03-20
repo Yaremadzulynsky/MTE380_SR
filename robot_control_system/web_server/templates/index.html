@@ -322,7 +322,11 @@
     <div id="odo-wrap">
       <div id="odo-header">
         <span>ODOMETRY &mdash; TOP DOWN VIEW</span>
-        <button class="ctrl-btn" onclick="resetOdoPath()" style="color:var(--dim); font-size:10px; padding:2px 8px;">&#10005; CLEAR PATH</button>
+        <div style="display:flex; gap:6px;">
+          <button class="ctrl-btn" id="btn-set-pose" onclick="toggleSetPoseMode()"
+                  style="color:var(--dim); font-size:10px; padding:2px 8px;">&#9999; SET POSE</button>
+          <button class="ctrl-btn" onclick="resetOdoPath()" style="color:var(--dim); font-size:10px; padding:2px 8px;">&#10005; CLEAR PATH</button>
+        </div>
       </div>
       <canvas id="odo-canvas" width="640" height="400"></canvas>
     </div>
@@ -847,14 +851,86 @@
   let robotGeometry = null;
   fetch('/api/geometry').then(r => r.json()).then(d => { robotGeometry = d; }).catch(() => {});
 
-  let odoPath         = [];       // [{x, y}] in metres
-  let odoRobot        = null;     // {x, y, heading_rad}
-  let odoLineSeg      = null;     // {cx, cy, dx, dy} line centre + unit tangent in world
-  let odoLineHist     = [];       // [{cx, cy}] sampled line centre positions over time
-  let odoLineSplatter = [];       // [{x, y}] world-space red pixel cloud
-  let odoZoom         = 1.0;
+  let odoPath          = [];       // [{x, y}] in metres
+  let odoRobot         = null;     // {x, y, heading_rad}
+  let odoTargetHeading = null;     // desired world heading (rad)
+  let odoLineSeg       = null;     // {cx, cy, dx, dy} line centre + unit tangent in world
+  let odoLineHist      = [];       // [{cx, cy}] sampled line centre positions over time
+  let odoLineSplatter  = [];       // [{x, y}] world-space red pixel cloud
+  let odoZoom          = 1.0;
 
   const ODO_MAX_SPLATTER = 6000;
+
+  // ── Canvas transform (updated each draw, used for inverse mapping) ──────────
+  let _odoScale = 100, _odoOriginX = 0, _odoOriginY = 0;
+
+  function canvasToWorld(canvasX, canvasY) {
+    return [(canvasX - _odoOriginX) / _odoScale,
+            (_odoOriginY - canvasY) / _odoScale];
+  }
+
+  // ── Set-pose mode ─────────────────────────────────────────────────────────
+  let setPoseMode  = false;
+  let _dragStart   = null;   // {x, y} in world coords
+  let _dragPreview = null;   // {wx, wy, heading} for preview arrow
+
+  function toggleSetPoseMode() {
+    setPoseMode = !setPoseMode;
+    const btn = document.getElementById('btn-set-pose');
+    btn.style.color       = setPoseMode ? 'var(--accent)' : 'var(--dim)';
+    btn.style.borderColor = setPoseMode ? 'var(--accent)' : '';
+    odoCanvas.style.cursor = setPoseMode ? 'crosshair' : 'default';
+    _dragStart = _dragPreview = null;
+    drawOdometry();
+  }
+
+  function _canvasXY(e) {
+    const r = odoCanvas.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  }
+
+  odoCanvas.addEventListener('mousedown', e => {
+    if (!setPoseMode) return;
+    e.preventDefault();
+    const [cx, cy] = _canvasXY(e);
+    const [wx, wy] = canvasToWorld(cx, cy);
+    _dragStart   = { wx, wy };
+    _dragPreview = null;
+  });
+
+  odoCanvas.addEventListener('mousemove', e => {
+    if (!setPoseMode || !_dragStart) return;
+    const [cx, cy] = _canvasXY(e);
+    const [wx, wy] = canvasToWorld(cx, cy);
+    const dx = wx - _dragStart.wx, dy = wy - _dragStart.wy;
+    const dist = Math.hypot(dx, dy);
+    _dragPreview = dist > 0.01  // only show heading preview after 1cm drag
+      ? { wx: _dragStart.wx, wy: _dragStart.wy, heading: Math.atan2(dy, dx) }
+      : { wx: _dragStart.wx, wy: _dragStart.wy, heading: null };
+    drawOdometry();
+  });
+
+  odoCanvas.addEventListener('mouseup', e => {
+    if (!setPoseMode || !_dragStart) return;
+    e.preventDefault();
+    const [cx, cy] = _canvasXY(e);
+    const [wx, wy] = canvasToWorld(cx, cy);
+    const dx = wx - _dragStart.wx, dy = wy - _dragStart.wy;
+    const dist = Math.hypot(dx, dy);
+    const heading = dist > 0.01
+      ? Math.atan2(dy, dx)
+      : (odoRobot ? odoRobot.heading : Math.PI / 2);
+    fetch('/api/pose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x: _dragStart.wx, y: _dragStart.wy, heading }),
+    }).catch(() => {});
+    _dragStart = _dragPreview = null;
+  });
+
+  odoCanvas.addEventListener('mouseleave', () => {
+    if (_dragStart) { _dragStart = _dragPreview = null; drawOdometry(); }
+  });
 
   odoCanvas.addEventListener('wheel', e => {
     e.preventDefault();
@@ -866,10 +942,11 @@
   odoCanvas.addEventListener('dblclick', () => { odoZoom = 1.0; drawOdometry(); });
 
   function resetOdoPath() {
-    odoPath         = [];
-    odoLineHist     = [];
-    odoLineSeg      = null;
-    odoLineSplatter = [];
+    odoPath          = [];
+    odoLineHist      = [];
+    odoLineSeg       = null;
+    odoLineSplatter  = [];
+    odoTargetHeading = null;
     drawOdometry();
   }
 
@@ -912,6 +989,9 @@
       }
     }
 
+    // Target heading computed by state machine (needs odometry heading + lateral error)
+    odoTargetHeading = d.odometry.target_heading_rad ?? null;
+
     // Accumulate world-space red pixel splatter
     if (d.line_world_points && d.line_world_points.length > 0) {
       for (const [wx, wy] of d.line_world_points) {
@@ -948,6 +1028,9 @@
     const scale  = Math.min(W, H) / maxSpan * odoZoom;   // px per metre
     const originX = W / 2 - cx * scale;
     const originY = H / 2 + cy * scale;         // flip Y (world Y up, canvas Y down)
+
+    // Expose transform for canvas→world conversion
+    _odoScale = scale; _odoOriginX = originX; _odoOriginY = originY;
 
     function toC(wx, wy) {
       return [originX + wx * scale, originY - wy * scale];
@@ -1105,6 +1188,27 @@
       odoCtx.fillStyle = '#30e88a';
       odoCtx.fill();
 
+      // Target heading arrow (orange, dashed)
+      if (odoTargetHeading !== null) {
+        const th      = odoTargetHeading;
+        const tArrowPx = arrowPx * 1.3;
+        const tax = rx + Math.cos(th) * tArrowPx;
+        const tay = ry - Math.sin(th) * tArrowPx;
+        odoCtx.setLineDash([4, 3]);
+        odoCtx.beginPath(); odoCtx.moveTo(rx, ry); odoCtx.lineTo(tax, tay);
+        odoCtx.strokeStyle = '#f0a030'; odoCtx.lineWidth = 2; odoCtx.stroke();
+        odoCtx.setLineDash([]);
+        // Arrowhead
+        const tAngle = Math.atan2(ry - tay, tax - rx);
+        const aw = 6;
+        odoCtx.beginPath();
+        odoCtx.moveTo(tax, tay);
+        odoCtx.lineTo(tax - aw * Math.cos(tAngle - 0.4), tay + aw * Math.sin(tAngle - 0.4));
+        odoCtx.lineTo(tax - aw * Math.cos(tAngle + 0.4), tay + aw * Math.sin(tAngle + 0.4));
+        odoCtx.closePath();
+        odoCtx.fillStyle = '#f0a030'; odoCtx.fill();
+      }
+
       // Robot body circle
       odoCtx.beginPath();
       odoCtx.arc(rx, ry, 7, 0, Math.PI * 2);
@@ -1149,6 +1253,20 @@
       odoCtx.stroke();
     }
 
+    // ── Set-pose drag preview ─────────────────────────────────
+    if (setPoseMode && _dragPreview) {
+      const [px, py] = toC(_dragPreview.wx, _dragPreview.wy);
+      odoCtx.beginPath(); odoCtx.arc(px, py, 6, 0, Math.PI * 2);
+      odoCtx.strokeStyle = 'var(--accent)'; odoCtx.lineWidth = 2; odoCtx.stroke();
+      if (_dragPreview.heading !== null) {
+        const h2 = _dragPreview.heading;
+        const ex = px + Math.cos(h2) * 30;
+        const ey = py - Math.sin(h2) * 30;
+        odoCtx.beginPath(); odoCtx.moveTo(px, py); odoCtx.lineTo(ex, ey);
+        odoCtx.strokeStyle = 'var(--accent)'; odoCtx.lineWidth = 2; odoCtx.stroke();
+      }
+    }
+
     // ── HUD overlay ───────────────────────────────────────────
     odoCtx.fillStyle = 'rgba(10,10,24,0.75)';
     odoCtx.fillRect(0, 0, W, 22);
@@ -1172,6 +1290,9 @@
     odoCtx.fillStyle = '#c060ff'; odoCtx.fillText('● cam', W - 126, 14);
     if (odoLineSeg || odoLineHist.length > 0 || odoLineSplatter.length > 0) {
       odoCtx.fillStyle = '#f04060'; odoCtx.fillText('● line', W - 178, 14);
+    }
+    if (odoTargetHeading !== null) {
+      odoCtx.fillStyle = '#f0a030'; odoCtx.fillText('⇢ target hdg', W - 230, 14);
     }
   }
 

@@ -214,12 +214,14 @@ class LineDetector:
         self._thread: Optional[threading.Thread] = None
 
         # Runtime-tunable HSV thresholds (copies so config is not mutated)
-        rc = _config.get()['vision']['red_hsv']
+        _vc = _config.get()['vision']
+        rc = _vc['red_hsv']
         self._hsv_lower1 = np.array(rc['lower1'], dtype=np.uint8).copy()
         self._hsv_upper1 = np.array(rc['upper1'], dtype=np.uint8).copy()
         self._hsv_lower2 = np.array(rc['lower2'], dtype=np.uint8).copy()
         self._hsv_upper2 = np.array(rc['upper2'], dtype=np.uint8).copy()
-        self._min_mask_pixels: int = _config.get()['vision']['min_mask_pixels']
+        self._min_mask_pixels: int = _vc['min_mask_pixels']
+        self._cam_fwd_m: float = float(_vc.get('camera_forward_m', 0.15))
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -417,17 +419,37 @@ class LineDetector:
         else:
             sampled = [(int(p[0][0]), int(p[0][1])) for p in all_pts]
 
-        # ── Debug annotation ──────────────────────────────────────────────────
-        annotated = None
+        # ── Annotation ────────────────────────────────────────────────────────
+        ARROW_LEN      = 80
+        DEADZONE_M     = 0.01    # metres — matches machine._LATERAL_DEADZONE_M
+        FONT           = cv2.FONT_HERSHEY_SIMPLEX
+        FONT_SCALE     = 0.42
+        THICKNESS      = 1
+
+        annotated  = frame.copy()
+        robot_pt   = (int(ref_x), int(ref_y))
+
+        # Target direction in image space: same formula as StateMachine._update_target_heading.
+        # Robot forward = (0, -1) in image. Turning right by theta gives (sin θ, -cos θ).
+        # theta = line_angle_rad + lat_corr (both expressed as right-turn-from-forward).
+        #   line_angle_rad = angle_rad (positive = line tilts right = robot must turn right)
+        #   lat_corr = atan2(lat_m, cam_fwd_m) if |lat_m| > deadzone else 0
+        if lateral_m is not None and abs(lateral_m) >= DEADZONE_M:
+            lat_corr = math.atan2(lateral_m, self._cam_fwd_m)
+        else:
+            lat_corr = 0.0
+        theta = angle_rad + lat_corr
+        tx = math.sin(theta)
+        ty = -math.cos(theta)
+        tgt_end = (int(ref_x + tx * ARROW_LEN), int(ref_y + ty * ARROW_LEN))
+
+        # Always draw: target heading arrow (orange) + robot reference dot
+        cv2.arrowedLine(annotated, robot_pt, tgt_end, (0, 100, 255), 3, tipLength=0.25)
+        cv2.putText(annotated, 'TARGET', (tgt_end[0] + 4, tgt_end[1]),
+                    FONT, FONT_SCALE, (0, 100, 255), THICKNESS)
+        cv2.circle(annotated, robot_pt, 5, (255, 255, 255), -1)
+
         if self._debug:
-            annotated = frame.copy()
-
-            ARROW_LEN  = 80
-            DEADZONE   = 20
-            FONT       = cv2.FONT_HERSHEY_SIMPLEX
-            FONT_SCALE = 0.42
-            THICKNESS  = 1
-
             # Contour outline
             cv2.drawContours(annotated, [contour], -1, (0, 180, 180), 1)
 
@@ -441,8 +463,6 @@ class LineDetector:
             # Centroid dot
             cv2.circle(annotated, (int(centroid_x), int(centroid_y)), 5, (0, 255, 255), -1)
 
-            robot_pt = (int(ref_x), int(ref_y))
-
             # Robot forward arrow
             fwd_end = (int(ref_x), int(ref_y - ARROW_LEN))
             cv2.arrowedLine(annotated, robot_pt, fwd_end, (255, 255, 255), 2, tipLength=0.2)
@@ -455,21 +475,16 @@ class LineDetector:
             cv2.putText(annotated, 'TANGENT', (tan_end[0] + 4, tan_end[1]),
                         FONT, FONT_SCALE, (0, 230, 0), THICKNESS)
 
-            # Lateral correction arrow (toward centroid x)
-            lat_nx = math.copysign(1.0, lateral_px) * vy   # perpendicular direction
-            lat_ny = -math.copysign(1.0, lateral_px) * vx
-            lat_weight  = max(0.0, abs(lateral_px) - DEADZONE) / ARROW_LEN
-            lat_weight  = min(lat_weight, 1.0)
-            lat_draw_len = lat_weight * ARROW_LEN
+            # Lateral correction arrow: perpendicular toward line centre
+            lat_nx = math.copysign(1.0, lateral_px) * (-vy)
+            lat_ny = math.copysign(1.0, lateral_px) * vx
+            lat_draw_len = min(1.0, abs(lat_corr) / (math.pi / 4)) * ARROW_LEN
             lat_end = (int(ref_x + lat_nx * lat_draw_len), int(ref_y + lat_ny * lat_draw_len))
             if lat_draw_len > 2:
                 cv2.arrowedLine(annotated, robot_pt, lat_end, (255, 220, 0), 2, tipLength=0.25)
             cv2.putText(annotated, 'LATERAL',
                         (lat_end[0] + 4, lat_end[1]),
                         FONT, FONT_SCALE, (255, 220, 0), THICKNESS)
-
-            # Robot reference dot
-            cv2.circle(annotated, robot_pt, 5, (255, 255, 255), -1)
 
             lat_label = (f'{lateral_px:+.1f}px'
                          + (f' / {lateral_m:+.3f}m' if lateral_m is not None else ''))
@@ -484,6 +499,7 @@ class LineDetector:
                 ((0, 255, 255),   '(1) CENTROID'),
                 ((0, 230, 0),     '(2) TANGENT (fitLine on edges)'),
                 ((255, 220, 0),   f'(3) LATERAL (deadzone={DEADZONE}px)'),
+                ((0, 100, 255),   '(4) TARGET heading'),
             ]
             for i, (colour, text) in enumerate(legend):
                 y = h - 12 - i * 16

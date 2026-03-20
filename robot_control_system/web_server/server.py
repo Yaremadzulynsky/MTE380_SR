@@ -260,6 +260,20 @@ class WebServer:
             _cfg_mod.save(tuned, base / 'temp.yaml')
             return jsonify({'saved': True, **params})
 
+        @app.route('/api/pose', methods=['POST'])
+        def set_pose():
+            sm = self._state_machine
+            if sm is None:
+                return jsonify({'error': 'no state machine'}), 503
+            import math as _math
+            body    = request.get_json(silent=True) or {}
+            x       = float(body.get('x',       0.0))
+            y       = float(body.get('y',       0.0))
+            heading = float(body.get('heading', _math.pi / 2.0))
+            sm.odometry.reset_to(x, y, heading)
+            return jsonify({'x': round(x, 4), 'y': round(y, 4),
+                            'heading_deg': round(_math.degrees(heading), 2)})
+
         @app.route('/api/geometry', methods=['GET'])
         def get_geometry():
             import config as _cfg
@@ -334,10 +348,12 @@ class WebServer:
         sm = self._state_machine
         if sm is not None:
             x, y, heading = sm.odometry.pose()
+            th = sm.target_heading
             status['odometry'] = {
-                'x_m':        round(x, 4),
-                'y_m':        round(y, 4),
-                'heading_deg': round(_math.degrees(heading), 2),
+                'x_m':               round(x, 4),
+                'y_m':               round(y, 4),
+                'heading_deg':       round(_math.degrees(heading), 2),
+                'target_heading_rad': round(th, 6) if th is not None else None,
             }
 
         if self._robot is not None:
