@@ -61,7 +61,7 @@ class SmoothingConfig:
     segment_lock_frames: int = 3
     segment_switch_score_margin: float = 1.2
     segment_max_missed_frames: int = 2
-    centerline_lookahead_ratio: float = 0.15
+    centerline_lookahead_ratio: float = 0.25
     centerline_ema_alpha: float = 0.8
 
 @dataclass
