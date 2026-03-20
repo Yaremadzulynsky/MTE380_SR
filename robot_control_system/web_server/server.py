@@ -205,7 +205,6 @@ class WebServer:
 
         @app.route('/api/align-target', methods=['POST'])
         def align_to_target():
-            import math as _math
             robot    = self._robot
             detector = self._detector
             if robot is None:
@@ -215,20 +214,12 @@ class WebServer:
             result = detector.get_result()
             if result is None:
                 return jsonify({'error': 'no line detected'}), 404
-            from state_machine.states.line_follow import DEADZONE_PX, CORRECTION_SCALE_PX
-            tx, ty   = result.direction
-            lat_px   = result.lateral_distance_px
-            weight   = min(1.0, max(0.0, abs(lat_px) - DEADZONE_PX) / CORRECTION_SCALE_PX)
-            corr_x   = _math.copysign(weight, lat_px)
-            bx, by   = tx + corr_x, ty
-            length   = _math.hypot(bx, by)
-            if length > 1e-6:
-                bx /= length
-                by /= length
+            from state_machine.states.line_follow import compute_target_direction
+            bx, by = compute_target_direction(result)
             robot.set_speed(0.0)
             robot.add_direction(bx, by)
             return jsonify({'direction': [round(bx, 3), round(by, 3)],
-                            'lateral_px': round(lat_px, 1), 'weight': round(weight, 3)})
+                            'lateral_px': round(result.lateral_distance_px, 1)})
 
         @app.route('/api/gains', methods=['GET'])
         def get_gains():

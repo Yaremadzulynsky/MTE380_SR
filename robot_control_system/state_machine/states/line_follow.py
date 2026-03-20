@@ -39,6 +39,34 @@ DEADZONE_PX:         float = _lf['deadzone_px']
 CORRECTION_SCALE_PX: float = _lf['correction_scale_px']
 
 
+def compute_target_direction(result) -> tuple[float, float]:
+    """Compute the blended direction vector from a LineResult (tangent + lateral correction).
+
+    Accounts for the camera being mounted ahead of the wheel base: the lateral
+    distance measured at the camera position is projected back to the wheel-base
+    pivot using the tangent vector's lateral component.
+    """
+    tx, ty   = result.direction
+    lat_px   = result.lateral_distance_px
+
+    # Project lateral distance from camera plane back to wheel-base pivot
+    _vc = _config.get()['vision']
+    ppm = _vc.get('pixels_per_meter')          # None until calibrated
+    cam_fwd_m = _vc.get('camera_forward_m', 0.0)
+    if ppm and cam_fwd_m:
+        # How far the line has shifted laterally over cam_fwd_m of forward distance
+        lat_px = lat_px + cam_fwd_m * ppm * tx
+
+    weight   = min(1.0, max(0.0, abs(lat_px) - DEADZONE_PX) / CORRECTION_SCALE_PX)
+    corr_x   = math.copysign(weight, lat_px)
+    bx, by   = tx + corr_x, ty
+    length   = math.hypot(bx, by)
+    if length > 1e-6:
+        bx /= length
+        by /= length
+    return bx, by
+
+
 class LineFollow(State):
     name = 'line_follow'
 
@@ -59,31 +87,15 @@ class LineFollow(State):
             log.debug('LINE_FOLLOW: line lost')
             return 'stopped'
 
-        # ── Tangent direction (from line fit) ─────────────────────────────────
-        tx, ty = result.direction   # unit vector: x=lateral, y=forward
-
-        # ── Lateral correction (with deadzone) ────────────────────────────────
-        # lateral_distance_px > 0 → line is to the right → steer right (+ x)
-        # lateral_distance_px < 0 → line is to the left  → steer left  (- x)
-        lat_px = result.lateral_distance_px
-        weight = max(0.0, abs(lat_px) - DEADZONE_PX) / CORRECTION_SCALE_PX
-        weight = min(weight, 1.0)
-        correction_x = math.copysign(weight, lat_px)
-
-        # ── Blend and normalise ───────────────────────────────────────────────
-        bx = tx + correction_x
-        by = ty
-        length = math.hypot(bx, by)
-        if length > 1e-6:
-            bx /= length
-            by /= length
+        tx, ty = result.direction
+        bx, by = compute_target_direction(result)
 
         robot.add_direction(bx, by)
         robot.set_speed(FOLLOW_SPEED)
 
         log.debug(
-            'LINE_FOLLOW: lat=%.1fpx weight=%.2f tangent=(%.2f,%.2f) cmd=(%.2f,%.2f)',
-            lat_px, weight, tx, ty, bx, by,
+            'LINE_FOLLOW: lat=%.1fpx tangent=(%.2f,%.2f) cmd=(%.2f,%.2f)',
+            result.lateral_distance_px, tx, ty, bx, by,
         )
         return None
 

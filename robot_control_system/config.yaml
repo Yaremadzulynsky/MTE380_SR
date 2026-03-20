@@ -27,6 +27,8 @@ vision:
   frame_width: 640
   frame_height: 480
   min_mask_pixels: 200
+  pixels_per_meter: null   # calibrate: measure a known distance on the ground in pixels
+  camera_forward_m: 0.10   # camera is this far ahead of the wheel base centre
   red_hsv:
     lower1: [0,   100,  60]
     upper1: [10,  255, 255]
