@@ -1,70 +1,37 @@
 """
 MTE 380 robot CLI.
 
-Launch the robot brain (state machine + web server):
-  python -m cli.main serve --port /dev/ttyACM0 --virtual-cam
-  python -m cli.main serve --port COM3 --camera 0 --initial-state line_follow
-  python -m cli.main serve --no-robot --virtual-cam   # vision only, no hardware
+Start the robot (state machine + web server):
+  python -m cli.main                              # uses default port /dev/ttyACM0
+  python -m cli.main --port /dev/ttyACM0 --camera pi
+  python -m cli.main --port COM3 --camera 0
+  python -m cli.main --no-robot --virtual-cam     # vision only, no hardware
 
-Interactive shell (embedded in serve, or connect to a remote process):
-  python -m cli.main serve --port COM3     # starts robot + drops into shell
-  python -m cli.main shell                 # attach to an already-running serve
-  python -m cli.main shell --server http://pi.local:8321
-
-Server commands (talk to a running 'serve' process):
-  python -m cli.main start
-  python -m cli.main stop
-  python -m cli.main state get
-  python -m cli.main state set <name>
-  python -m cli.main status
-
-  Use --server to point at a non-default host: --server http://pi.local:8321
-
-Hardware commands (talk directly to Arduino over serial):
-  python -m cli.main --port /dev/ttyACM0 <command> [args]
-  python -m cli.main --port COM3         <command> [args]
-
-  drive <left> <right>                — move both wheels by N ticks
-  wheel <left|right> <ticks>          — move one wheel by N ticks
-  motors <left> <right>               — set motor speeds directly (-1 to 1)
-  servo <angle>                       — set claw angle (0-180)
-  direction <x> <y>                   — set direction vector (-1 to 1 each)
-  speed <value>                       — set forward/backward speed (-1 to 1)
-  rotation <scale>                    — set rotation scale (0-1)
-  gains heading <kp> <ki> <kd>        — tune heading PID
-  gains speed <kp> <ki> <kd>          — tune speed PID
-  gains wheel <kp> <kd> <deadband>    — tune wheel PD loop
-  encoders                            — stream encoder ticks (Ctrl-C to stop)
-  heading                             — stream heading live (Ctrl-C to stop)
-  serial                              — print raw serial bytes (Ctrl-C to stop)
+Low-level hardware debug commands (talk directly to Arduino over serial):
+  python -m cli.main --port /dev/ttyACM0 encoders
+  python -m cli.main --port /dev/ttyACM0 heading
+  python -m cli.main --port /dev/ttyACM0 motors <left> <right>
+  python -m cli.main --port /dev/ttyACM0 drive <left> <right>
+  python -m cli.main --port /dev/ttyACM0 wheel <left|right> <ticks>
+  python -m cli.main --port /dev/ttyACM0 servo <angle>
 """
 
 import argparse
 import cmd
-import json
 import logging
+import math
 import signal
 import sys
 import threading
 import time
-import urllib.request
-import urllib.error
 
 sys.path.insert(0, str(__import__('pathlib').Path(__file__).parent.parent))
 from state_machine.hardware.robot import Robot
-
-# Commands that talk to a running serve process over HTTP
-_SERVER_COMMANDS = {'start', 'stop', 'state', 'status'}
 
 
 # ── Camera helper ─────────────────────────────────────────────────────────────
 
 def _find_virtual_cam(max_index: int = 10) -> tuple:
-    """Scan webcam indices and return (index, backend) for the first that opens.
-
-    Tries CAP_DSHOW and CAP_MSMF (Windows virtual webcam backends) before the
-    default backend.  Raises RuntimeError if nothing is found.
-    """
     import cv2
     backends = []
     if hasattr(cv2, 'CAP_DSHOW'):
@@ -83,288 +50,168 @@ def _find_virtual_cam(max_index: int = 10) -> tuple:
 
     raise RuntimeError(
         'Could not find any working camera source. '
-        'Make sure OBS Virtual Camera is started or your virtual webcam software is running.'
+        'Make sure OBS Virtual Camera or your virtual webcam software is running.'
     )
-
-
-# ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-def _http_get(server: str, path: str) -> dict:
-    url = server.rstrip('/') + path
-    with urllib.request.urlopen(url, timeout=5) as r:
-        return json.loads(r.read())
-
-
-def _http_post(server: str, path: str, body: dict) -> dict:
-    url  = server.rstrip('/') + path
-    data = json.dumps(body).encode()
-    req  = urllib.request.Request(url, data=data,
-                                  headers={'Content-Type': 'application/json'},
-                                  method='POST')
-    with urllib.request.urlopen(req, timeout=5) as r:
-        return json.loads(r.read())
-
-
-# ── Server commands ───────────────────────────────────────────────────────────
-
-def cmd_start(args):
-    r = _http_post(args.server, '/api/state', {'state': 'line_follow'})
-    print(f'  state → {r.get("state")}')
-
-
-def cmd_stop(args):
-    r = _http_post(args.server, '/api/state', {'state': 'stopped'})
-    print(f'  state → {r.get("state")}')
-
-
-def cmd_state(args):
-    if args.state_action == 'get':
-        r = _http_get(args.server, '/api/state')
-        print(f'  current state: {r.get("state")}')
-    elif args.state_action == 'set':
-        r = _http_post(args.server, '/api/state', {'state': args.state_name})
-        print(f'  state → {r.get("state")}')
-
-
-def cmd_status(args):
-    """Stream live status from the server's SSE endpoint and print to terminal."""
-    url = args.server.rstrip('/') + '/events'
-    print(f'  Streaming status from {url}  (Ctrl-C to stop)\n')
-    try:
-        req = urllib.request.urlopen(url, timeout=None)
-        buf = ''
-        while True:
-            chunk = req.read(1).decode('utf-8', errors='replace')
-            if not chunk:
-                break
-            buf += chunk
-            if buf.endswith('\n\n'):
-                for line in buf.strip().splitlines():
-                    if line.startswith('data:'):
-                        try:
-                            d = json.loads(line[5:].strip())
-                            _print_status(d)
-                        except json.JSONDecodeError:
-                            pass
-                buf = ''
-    except KeyboardInterrupt:
-        print()
-
-
-def _print_status(d: dict):
-    parts = []
-
-    state = d.get('state')
-    if state:
-        parts.append(f'state={state.upper():<12}')
-
-    hw = d.get('hardware')
-    if hw:
-        hb  = hw.get('heartbeat_age_s')
-        hdg = hw.get('heading', {})
-        enc = hw.get('encoders', {})
-        vel = hw.get('linear_speed_mps')
-        parts.append(f'hb={hb:.1f}s' if hb is not None else 'hb=--')
-        parts.append(f'hdg={hdg.get("current_deg", 0):+6.1f}°→{hdg.get("target_deg", 0):+6.1f}°')
-        parts.append(f'enc=L{enc.get("left", 0):+7d} R{enc.get("right", 0):+7d}')
-        if vel is not None:
-            parts.append(f'vel={vel:+.3f}m/s')
-
-    ln = d.get('line')
-    if ln:
-        if ln.get('found'):
-            parts.append(f'line=FOUND  angle={ln.get("angle_deg", 0):+5.1f}°  '
-                         f'lat={ln.get("lateral_distance_px", 0):+6.1f}px')
-        else:
-            parts.append('line=LOST')
-
-    print('\r  ' + '   '.join(parts) + '   ', end='', flush=True)
-
-
-def _print_status_snapshot(d: dict):
-    """Pretty-print a single /api/status snapshot."""
-    state = d.get('state') or '—'
-    print(f'  state:     {state.upper()}')
-
-    hw = d.get('hardware')
-    if hw:
-        hdg = hw.get('heading', {})
-        enc = hw.get('encoders', {})
-        drv = hw.get('last_drive', {})
-        hb  = hw.get('heartbeat_age_s')
-        print(f'  heading:   {hdg.get("current_deg", 0):+.1f}° → {hdg.get("target_deg", 0):+.1f}°')
-        print(f'  encoders:  L={enc.get("left", 0):+d}  R={enc.get("right", 0):+d}')
-        print(f'  speed:     {hw.get("speed_scale", 0):.3f}  ({hw.get("linear_speed_mps", 0):.3f} m/s)')
-        print(f'  drive:     L={drv.get("left", 0):+.3f}  R={drv.get("right", 0):+.3f}')
-        print(f'  heartbeat: {f"{hb:.1f}s ago" if hb is not None else "no data"}')
-
-    od = d.get('odometry')
-    if od:
-        print(f'  pose:      x={od["x_m"]:.3f}m  y={od["y_m"]:.3f}m  '
-              f'heading={od["heading_deg"]:.1f}°')
-
-    ln = d.get('line')
-    if ln:
-        if ln.get('found'):
-            print(f'  line:      FOUND  angle={ln.get("angle_deg", 0):+.1f}°  '
-                  f'lat={ln.get("lateral_distance_px", 0):+.1f}px')
-        else:
-            print('  line:      LOST')
 
 
 # ── Interactive shell ─────────────────────────────────────────────────────────
 
 class RobotShell(cmd.Cmd):
-    """Interactive shell for controlling the robot via the HTTP API."""
+    """Direct interactive shell — calls state machine / robot Python APIs, no HTTP."""
 
-    intro  = "MTE 380 robot shell — type 'help' for commands, 'exit' to quit."
+    intro  = "MTE 380 — type 'help' for commands, 'exit' to quit."
     prompt = '(robot) '
 
-    _STATES = ['idle', 'stopped', 'line_follow', 'line_follow_p', 'line_follow_angle']
+    _STATES = ['idle', 'line_follow', 'line_follow_turn', 'find_line']
 
-    def __init__(self, server: str):
+    def __init__(self, sm, robot):
         super().__init__()
-        self._server = server
+        self._sm    = sm
+        self._robot = robot
 
-    # ── HTTP wrappers ──────────────────────────────────────────────────────────
-
-    def _get(self, path: str) -> dict | None:
-        try:
-            return _http_get(self._server, path)
-        except urllib.error.URLError as e:
-            print(f'  error: cannot reach {self._server} — {e.reason}')
-            return None
-
-    def _post(self, path: str, body: dict) -> dict | None:
-        try:
-            return _http_post(self._server, path, body)
-        except urllib.error.URLError as e:
-            print(f'  error: cannot reach {self._server} — {e.reason}')
-            return None
-
-    # ── Commands ───────────────────────────────────────────────────────────────
+    # ── State ──────────────────────────────────────────────────────────────────
 
     def do_state(self, line: str):
         """state [name]  — get current state, or transition to <name>."""
         name = line.strip()
         if name:
-            r = self._post('/api/state', {'state': name})
-            if r:
-                print(f'  state → {r.get("state")}')
+            self._sm.transition(name)
+            print(f'  → {name}')
         else:
-            r = self._get('/api/state')
-            if r:
-                print(f'  state: {r.get("state")}')
+            print(f'  {self._sm.current_state}')
 
-    def complete_state(self, text, line, begidx, endidx):
+    def complete_state(self, text, *_):
         return [s for s in self._STATES if s.startswith(text)]
 
     def do_start(self, _):
-        """start  — transition to line_follow."""
+        """start  — begin line following."""
         self.do_state('line_follow')
 
     def do_stop(self, _):
-        """stop  — transition to stopped."""
-        self.do_state('stopped')
+        """stop  — return to idle and halt motors."""
+        self.do_state('idle')
+
+    # ── Motion ─────────────────────────────────────────────────────────────────
 
     def do_speed(self, line: str):
-        """speed <value>  — set forward speed (-1 to 1)."""
+        """speed <0-1>  — drive both motors straight at this power (0 = stop)."""
         try:
-            val = float(line.strip())
+            val = max(-1.0, min(1.0, float(line.strip())))
         except ValueError:
-            print('  usage: speed <value>')
+            print('  usage: speed <0-1>')
             return
-        r = self._post('/api/speed', {'speed': val})
-        if r:
-            print(f'  speed → {r.get("speed")}')
+        if not self._robot:
+            print('  no robot')
+            return
+        self._robot.set_motors(val, val)
+        print(f'  motors → {val}')
 
     def do_direction(self, line: str):
-        """direction <x> <y>  — set direction vector (x=lateral, y=forward)."""
+        """direction <x> <y>  — set direction vector (x=lateral [-1,1], y=forward [-1,1])."""
         parts = line.split()
         try:
             x, y = float(parts[0]), float(parts[1])
         except (IndexError, ValueError):
             print('  usage: direction <x> <y>')
             return
-        r = self._post('/api/direction', {'x': x, 'y': y})
-        if r:
-            print(f'  direction → ({r.get("x")}, {r.get("y")})')
+        if self._robot:
+            self._robot.add_direction(x, y)
+            print(f'  direction → ({x}, {y})')
+        else:
+            print('  no robot')
+
+    def do_motors(self, line: str):
+        """motors <left> <right>  — set raw motor outputs [-1, 1], bypassing PID."""
+        parts = line.split()
+        try:
+            l, r = float(parts[0]), float(parts[1])
+        except (IndexError, ValueError):
+            print('  usage: motors <left> <right>')
+            return
+        if self._robot:
+            self._robot.set_motors(l, r)
+            print(f'  motors → L={l}  R={r}')
+        else:
+            print('  no robot')
+
+    def do_servo(self, line: str):
+        """servo <angle>  — set claw servo angle (0–180)."""
+        try:
+            angle = float(line.strip())
+        except ValueError:
+            print('  usage: servo <angle>')
+            return
+        if self._robot:
+            self._robot.set_claw(angle)
+            print(f'  servo → {angle}°')
+        else:
+            print('  no robot')
+
+    # ── Tuning ─────────────────────────────────────────────────────────────────
 
     def do_gains(self, line: str):
         """gains <heading|speed> <kp> <ki> <kd>  — set PID gains."""
         parts = line.split()
         try:
-            pid = parts[0]
+            target = parts[0]
             kp, ki, kd = float(parts[1]), float(parts[2]), float(parts[3])
         except (IndexError, ValueError):
             print('  usage: gains <heading|speed> <kp> <ki> <kd>')
             return
-        r = self._post('/api/gains', {'pid': pid, 'kp': kp, 'ki': ki, 'kd': kd})
-        if r:
-            g = r.get(pid, {})
-            print(f'  {pid} gains → kp={g.get("kp")}  ki={g.get("ki")}  kd={g.get("kd")}')
+        if not self._robot:
+            print('  no robot')
+            return
+        if target == 'heading':
+            self._robot.set_gains(kp, ki, kd)
+        elif target == 'speed':
+            self._robot.set_speed_gains(kp, ki, kd)
+        else:
+            print(f'  unknown target: {target!r}')
+            return
+        print(f'  {target} gains → kp={kp}  ki={ki}  kd={kd}')
 
-    def complete_gains(self, text, line, begidx, endidx):
+    def complete_gains(self, text, *_):
         return [t for t in ('heading', 'speed') if t.startswith(text)]
 
-    def do_servo(self, line: str):
-        """servo <angle>  — set claw servo angle (0–180)."""
-        # servo isn't in the HTTP API yet — print a note
-        print('  servo control is hardware-only; use: python -m cli.main servo <angle>')
+    # ── Status ─────────────────────────────────────────────────────────────────
 
     def do_status(self, _):
-        """status  — print a snapshot of all robot state."""
-        d = self._get('/api/status')
-        if d:
-            _print_status_snapshot(d)
+        """status  — print a snapshot of robot state."""
+        print(f'  state:    {self._sm.current_state}')
+        if self._robot:
+            info = self._robot.get_debug_info()
+            print(f'  heading:  {info["heading_current"]:+.1f}° → {info["heading_target"]:+.1f}°')
+            print(f'  velocity: {info["linear_speed_mps"]:+.3f} m/s  '
+                  f'(setpoint {info["speed_setpoint_mps"]:+.3f} m/s)')
+            print(f'  drive:    L={info["last_drive"][0]:+.3f}  R={info["last_drive"][1]:+.3f}')
+            enc = info['encoders']
+            print(f'  encoders: L={enc[0]:+d}  R={enc[1]:+d}')
+            hb = info['heartbeat_age_s']
+            print(f'  hb:       {f"{hb:.1f}s ago" if hb is not None else "none"}')
+        x, y, h = self._sm.odometry.pose()
+        print(f'  pose:     x={x:.3f}m  y={y:.3f}m  hdg={math.degrees(h):.1f}°')
 
-    def do_pose(self, _):
-        """pose  — print current odometry (x, y, heading)."""
-        d = self._get('/api/status')
-        if not d:
-            return
-        od = d.get('odometry')
-        if od:
-            print(f'  x={od["x_m"]:.4f}m  y={od["y_m"]:.4f}m  '
-                  f'heading={od["heading_deg"]:.2f}°')
-        else:
-            print('  odometry not available')
+    # ── Misc ───────────────────────────────────────────────────────────────────
 
     def do_exit(self, _):
-        """exit  — quit the shell."""
+        """exit  — shut down and quit."""
         return True
 
     def do_quit(self, _):
-        """quit  — quit the shell."""
+        """quit  — shut down and quit."""
         return True
 
     def default(self, line: str):
-        print(f'  unknown command: {line.split()[0]!r}  — type "help" for commands')
+        print(f'  unknown command: {line.split()[0]!r}')
 
     def emptyline(self):
-        pass  # don't repeat the last command
-
-
-def cmd_shell(args):
-    """Start the interactive robot shell."""
-    # Try to enable readline history (no-op on Windows without pyreadline)
-    try:
-        import readline
-        readline.parse_and_bind('tab: complete')
-    except ImportError:
         pass
 
-    shell = RobotShell(args.server)
-    try:
-        shell.cmdloop()
-    except KeyboardInterrupt:
-        print()
 
-
-# ── Serve command ─────────────────────────────────────────────────────────────
+# ── Main serve command ────────────────────────────────────────────────────────
 
 def cmd_serve(args):
-    """Launch the robot brain: state machine + web server."""
+    """Start the robot: state machine + web server. Blocks until Ctrl-C."""
     import state_machine.hardware.robot as _robot_module
     from state_machine.hardware.robot       import Robot, MAX_SPEED, MAX_ROT_SPEED
     from state_machine.vision.line_detector import LineDetector
@@ -372,15 +219,12 @@ def cmd_serve(args):
     from state_machine.states               import Idle, LineFollow, LineFollowTurn, FindLine
     from web_server.server                  import WebServer
 
-    log = logging.getLogger('cli.serve')
+    log = logging.getLogger('cli')
 
-    # ── Speed overrides ───────────────────────────────────────────────────────
     if args.max_speed is not None:
         _robot_module.MAX_SPEED = args.max_speed
-        log.info('MAX_SPEED → %.2f', args.max_speed)
     if args.max_rot_speed is not None:
         _robot_module.MAX_ROT_SPEED = args.max_rot_speed
-        log.info('MAX_ROT_SPEED → %.2f', args.max_rot_speed)
 
     # ── Robot ─────────────────────────────────────────────────────────────────
     robot = None
@@ -395,19 +239,13 @@ def cmd_serve(args):
         log.info('Auto-detecting virtual webcam…')
         source, backend = _find_virtual_cam()
         log.info('Virtual webcam found at index %d', source)
-        detector = LineDetector(source=source, backend=backend, debug=True)
+        detector = LineDetector(source=source, backend=backend, debug=args.debug)
         detector.start()
     elif args.camera is not None:
-        source = args.camera
-        if source == 'pi':
-            source = None
-            log.info('Camera source: Picamera2')
-        else:
-            try:
-                source = int(source)
-                log.info('Camera source: webcam index %d', source)
-            except ValueError:
-                log.info('Camera source: %s', source)
+        source = None if args.camera == 'pi' else (
+            int(args.camera) if args.camera.isdigit() else args.camera
+        )
+        log.info('Camera source: %s', 'Picamera2' if source is None else source)
         detector = LineDetector(source=source, debug=args.debug)
         detector.start()
 
@@ -423,7 +261,7 @@ def cmd_serve(args):
     # ── Web server ────────────────────────────────────────────────────────────
     server = WebServer(state_machine=sm, host=args.host, port=args.web_port)
     server.start()
-    log.info('Dashboard: http://localhost:%d', args.web_port)
+    log.info('Dashboard: http://<host>:%d', args.web_port)
 
     sm.start(args.initial_state)
 
@@ -437,8 +275,13 @@ def cmd_serve(args):
 
     signal.signal(signal.SIGTERM, lambda *_: (_shutdown(), sys.exit(0)))
 
-    # ── Embedded interactive shell ─────────────────────────────────────────────
-    shell = RobotShell(f'http://localhost:{args.web_port}')
+    try:
+        import readline
+        readline.parse_and_bind('tab: complete')
+    except ImportError:
+        pass
+
+    shell = RobotShell(sm, robot)
     try:
         shell.cmdloop()
     except KeyboardInterrupt:
@@ -447,15 +290,13 @@ def cmd_serve(args):
         _shutdown()
 
 
-# ── Hardware helpers ──────────────────────────────────────────────────────────
+# ── Low-level hardware debug commands ─────────────────────────────────────────
 
 def _make_robot(args) -> Robot:
     robot = Robot(args.port, args.baud)
     robot.start()
     return robot
 
-
-# ── Hardware commands ─────────────────────────────────────────────────────────
 
 def cmd_encoders(robot: Robot, _args):
     stop = threading.Event()
@@ -533,75 +374,36 @@ def cmd_servo(robot: Robot, args):
     robot.set_claw(args.angle)
 
 
-def cmd_direction(robot: Robot, args):
-    robot.add_direction(args.x, args.y)
-    try:
-        input('  Holding direction — press Enter or Ctrl-C to stop\n')
-    except KeyboardInterrupt:
-        pass
-
-
-def cmd_speed(robot: Robot, args):
-    robot.set_speed(args.value)
-    try:
-        input('  Running — press Enter or Ctrl-C to stop\n')
-    except KeyboardInterrupt:
-        pass
-
-
-def cmd_rotation(robot: Robot, args):
-    robot.set_rotation_scale(args.scale)
-
-
-def cmd_gains(robot: Robot, args):
-    if args.gains_target == 'heading':
-        robot.set_gains(args.kp, args.ki, args.kd)
-    elif args.gains_target == 'speed':
-        robot.set_speed_gains(args.kp, args.ki, args.kd)
-    elif args.gains_target == 'wheel':
-        print(f'  wheel gains → kp={args.kp}  kd={args.kd}  deadband={args.deadband}')
-
-
 HARDWARE_COMMANDS = {
-    'encoders':  cmd_encoders,
-    'heading':   cmd_heading,
-    'serial':    cmd_serial,
-    'drive':     cmd_drive,
-    'wheel':     cmd_wheel,
-    'motors':    cmd_motors,
-    'servo':     cmd_servo,
-    'direction': cmd_direction,
-    'speed':     cmd_speed,
-    'rotation':  cmd_rotation,
-    'gains':     cmd_gains,
+    'encoders': cmd_encoders,
+    'heading':  cmd_heading,
+    'serial':   cmd_serial,
+    'drive':    cmd_drive,
+    'wheel':    cmd_wheel,
+    'motors':   cmd_motors,
+    'servo':    cmd_servo,
 }
 
 
-# ── Parser ────────────────────────────────────────────────────────────────────
+# ── Argument parser ───────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description='MTE 380 robot CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    # Hardware connection (used by hardware commands)
     parser.add_argument('--port', default='/dev/ttyACM0',
                         help='Serial port (default: /dev/ttyACM0)')
     parser.add_argument('--baud', type=int, default=115200)
-    # Server connection (used by server commands)
-    parser.add_argument('--server', default='http://localhost:8321',
-                        help='Server URL for state/status commands (default: http://localhost:8321)')
     parser.add_argument('--debug', action='store_true')
 
     sub = parser.add_subparsers(dest='command', metavar='command')
-    sub.required = False
 
-    # ── Serve ─────────────────────────────────────────────────────────────────
-    p = sub.add_parser('serve', help='Launch robot brain: state machine + web server')
+    # ── Serve (default) ───────────────────────────────────────────────────────
+    p = sub.add_parser('serve', help='Start robot brain (default when no command given)')
 
     robot_group = p.add_mutually_exclusive_group()
-    robot_group.add_argument('--port', default='/dev/ttyACM0',
-                             dest='port',
+    robot_group.add_argument('--port', dest='port', default='/dev/ttyACM0',
                              help='Serial port for Arduino (default: /dev/ttyACM0)')
     robot_group.add_argument('--no-robot', action='store_true',
                              help='Skip serial connection (camera/UI only)')
@@ -609,38 +411,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     cam_group = p.add_mutually_exclusive_group()
     cam_group.add_argument('--virtual-cam', action='store_true',
-                           help='Auto-detect a virtual webcam (OBS Virtual Camera, DroidCam, etc.)')
+                           help='Auto-detect a virtual webcam')
     cam_group.add_argument('--camera',
                            help='Camera source: integer index, "pi" for Picamera2, or a file/URL')
 
-    p.add_argument('--host', default='0.0.0.0',
-                   help='Web server bind address (default: 0.0.0.0)')
-    p.add_argument('--web-port', type=int, default=8321,
-                   help='Web server HTTP port (default: 8321)')
+    p.add_argument('--host', default='0.0.0.0')
+    p.add_argument('--web-port', type=int, default=8321)
     p.add_argument('--initial-state', default='idle',
-                   choices=['idle', 'stopped', 'line_follow', 'line_follow_p', 'line_follow_angle'],
-                   help='Initial state machine state (default: idle)')
-    p.add_argument('--max-speed', type=float, default=None,
-                   help='Override MAX_SPEED (0–1)')
-    p.add_argument('--max-rot-speed', type=float, default=None,
-                   help='Override MAX_ROT_SPEED (0–1)')
+                   choices=['idle', 'line_follow', 'line_follow_turn', 'find_line'])
+    p.add_argument('--max-speed', type=float, default=None)
+    p.add_argument('--max-rot-speed', type=float, default=None)
 
-    # ── Shell ─────────────────────────────────────────────────────────────────
-    sub.add_parser('shell',  help='Interactive shell (connects to running serve process)')
-
-    # ── Server commands ───────────────────────────────────────────────────────
-    sub.add_parser('start',  help='Start line following (server)')
-    sub.add_parser('stop',   help='Stop the robot (server)')
-    sub.add_parser('status', help='Stream live status from server (Ctrl-C to stop)')
-
-    p = sub.add_parser('state', help='Get or set state machine state (server)')
-    state_sub = p.add_subparsers(dest='state_action', metavar='action')
-    state_sub.required = True
-    state_sub.add_parser('get', help='Print current state')
-    sp = state_sub.add_parser('set', help='Transition to a state')
-    sp.add_argument('state_name')
-
-    # ── Hardware commands ─────────────────────────────────────────────────────
+    # ── Hardware debug commands ───────────────────────────────────────────────
     sub.add_parser('encoders', help='Stream encoder ticks (Ctrl-C to stop)')
     sub.add_parser('heading',  help='Stream heading live (Ctrl-C to stop)')
     sub.add_parser('serial',   help='Print raw serial bytes (Ctrl-C to stop)')
@@ -663,29 +445,6 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser('servo', help='Set claw servo angle (0-180)')
     p.add_argument('angle', type=float)
 
-    p = sub.add_parser('direction', help='Set direction vector')
-    p.add_argument('x', type=float, help='Lateral  [-1=left,  1=right]')
-    p.add_argument('y', type=float, help='Forward  [-1=back,  1=fwd]')
-
-    p = sub.add_parser('speed', help='Set forward/backward speed (-1 to 1)')
-    p.add_argument('value', type=float)
-
-    p = sub.add_parser('rotation', help='Set rotation scale (0-1)')
-    p.add_argument('scale', type=float)
-
-    p = sub.add_parser('gains', help='Tune PID gains')
-    gains_sub = p.add_subparsers(dest='gains_target', metavar='target')
-    gains_sub.required = True
-    for target in ('heading', 'speed'):
-        gp = gains_sub.add_parser(target)
-        gp.add_argument('kp', type=float)
-        gp.add_argument('ki', type=float)
-        gp.add_argument('kd', type=float)
-    gp = gains_sub.add_parser('wheel')
-    gp.add_argument('kp', type=float)
-    gp.add_argument('kd', type=float)
-    gp.add_argument('deadband', type=int)
-
     return parser
 
 
@@ -693,33 +452,39 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     parser = build_parser()
-    args = parser.parse_args()
+    args   = parser.parse_args()
 
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     )
 
-    if args.command is None or args.command == 'shell':
-        cmd_shell(args)
-        return
-
-    if args.command == 'serve':
+    # Default: start the robot
+    if args.command is None or args.command == 'serve':
+        # serve subparser sets its own --port; top-level --port is for hw commands
+        if args.command is None:
+            # propagate top-level --port/--baud into args for cmd_serve
+            if not hasattr(args, 'no_robot'):
+                args.no_robot = False
+            if not hasattr(args, 'virtual_cam'):
+                args.virtual_cam = False
+            if not hasattr(args, 'camera'):
+                args.camera = None
+            if not hasattr(args, 'host'):
+                args.host = '0.0.0.0'
+            if not hasattr(args, 'web_port'):
+                args.web_port = 8321
+            if not hasattr(args, 'initial_state'):
+                args.initial_state = 'idle'
+            if not hasattr(args, 'max_speed'):
+                args.max_speed = None
+            if not hasattr(args, 'max_rot_speed'):
+                args.max_rot_speed = None
         cmd_serve(args)
         return
 
-    if args.command in _SERVER_COMMANDS:
-        try:
-            {'start': cmd_start, 'stop': cmd_stop,
-             'state': cmd_state, 'status': cmd_status}[args.command](args)
-        except urllib.error.URLError as e:
-            print(f'Cannot reach server at {args.server}: {e.reason}', file=sys.stderr)
-            sys.exit(1)
-        return
-
-    # Hardware commands — connect to robot over serial
+    # Hardware debug commands — connect to Arduino directly
     robot = _make_robot(args)
-    robot.set_speed(0.01)
     try:
         HARDWARE_COMMANDS[args.command](robot, args)
     except KeyboardInterrupt:

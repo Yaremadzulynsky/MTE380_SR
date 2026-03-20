@@ -742,8 +742,8 @@
       setBar('bar-l', 'hw-ml', hw.last_drive.left);
       setBar('bar-r', 'hw-mr', hw.last_drive.right);
     }
-    if (hw.speed_scale !== undefined)
-      setBar('bar-spd', 'hw-spd', hw.speed_scale);
+    if (hw.speed_setpoint_mps !== undefined)
+      setBar('bar-spd', 'hw-spd', hw.speed_setpoint_mps);
   }
 
   function updateVision(vis) {

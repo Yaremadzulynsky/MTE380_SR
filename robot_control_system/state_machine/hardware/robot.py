@@ -88,9 +88,15 @@ class Robot:
                 self._target_heading = self._heading_fb + delta
 
     def set_speed(self, speed: float):
-        """Set forward/backward speed. -1 = full reverse, 0 = stop, 1 = full forward."""
+        """Set forward velocity setpoint in m/s (closed-loop via SpeedPID).
+        Range is clamped to [-MAX_SPEED, MAX_SPEED].  Pass 0.0 to stop.
+        Clears any motor override so the PID loop takes effect immediately."""
         with self._lock:
-            self._speed_scale = max(-MAX_SPEED, min(MAX_SPEED, speed))
+            new_speed = max(-MAX_SPEED, min(MAX_SPEED, float(speed)))
+            if new_speed == 0.0 and self._speed_scale != 0.0:
+                self._speed_pid.reset()
+            self._speed_scale    = new_speed
+            self._motor_override = None
 
     def set_rotation_scale(self, scale: float):
         """Set rotation speed as a fraction of max angular output. 0 = no rotation, 1 = full."""
@@ -194,6 +200,7 @@ class Robot:
         with self._lock:
             self._motor_override = (left, right)
             self._heading_pid.reset()
+            self._speed_pid.reset()
 
     def set_claw(self, angle: float):
         self._bridge.send_claw(angle)
@@ -207,7 +214,7 @@ class Robot:
                 'encoders':          (self._enc_left, self._enc_right),
                 'heading_current':   math.degrees(self._heading_fb),
                 'heading_target':    math.degrees(self._target_heading),
-                'speed_scale':       self._speed_scale,
+                'speed_setpoint_mps': self._speed_scale,
                 'linear_speed_mps':  self._linear_speed,
                 'last_drive':        self._last_drive,
                 'angular_z':         self._last_angular_z,
@@ -267,7 +274,7 @@ class Robot:
             else:
                 angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
                 angular_z = max(-MAX_ROT_SPEED, min(MAX_ROT_SPEED, angular_z))
-                linear_x  = speed_scale
+                linear_x  = speed_scale  # speed PID disabled — open-loop
                 left  = max(-1.0, min(1.0, linear_x - angular_z))
                 right = max(-1.0, min(1.0, linear_x + angular_z))
 

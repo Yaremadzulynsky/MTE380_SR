@@ -389,8 +389,8 @@ class WebServer:
                     'current_deg': round(info['heading_current'], 2),
                     'target_deg':  round(info['heading_target'],  2),
                 },
-                'speed_scale':      round(info['speed_scale'], 3),
-                'linear_speed_mps': round(info['linear_speed_mps'], 3),
+                'speed_setpoint_mps': round(info['speed_setpoint_mps'], 3),
+                'linear_speed_mps':   round(info['linear_speed_mps'], 3),
                 'last_drive': {
                     'left':  round(info['last_drive'][0], 3),
                     'right': round(info['last_drive'][1], 3),

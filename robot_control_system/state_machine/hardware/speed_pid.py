@@ -29,13 +29,17 @@ class SpeedPID:
         self._pid.reset()
 
     def update(self, setpoint: float, current_speed: float) -> float:
-        """Return linear_x given setpoint and current speed in m/s."""
-        error = setpoint - current_speed
-        if abs(error) < SPEED_DEADBAND:
+        """Return motor command [-1, 1] given target velocity and measured velocity (m/s).
+
+        When setpoint is zero (stopped) the PID is reset and 0 is returned.
+        The motor deadband is applied to the output so the wheels always
+        receive at least the minimum voltage needed to overcome static friction.
+        """
+        import math
+        if abs(setpoint) < 1e-4:
             self._pid.reset()
             return 0.0
         raw = self._pid.update(setpoint, current_speed)
         if abs(raw) < 1e-6:
             return 0.0
-        import math
         return math.copysign(max(abs(raw), MOTOR_DEADBAND), raw)
