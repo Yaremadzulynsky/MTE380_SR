@@ -26,9 +26,16 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-_LATERAL_DEADZONE_M = 0.01   # metres — suppress lateral correction below this
 
 TICK_RATE_HZ = 20.0
+
+
+def _angle_diff(a: float, b: float) -> float:
+    """Signed shortest-path difference a − b, wrapped to (−π, π]."""
+    d = (a - b) % (2 * math.pi)
+    if d > math.pi:
+        d -= 2 * math.pi
+    return d
 
 
 class StateMachine:
@@ -62,10 +69,15 @@ class StateMachine:
         self._lock     = threading.Lock()
         self._running  = False
         self._thread:  Optional[threading.Thread] = None
-        self._target_heading: Optional[float] = None   # radians, world frame
+        self._target_heading:          Optional[float] = None  # raw, world frame
+        self._smoothed_target_heading: Optional[float] = None  # filtered, used by states
 
-        _vc = _config.get()['vision']
+        _vc  = _config.get()['vision']
         self._cam_fwd_m: float = float(_vc.get('camera_forward_m', 0.15))
+        _thf = _config.get().get('target_heading_filter', {})
+        self._heading_filter_kp:    float = float(_thf.get('kp', 0.3))
+        _lf  = _config.get().get('line_follow', {})
+        self._lateral_deadzone_m:   float = float(_lf.get('lateral_deadzone_m', 0.01))
 
     # ── Public accessors ──────────────────────────────────────────────────────
 
@@ -91,12 +103,37 @@ class StateMachine:
 
     @property
     def target_heading(self) -> Optional[float]:
-        """
-        World-frame heading the robot should drive toward, in radians.
-        Combines the line tangent angle and lateral-error correction.
-        None when no line is detected.
-        """
+        """Raw world-frame target heading (radians). None when no line detected."""
         return self._target_heading
+
+    @property
+    def smoothed_target_heading(self) -> Optional[float]:
+        """Filtered target heading (radians) — what states actually use."""
+        return self._smoothed_target_heading
+
+    def get_line_params(self) -> dict:
+        """Return current line-follow tuning parameters."""
+        lf = self._states.get('line_follow')
+        return {
+            'filter_kp':          self._heading_filter_kp,
+            'lateral_deadzone_m': self._lateral_deadzone_m,
+            'follow_speed':       lf._follow_speed if lf else None,
+        }
+
+    def set_line_params(self, *,
+                        filter_kp:          Optional[float] = None,
+                        lateral_deadzone_m: Optional[float] = None,
+                        follow_speed:       Optional[float] = None) -> dict:
+        """Update line-follow tuning parameters at runtime (thread-safe)."""
+        if filter_kp is not None:
+            self._heading_filter_kp = max(0.0, min(1.0, float(filter_kp)))
+        if lateral_deadzone_m is not None:
+            self._lateral_deadzone_m = max(0.0, float(lateral_deadzone_m))
+        if follow_speed is not None:
+            lf = self._states.get('line_follow')
+            if lf is not None:
+                lf._follow_speed = max(0.0, min(1.0, float(follow_speed)))
+        return self.get_line_params()
 
     # ── Registration ──────────────────────────────────────────────────────────
 
@@ -153,23 +190,39 @@ class StateMachine:
         log.info('State → %s', name)
 
     def _update_target_heading(self) -> None:
-        """Recompute world-frame target heading from the latest detector result."""
+        """Recompute raw target heading and advance the smoothed filter."""
         if self._detector is None:
             self._target_heading = None
+            self._smoothed_target_heading = None
             return
         result = self._detector.get_result()
         if result is None:
             self._target_heading = None
+            self._smoothed_target_heading = None
+            self._detector.set_smoothed_heading(None)
             return
 
-        h            = self._odometry.heading
-        line_angle   = math.radians(result.angle_deg)
-        lat_m        = result.lateral_distance_m
-        if lat_m is not None and abs(lat_m) >= _LATERAL_DEADZONE_M:
+        h          = self._odometry.heading
+        line_angle = math.radians(result.angle_deg)
+        lat_m      = result.lateral_distance_m
+        if lat_m is not None and abs(lat_m) >= self._lateral_deadzone_m:
             lat_corr = math.atan2(lat_m, self._cam_fwd_m)
         else:
             lat_corr = 0.0
         self._target_heading = h - line_angle - lat_corr
+
+        # P-controller low-pass filter: move smoothed toward raw by kp each tick.
+        if self._smoothed_target_heading is None:
+            self._smoothed_target_heading = self._target_heading
+        else:
+            error = _angle_diff(self._target_heading, self._smoothed_target_heading)
+            self._smoothed_target_heading += self._heading_filter_kp * error
+
+        # Push robot-frame smoothed angle to detector for camera overlay.
+        # theta = how far right of current heading the smoothed target is.
+        if self._detector is not None:
+            theta = self._odometry.heading - self._smoothed_target_heading
+            self._detector.set_smoothed_heading(theta)
 
     def _loop(self) -> None:
         interval = 1.0 / TICK_RATE_HZ
@@ -191,10 +244,10 @@ class StateMachine:
             # Compute target heading from line detection + current odometry
             self._update_target_heading()
 
-            # Tick the active state
+            # Tick the active state (receives smoothed heading, not raw)
             if self._current is not None:
                 next_state = self._current.tick(self._robot, self._detector,
-                                                self._odometry, self._target_heading)
+                                                self._odometry, self._smoothed_target_heading)
                 if next_state is not None:
                     self._transition(next_state)
 

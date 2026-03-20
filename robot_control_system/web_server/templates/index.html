@@ -463,6 +463,37 @@
       </div>
     </div>
 
+    <!-- Line follow tuning -->
+    <div class="panel">
+      <div class="panel-title">LINE FOLLOW TUNING</div>
+      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Filter Kp</span>
+          <input id="lf-filter-kp" class="tuner-input" type="number" step="0.01" min="0" max="1" value="0.3">
+          <input id="lf-filter-kp-range" type="range" min="0" max="1" step="0.01" value="0.3" style="flex:1;">
+        </div>
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Lat deadzone (m)</span>
+          <input id="lf-deadzone" class="tuner-input" type="number" step="0.005" min="0" max="0.2" value="0.01">
+          <input id="lf-deadzone-range" type="range" min="0" max="0.2" step="0.005" value="0.01" style="flex:1;">
+        </div>
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Follow speed</span>
+          <input id="lf-speed" class="tuner-input" type="number" step="0.01" min="0" max="1" value="0.35">
+          <input id="lf-speed-range" type="range" min="0" max="1" step="0.01" value="0.35" style="flex:1;">
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="ctrl-btn" onclick="loadLineFollow()" style="color:var(--dim);">&#8635; LOAD</button>
+          <span id="lf-status" style="font-size:11px; color:var(--dim);"></span>
+        </div>
+
+      </div>
+    </div>
+
     <!-- PID tuner -->
     <div class="panel">
       <div class="panel-title">PID TUNER</div>
@@ -807,6 +838,48 @@
     return document.querySelector('input[name="pid-loop"]:checked').value;
   }
 
+  // ── Line follow tuning ────────────────────────────────────────────────────
+
+  function loadLineFollow() {
+    fetch('/api/line_follow')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('lf-filter-kp').value       = d.filter_kp;
+        document.getElementById('lf-filter-kp-range').value = d.filter_kp;
+        document.getElementById('lf-deadzone').value        = d.lateral_deadzone_m;
+        document.getElementById('lf-deadzone-range').value  = d.lateral_deadzone_m;
+        if (d.follow_speed !== null) {
+          document.getElementById('lf-speed').value       = d.follow_speed;
+          document.getElementById('lf-speed-range').value = d.follow_speed;
+        }
+        setStatus('lf-status', 'loaded', true);
+      })
+      .catch(() => setStatus('lf-status', 'load error', false));
+  }
+
+  function applyLineFollow() {
+    fetch('/api/line_follow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filter_kp:          parseFloat(document.getElementById('lf-filter-kp').value),
+        lateral_deadzone_m: parseFloat(document.getElementById('lf-deadzone').value),
+        follow_speed:       parseFloat(document.getElementById('lf-speed').value),
+      }),
+    })
+      .then(r => r.json())
+      .then(() => setStatus('lf-status', 'applied', true))
+      .catch(() => setStatus('lf-status', 'error', false));
+  }
+
+  pairInputs('lf-filter-kp',  'lf-filter-kp-range', debounce(applyLineFollow, 250));
+  pairInputs('lf-deadzone',   'lf-deadzone-range',   debounce(applyLineFollow, 250));
+  pairInputs('lf-speed',      'lf-speed-range',      debounce(applyLineFollow, 250));
+
+  loadLineFollow();
+
+  // ── PID tuning ────────────────────────────────────────────────────────────
+
   function loadGains() {
     fetch('/api/gains')
       .then(r => r.json())
@@ -853,7 +926,8 @@
 
   let odoPath          = [];       // [{x, y}] in metres
   let odoRobot         = null;     // {x, y, heading_rad}
-  let odoTargetHeading = null;     // desired world heading (rad)
+  let odoTargetHeading         = null;  // raw world heading (rad)
+  let odoSmoothedTargetHeading = null;  // filtered heading sent to robot
   let odoLineSeg       = null;     // {cx, cy, dx, dy} line centre + unit tangent in world
   let odoLineHist      = [];       // [{cx, cy}] sampled line centre positions over time
   let odoLineSplatter  = [];       // [{x, y}] world-space red pixel cloud
@@ -946,7 +1020,8 @@
     odoLineHist      = [];
     odoLineSeg       = null;
     odoLineSplatter  = [];
-    odoTargetHeading = null;
+    odoTargetHeading         = null;
+    odoSmoothedTargetHeading = null;
     drawOdometry();
   }
 
@@ -989,8 +1064,8 @@
       }
     }
 
-    // Target heading computed by state machine (needs odometry heading + lateral error)
-    odoTargetHeading = d.odometry.target_heading_rad ?? null;
+    odoTargetHeading         = d.odometry.target_heading_rad          ?? null;
+    odoSmoothedTargetHeading = d.odometry.smoothed_target_heading_rad ?? null;
 
     // Accumulate world-space red pixel splatter
     if (d.line_world_points && d.line_world_points.length > 0) {
@@ -1188,19 +1263,30 @@
       odoCtx.fillStyle = '#30e88a';
       odoCtx.fill();
 
-      // Target heading arrow (orange, dashed)
+      // Raw target heading — faint dashed grey-orange
       if (odoTargetHeading !== null) {
-        const th      = odoTargetHeading;
+        const th = odoTargetHeading;
+        const tArrowPx = arrowPx * 1.3;
+        const tax = rx + Math.cos(th) * tArrowPx;
+        const tay = ry - Math.sin(th) * tArrowPx;
+        odoCtx.setLineDash([3, 4]);
+        odoCtx.beginPath(); odoCtx.moveTo(rx, ry); odoCtx.lineTo(tax, tay);
+        odoCtx.strokeStyle = 'rgba(240,160,48,0.35)'; odoCtx.lineWidth = 1.5; odoCtx.stroke();
+        odoCtx.setLineDash([]);
+      }
+
+      // Smoothed target heading — solid bright orange (what robot actually follows)
+      if (odoSmoothedTargetHeading !== null) {
+        const th = odoSmoothedTargetHeading;
         const tArrowPx = arrowPx * 1.3;
         const tax = rx + Math.cos(th) * tArrowPx;
         const tay = ry - Math.sin(th) * tArrowPx;
         odoCtx.setLineDash([4, 3]);
         odoCtx.beginPath(); odoCtx.moveTo(rx, ry); odoCtx.lineTo(tax, tay);
-        odoCtx.strokeStyle = '#f0a030'; odoCtx.lineWidth = 2; odoCtx.stroke();
+        odoCtx.strokeStyle = '#f0a030'; odoCtx.lineWidth = 2.5; odoCtx.stroke();
         odoCtx.setLineDash([]);
-        // Arrowhead
         const tAngle = Math.atan2(ry - tay, tax - rx);
-        const aw = 6;
+        const aw = 7;
         odoCtx.beginPath();
         odoCtx.moveTo(tax, tay);
         odoCtx.lineTo(tax - aw * Math.cos(tAngle - 0.4), tay + aw * Math.sin(tAngle - 0.4));
@@ -1291,8 +1377,11 @@
     if (odoLineSeg || odoLineHist.length > 0 || odoLineSplatter.length > 0) {
       odoCtx.fillStyle = '#f04060'; odoCtx.fillText('● line', W - 178, 14);
     }
+    if (odoSmoothedTargetHeading !== null) {
+      odoCtx.fillStyle = '#f0a030'; odoCtx.fillText('⇢ target (smoothed)', W - 270, 14);
+    }
     if (odoTargetHeading !== null) {
-      odoCtx.fillStyle = '#f0a030'; odoCtx.fillText('⇢ target hdg', W - 230, 14);
+      odoCtx.fillStyle = 'rgba(240,160,48,0.45)'; odoCtx.fillText('⇢ target (raw)', W - 390, 14);
     }
   }
 

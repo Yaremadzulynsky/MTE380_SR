@@ -223,6 +223,7 @@ class LineDetector:
         self._hsv_upper2 = np.array(rc['upper2'], dtype=np.uint8).copy()
         self._min_mask_pixels: int = _vc['min_mask_pixels']
         self._cam_fwd_m: float = float(_vc.get('camera_forward_m', 0.15))
+        self._smoothed_theta: Optional[float] = None  # robot-frame smoothed turn angle
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -274,6 +275,14 @@ class LineDetector:
                 self._hsv_lower2[2] = v
             if min_mask_pixels is not None:
                 self._min_mask_pixels = max(0, int(min_mask_pixels))
+
+    def set_smoothed_heading(self, theta: Optional[float]) -> None:
+        """Set the smoothed robot-frame turn angle for camera overlay annotation.
+        theta = odometry.heading - smoothed_target_heading  (positive = turn right).
+        Call this each tick from the state machine.
+        """
+        with self._lock:
+            self._smoothed_theta = theta
 
     def get_direction(self) -> Optional[Tuple[float, float]]:
         """Convenience wrapper — returns (x, y) direction or None."""
@@ -444,10 +453,22 @@ class LineDetector:
         ty = -math.cos(theta)
         tgt_end = (int(ref_x + tx * ARROW_LEN), int(ref_y + ty * ARROW_LEN))
 
-        # Always draw: target heading arrow (orange) + robot reference dot
-        cv2.arrowedLine(annotated, robot_pt, tgt_end, (0, 100, 255), 3, tipLength=0.25)
-        cv2.putText(annotated, 'TARGET', (tgt_end[0] + 4, tgt_end[1]),
-                    FONT, FONT_SCALE, (0, 100, 255), THICKNESS)
+        # Raw target arrow (faint, solid thin)
+        cv2.line(annotated, robot_pt, tgt_end, (0, 60, 160), 1)
+        cv2.putText(annotated, 'RAW', (tgt_end[0] + 4, tgt_end[1]),
+                    FONT, FONT_SCALE, (0, 60, 160), THICKNESS)
+
+        # Smoothed target arrow (bright orange, thicker) — from state machine filter
+        with self._lock:
+            smoothed_theta = self._smoothed_theta
+        if smoothed_theta is not None:
+            sx = math.sin(smoothed_theta)
+            sy = -math.cos(smoothed_theta)
+            sm_end = (int(ref_x + sx * ARROW_LEN), int(ref_y + sy * ARROW_LEN))
+            cv2.arrowedLine(annotated, robot_pt, sm_end, (0, 100, 255), 3, tipLength=0.25)
+            cv2.putText(annotated, 'TARGET', (sm_end[0] + 4, sm_end[1]),
+                        FONT, FONT_SCALE, (0, 100, 255), THICKNESS)
+
         cv2.circle(annotated, robot_pt, 5, (255, 255, 255), -1)
 
         if self._debug:

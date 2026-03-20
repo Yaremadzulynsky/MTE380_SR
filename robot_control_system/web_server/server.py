@@ -283,6 +283,25 @@ class WebServer:
                 'camera_forward_m': cfg['vision']['camera_forward_m'],
             })
 
+        @app.route('/api/line_follow', methods=['GET'])
+        def get_line_follow():
+            sm = self._state_machine
+            if sm is None:
+                return jsonify({'error': 'no state machine'}), 503
+            return jsonify(sm.get_line_params())
+
+        @app.route('/api/line_follow', methods=['POST'])
+        def set_line_follow():
+            sm = self._state_machine
+            if sm is None:
+                return jsonify({'error': 'no state machine'}), 503
+            body = request.get_json(silent=True) or {}
+            return jsonify(sm.set_line_params(
+                filter_kp=          body.get('filter_kp'),
+                lateral_deadzone_m= body.get('lateral_deadzone_m'),
+                follow_speed=       body.get('follow_speed'),
+            ))
+
         @app.route('/api/limits', methods=['GET'])
         def get_limits():
             import state_machine.hardware.robot as _hw
@@ -348,12 +367,14 @@ class WebServer:
         sm = self._state_machine
         if sm is not None:
             x, y, heading = sm.odometry.pose()
-            th = sm.target_heading
+            th  = sm.target_heading
+            sth = sm.smoothed_target_heading
             status['odometry'] = {
-                'x_m':               round(x, 4),
-                'y_m':               round(y, 4),
-                'heading_deg':       round(_math.degrees(heading), 2),
-                'target_heading_rad': round(th, 6) if th is not None else None,
+                'x_m':                       round(x, 4),
+                'y_m':                       round(y, 4),
+                'heading_deg':               round(_math.degrees(heading), 2),
+                'target_heading_rad':        round(th,  6) if th  is not None else None,
+                'smoothed_target_heading_rad': round(sth, 6) if sth is not None else None,
             }
 
         if self._robot is not None:
