@@ -1,6 +1,6 @@
 robot:
   rate_hz: 20.0
-  max_speed: 1.0
+  max_speed: 0.3
   max_rot_speed: 1.0
   heartbeat_timeout: 3.0
 
@@ -50,11 +50,15 @@ vision:
     - 255
 
 target_heading_filter:
-  kp: 0.3        # fraction of heading error closed per tick (0=frozen, 1=no filter)
+  kp: 0.01        # fraction of heading error closed per tick (0=frozen, 1=no filter)
 
 line_follow:
   follow_speed: 0.35
   lateral_deadzone_m: 0.01
+
+line_follow_turn:
+  turn_speed: 0.20              # forward speed while navigating a curve
+  curvature_threshold_deg: 15.0 # abs curvature above this triggers turn state
 
 find_line:
   follow_speed: 0.30   # forward speed while sweeping

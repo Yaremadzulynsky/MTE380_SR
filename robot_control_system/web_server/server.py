@@ -300,6 +300,7 @@ class WebServer:
                 filter_kp=          body.get('filter_kp'),
                 lateral_deadzone_m= body.get('lateral_deadzone_m'),
                 follow_speed=       body.get('follow_speed'),
+                turn_speed=         body.get('turn_speed'),
             ))
 
         @app.route('/api/limits', methods=['GET'])
