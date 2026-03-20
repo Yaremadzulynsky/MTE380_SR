@@ -52,8 +52,14 @@ services:
       context: ./control_screen
     container_name: control-screen
     network_mode: host
+    # Mount this repo so Ops can find run_perception_rpicam.sh (default path is wrong inside /app-only image).
+    volumes:
+      - .:/workspace/system:rw
     environment:
       PORT: 3000
+      PERCEPTION_RUN_SCRIPT: /workspace/system/run_perception_rpicam.sh
+      PERCEPTION_RUN_CWD: /workspace/system
+      PERCEPTION_LOG_FILE: /workspace/system/perception/logs/control-screen-perception.log
       CONTROL_COMM_BASE_URL: "http://localhost:5001"
       CONTROL_COMM_P_PATH: "/pid/proportional"
       CONTROL_COMM_I_PATH: "/pid/integral"

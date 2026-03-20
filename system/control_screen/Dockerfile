@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Ops spawns run_perception_rpicam.sh with bash (Alpine ships ash only by default).
+RUN apk add --no-cache bash
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

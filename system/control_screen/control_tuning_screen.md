@@ -36,6 +36,7 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 - Script defaults to `../run_perception_rpicam.sh` relative to `control_screen/server.js`.
 - Override script path with `PERCEPTION_RUN_SCRIPT=/absolute/path/to/run_perception_rpicam.sh`.
 - Override working directory with `PERCEPTION_RUN_CWD=/absolute/path/to/system`.
+- **Docker:** `docker-compose.yaml` mounts the repo at `/workspace/system` and sets `PERCEPTION_RUN_*` so the script is not resolved as `/run_perception_rpicam.sh` (broken default when `server.js` lives in `/app` only). Rebuild `control-screen` after changing the Dockerfile (bash is required to run the script).
 - Perception logs are written to `../perception/logs/control-screen-perception.log` by default (override with `PERCEPTION_LOG_FILE`).
 
 ## Ops API endpoints

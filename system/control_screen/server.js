@@ -70,8 +70,8 @@ const linePidRanges = {
 const perceptionRunner = createPerceptionRunner();
 
 app.use(express.json({ limit: '32kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve HTML shells before static files so routes like /ops are never shadowed.
 app.get(['/', '/pid'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'pid.html'));
 });
@@ -83,6 +83,8 @@ app.get('/control', (req, res) => {
 app.get('/ops', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'ops.html'));
 });
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/config', (req, res) => {
   res.json({
