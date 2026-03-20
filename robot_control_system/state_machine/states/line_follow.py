@@ -49,13 +49,15 @@ def compute_target_direction(result) -> tuple[float, float]:
     tx, ty   = result.direction
     lat_px   = result.lateral_distance_px
 
-    # Project lateral distance from camera plane back to wheel-base pivot
+    # Project lateral distance from camera plane back to wheel-base pivot.
+    # Geometry: camera is d metres ahead of wheel base. Line passes through
+    # (lat_px/ppm, d) in robot frame with direction (tx, ty). Setting y=0
+    # gives lateral_at_wheelbase = lat_px - d * ppm * tx / ty.
     _vc = _config.get()['vision']
     ppm = _vc.get('pixels_per_meter')          # None until calibrated
     cam_fwd_m = _vc.get('camera_forward_m', 0.0)
-    if ppm and cam_fwd_m:
-        # How far the line has shifted laterally over cam_fwd_m of forward distance
-        lat_px = lat_px + cam_fwd_m * ppm * tx
+    if ppm and cam_fwd_m and abs(ty) > 1e-3:
+        lat_px = lat_px - cam_fwd_m * ppm * tx / ty
 
     weight   = min(1.0, max(0.0, abs(lat_px) - DEADZONE_PX) / CORRECTION_SCALE_PX)
     corr_x   = math.copysign(weight, lat_px)
