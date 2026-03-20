@@ -1,3 +1,11 @@
 # Single-file runner: python run.py
+# Install everything here in the venv (Pi/desktop). Do not rely on system python-opencv
+# unless you know it exposes cv2.imdecode — a partial cv2 causes:
+#   AttributeError: module 'cv2' has no attribute 'imdecode'
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
+numpy>=1.24
+opencv-python-headless>=4.8
+pyyaml>=6.0
+pyserial>=3.5
+requests>=2.28

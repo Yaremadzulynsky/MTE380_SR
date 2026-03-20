@@ -77,6 +77,11 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--fps", type=float, default=30.0, help="Camera FPS")
     p.add_argument("--no-robot", action="store_true",
                    help="Skip robot init (software-only / test mode)")
+    p.add_argument(
+        "--encoder-heading",
+        action="store_true",
+        help="Integrate heading from wheel encoders (default: vision path heading when path visible)",
+    )
     p.add_argument("--h264-udp", default=None, metavar="HOST:PORT",
                    help="Also stream annotated overlay as H.264 MPEG-TS over UDP. "
                         "View on laptop: ffplay -fflags nobuffer -flags low_delay "
@@ -791,6 +796,23 @@ def _build_app(
         shared.set_sm_state(state_machine.state.value)
         return {"ok": True}
 
+    # ── Robot hardware speed cap ────────────────────────────────────────────────
+    @app.get("/api/robot")
+    async def api_get_robot():
+        return {
+            "max_speed": robot.max_speed if robot is not None else 0.2,
+            "robot_active": robot is not None,
+        }
+
+    @app.post("/api/robot")
+    async def api_set_robot(payload: dict[str, Any] = Body(default_factory=dict)):
+        if robot is not None and "max_speed" in payload:
+            robot.set_max_speed(float(payload["max_speed"]))
+        return {
+            "ok": True,
+            "max_speed": robot.max_speed if robot is not None else 0.2,
+        }
+
     app.mount("/ui", StaticFiles(directory=str(ui_dir)), name="ui")
 
     return app
@@ -807,9 +829,15 @@ def main() -> None:
     robot: Any = None
     if not args.no_robot and _RobotCls is not None:
         try:
-            robot = _RobotCls(args.serial, 115200)
+            use_enc_hdg = bool(args.encoder_heading)
+            robot = _RobotCls(
+                args.serial,
+                115200,
+                use_encoder_heading_odometry=use_enc_hdg,
+            )
             robot.start()
-            print(f"[run] Robot started on {args.serial}", flush=True)
+            mode = "encoder heading" if use_enc_hdg else "vision path heading"
+            print(f"[run] Robot started on {args.serial} ({mode})", flush=True)
         except Exception as exc:
             print(f"[run] Robot init failed ({exc}) — software-only mode", file=sys.stderr)
             robot = None
@@ -953,9 +981,10 @@ def main() -> None:
     _fps_count = 0
     _fps_start = time.time()
     _fps_cur = 0.0
+    _last_vision_heading_rad = 0.0
 
     def _worker_loop() -> None:
-        nonlocal _fps_count, _fps_start, _fps_cur
+        nonlocal _fps_count, _fps_start, _fps_cur, _last_vision_heading_rad
         while not stop_event.is_set():
             try:
                 item = frame_q.get(timeout=0.5)
@@ -981,6 +1010,11 @@ def main() -> None:
 
             # Annotated frame → JPEG
             px_out, py_out = to_robot_frame_clamped(out.px, out.py)
+            use_vision_heading = robot is not None and not robot.uses_encoder_heading_odometry
+            if out.path_detected:
+                _last_vision_heading_rad = math.atan2(float(px_out), float(py_out))
+                if use_vision_heading:
+                    robot.set_heading_feedback(_last_vision_heading_rad)
             hd = out.debug_artifacts.get("heading_debug", {})
             smoothing_dbg = out.debug_artifacts.get("smoothing_debug", {})
             smoothed_err = float(smoothing_dbg.get("line_error_median", out.line_error_x))
@@ -1021,6 +1055,11 @@ def main() -> None:
                     "detected": out.path_detected,
                     "vector": {"x": float(out.line_error_x), "y": float(py_out)},
                 },
+                "heading_rad": (
+                    float(robot.get_heading_rad()[0])
+                    if not use_vision_heading
+                    else float(_last_vision_heading_rad)
+                ),
             }
             input_buffer.update(payload)
 

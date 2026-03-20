@@ -342,7 +342,14 @@
     <!-- Speed tab -->
     <div id="tab-speed" class="tab-body">
       <div class="sec">
-        <div class="sec-title">Speed Controls</div>
+        <div class="sec-title">Motor Hard Cap</div>
+        <div id="hw-speed-sliders"></div>
+        <div class="apply-row">
+          <button class="btn b" onclick="applyRobotSpeed()">Apply Cap</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">State Machine Speed</div>
         <div id="speed-sliders"></div>
         <div class="apply-row">
           <button class="btn b" onclick="applyPid()">Apply Speed</button>
@@ -477,6 +484,10 @@ const PERC_DEFS = [
   { k:'freeze_on_miss_frames', label:'Freeze Frames', hint:'hold last error on miss',               min:0,   max:30,   step:1     },
 ];
 
+const HW_SPEED_DEFS = [
+  { k:'hw_max_speed', label:'Motor Hard Cap', hint:'absolute PWM ceiling for all wheels — overrides PID', min:0, max:1, step:0.01 },
+];
+
 const SERVO_DEFS = [
   { k:'min',    label:'Servo Min (deg)'    },
   { k:'max',    label:'Servo Max (deg)'    },
@@ -531,8 +542,9 @@ function mkNum(def, container, store) {
 }
 
 // ── Wire up DOM ───────────────────────────────────────────────────────────────
-PID_DEFS  .forEach(d => mkSlider(d, document.getElementById('pid-sliders')));
-SPEED_DEFS.forEach(d => mkSlider(d, document.getElementById('speed-sliders')));
+PID_DEFS     .forEach(d => mkSlider(d, document.getElementById('pid-sliders')));
+HW_SPEED_DEFS.forEach(d => mkSlider(d, document.getElementById('hw-speed-sliders')));
+SPEED_DEFS   .forEach(d => mkSlider(d, document.getElementById('speed-sliders')));
 PERC_DEFS .forEach(d => mkSlider(d, document.getElementById('perc-sliders')));
 LIMIT_DEFS.forEach(d => mkSlider(d, document.getElementById('limit-sliders')));
 SERVO_DEFS.forEach(d => mkNum(d, document.getElementById('servo-inputs'),  servoVals));
@@ -567,6 +579,23 @@ async function applySmoothing() {
   PERC_DEFS.forEach(({ k }) => { if (pidVals[k] !== undefined) payload[k] = pidVals[k]; });
   try { await fetch('/api/smoothing', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) }); }
   catch(e) {}
+}
+
+async function loadRobotSpeed() {
+  try {
+    const d = await (await fetch('/api/robot')).json();
+    setSlider('hw_max_speed', d.max_speed);
+  } catch(e) {}
+}
+
+async function applyRobotSpeed() {
+  try {
+    await fetch('/api/robot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_speed: pidVals['hw_max_speed'] ?? 0.2 }),
+    });
+  } catch(e) {}
 }
 
 async function loadServo() {
@@ -811,6 +840,7 @@ async function pollStatus() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadPid();
+loadRobotSpeed();
 loadSmoothing();
 loadServo();
 loadSmParams();

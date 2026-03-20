@@ -37,20 +37,29 @@ log = logging.getLogger('robot')
 
 class Robot:
 
-    def __init__(self, port: str, baud: int = 115200):
+    def __init__(
+        self,
+        port: str,
+        baud: int = 115200,
+        *,
+        use_encoder_heading_odometry: bool = True,
+    ):
         self._bridge = SerialBridge(port, baud)
         self._bridge.on_heartbeat = self._on_heartbeat
         self._bridge.on_encoders  = self._on_encoders
 
         self._heading_pid = HeadingPID()
         self._speed_pid   = SpeedPID()
+        self.max_speed    = MAX_SPEED  # settable at runtime via set_max_speed()
+        # When False, _heading_fb is only updated via set_heading_feedback (e.g. vision).
+        self._use_encoder_heading_odometry = bool(use_encoder_heading_odometry)
 
         self._lock = threading.Lock()
         self._target_heading = 0.0  # radians — updated incrementally via set_direction
         self._speed_scale    = 0.0  # [-1, 1] direct motor speed
         self._rotation_scale = 1.0  # [0, 1] multiplier applied to angular_z
         self._motor_override: tuple[float, float] | None = None  # (left, right)
-        self._heading_fb = 0.0   # radians — from encoder odometry
+        self._heading_fb = 0.0   # radians — encoder odometry and/or set_heading_feedback
         self._linear_speed = 0.0  # m/s — forward speed from encoders
 
         self._enc_left      = 0
@@ -83,6 +92,10 @@ class Robot:
         with self._lock:
             self._speed_scale = max(-1.0, min(1.0, speed))
 
+    def set_max_speed(self, value: float):
+        """Cap total motor output. 0.2 = 20% PWM max. Applies to all wheel commands."""
+        self.max_speed = max(0.0, min(1.0, float(value)))
+
     def set_rotation_scale(self, scale: float):
         """Set rotation speed as a fraction of max angular output. 0 = no rotation, 1 = full."""
         with self._lock:
@@ -103,8 +116,30 @@ class Robot:
         log.info('speed PID gains → kp=%.3f ki=%.3f kd=%.3f', kp, ki, kd)
 
     def set_heading_feedback(self, radians: float):
+        """Set current heading (rad) for the heading PID. Required each frame when
+        use_encoder_heading_odometry is False (e.g. vision path heading).
+        Resets the PID integrator if the heading jumps by more than ~8° to avoid
+        integrator windup when the path is reacquired after a miss."""
         with self._lock:
-            self._heading_fb = radians
+            if abs(radians - self._heading_fb) > 0.14:  # ~8°
+                self._heading_pid.reset()
+            self._heading_fb = float(radians)
+
+    def set_use_encoder_heading_odometry(self, enabled: bool) -> None:
+        """If True, integrate yaw from wheel encoders in _on_encoders. If False, only
+        set_heading_feedback updates _heading_fb."""
+        with self._lock:
+            self._use_encoder_heading_odometry = bool(enabled)
+
+    @property
+    def uses_encoder_heading_odometry(self) -> bool:
+        with self._lock:
+            return self._use_encoder_heading_odometry
+
+    def get_heading_rad(self) -> tuple[float, float]:
+        """Return (current_heading_rad, target_heading_rad)."""
+        with self._lock:
+            return float(self._heading_fb), float(self._target_heading)
 
     def get_heading(self) -> tuple[float, float]:
         """Return (current_heading_deg, target_heading_deg)."""
@@ -186,7 +221,10 @@ class Robot:
         timeout: float = 8.0,
         settle_time_s: float = 0.2,
     ) -> dict:
-        """Turn robot by requested degrees and validate using encoder-derived heading feedback."""
+        """Turn robot by requested degrees using _heading_fb (encoders and/or vision).
+
+        If use_encoder_heading_odometry is False, something must update heading during
+        the turn (e.g. vision) or feedback will not reflect the real pose."""
         def _wrap_pi(angle: float) -> float:
             return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
@@ -299,8 +337,9 @@ class Robot:
             if self._last_enc_time > 0.0 and dt > 0.0:
                 dl = (left  - self._enc_left)  * WHEEL_CIRC_M / TICKS_PER_REV
                 dr = (right - self._enc_right) * WHEEL_CIRC_M / TICKS_PER_REV
-                omega              = (dr - dl) / WHEEL_BASE_M / dt
-                self._heading_fb  += omega * dt
+                omega = (dr - dl) / WHEEL_BASE_M / dt
+                if self._use_encoder_heading_odometry:
+                    self._heading_fb += omega * dt
                 self._linear_speed = (dl + dr) / 2.0 / dt
             self._enc_left      = left
             self._enc_right     = right
@@ -327,8 +366,12 @@ class Robot:
                 angular_z = self._heading_pid.update(target_heading, hdg_fb, rotation_scale)
                 linear_x  = speed_scale
 
-                left  = max(-1.0, min(1.0, linear_x - angular_z))
-                right = max(-1.0, min(1.0, linear_x + angular_z))
+                # Cap total motor output to the commanded speed so the heading
+                # PID angular correction can't drive motors beyond MAX_SPEED.
+                # When stopped (speed_scale≈0) the branch above handles it.
+                cap = min(abs(speed_scale), self.max_speed)
+                left  = max(-cap, min(cap, linear_x - angular_z))
+                right = max(-cap, min(cap, linear_x + angular_z))
                 self._bridge.send_drive(left, right)
 
             log.debug('target_hdg=%.1f° hdg_fb=%.1f° speed=%.2f', math.degrees(target_heading), math.degrees(hdg_fb), speed_scale)
