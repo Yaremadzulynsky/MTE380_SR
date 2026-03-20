@@ -7,6 +7,7 @@ import os
 import queue
 import sys
 import threading
+import time
 import urllib.request
 
 def _send_post(url: str, body: bytes, timeout: float = 30.0) -> None:
@@ -32,6 +33,9 @@ class HTTPSender:
         mode_raw = (os.environ.get("PERCEPTION_HTTP_MODE") or "").strip().lower()
         direct_raw = (os.environ.get("PERCEPTION_HTTP_DIRECT_CONTROL") or "").strip().lower()
         self.direct_control = mode_raw == "control" or direct_raw in {"1", "true", "yes", "on"}
+        self._line_loss_hold_s = max(0.0, float(os.environ.get("PERCEPTION_HTTP_LINE_LOSS_HOLD_S", "0.5")))
+        self._last_direct_payload: dict[str, float | str] | None = None
+        self._last_direct_payload_at: float | None = None
         self._q: "queue.Queue[bytes]" = queue.Queue(maxsize=1)
         self._stop = threading.Event()
         self._worker = threading.Thread(target=self._worker_loop, daemon=True)
@@ -77,19 +81,32 @@ class HTTPSender:
             detected = bool(path_detected)
             steer_x = float(line_error_x)
             steer_y = float(line_error_y)
-            if not detected:
-                steer_x = 0.0
-                steer_y = 0.0
-                speed = 0.0
-            else:
+            now = time.monotonic()
+            if detected:
                 speed = min(1.0, float((steer_x * steer_x + steer_y * steer_y) ** 0.5))
-            payload = {
-                "x": steer_x,
-                "y": steer_y,
-                "speed": speed,
-                "line_error_x": float(line_error_x),
-                "control_mode": "line_follow",
-            }
+                payload = {
+                    "x": steer_x,
+                    "y": steer_y,
+                    "speed": speed,
+                    "line_error_x": steer_x,
+                    "control_mode": "line_follow",
+                }
+                self._last_direct_payload = dict(payload)
+                self._last_direct_payload_at = now
+            elif (
+                self._last_direct_payload is not None
+                and self._last_direct_payload_at is not None
+                and (now - self._last_direct_payload_at) <= self._line_loss_hold_s
+            ):
+                payload = dict(self._last_direct_payload)
+            else:
+                payload = {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "speed": 0.0,
+                    "line_error_x": 0.0,
+                    "control_mode": "line_follow",
+                }
             body = json.dumps(payload).encode("utf-8")
             print(f"[perception] send_control: {body.decode('utf-8')}", file=sys.stderr)
             self._enqueue(body)
