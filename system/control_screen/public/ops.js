@@ -4,7 +4,8 @@ const state = {
   runnerStatusTimer: null,
   logTailTimer: null,
   logTailMs: 2500,
-  defaultStreamUrl: 'http://localhost:8090/stream.mjpg'
+  defaultStreamUrl: 'http://localhost:8090/stream.mjpg',
+  lineFollowBounds: null
 };
 
 const elements = {
@@ -34,7 +35,16 @@ const elements = {
   testFeedback: document.getElementById('testFeedback'),
   turnTestFeedback: document.getElementById('turnTestFeedback'),
   neutralControlBtn: document.getElementById('neutralControlBtn'),
-  sampleInputBtn: document.getElementById('sampleInputBtn')
+  sampleInputBtn: document.getElementById('sampleInputBtn'),
+  opsMaxSpeed: document.getElementById('opsMaxSpeed'),
+  opsMaxSpeedRange: document.getElementById('opsMaxSpeedRange'),
+  opsMaxSpeedHint: document.getElementById('opsMaxSpeedHint'),
+  opsFollowMaxSpeed: document.getElementById('opsFollowMaxSpeed'),
+  opsFollowMaxSpeedRange: document.getElementById('opsFollowMaxSpeedRange'),
+  opsFollowMaxSpeedHint: document.getElementById('opsFollowMaxSpeedHint'),
+  opsApplySpeedBtn: document.getElementById('opsApplySpeedBtn'),
+  opsRefreshSpeedBtn: document.getElementById('opsRefreshSpeedBtn'),
+  opsSpeedFeedback: document.getElementById('opsSpeedFeedback')
 };
 
 initialize().catch((err) => {
@@ -44,6 +54,7 @@ initialize().catch((err) => {
 async function initialize() {
   bindEvents();
   await loadOpsConfig();
+  await loadLineFollowSpeeds();
   await refreshRunnerStatus();
   await refreshLogs();
   startRunnerStatusRefresh();
@@ -70,6 +81,12 @@ function bindEvents() {
   elements.toggleTailBtn?.addEventListener('click', toggleTail);
   elements.neutralControlBtn?.addEventListener('click', sendNeutralControlTest);
   elements.sampleInputBtn?.addEventListener('click', sendSampleInputTest);
+  elements.opsMaxSpeedRange?.addEventListener('input', () => syncOpsSpeedFromRange('max'));
+  elements.opsMaxSpeed?.addEventListener('input', () => syncOpsSpeedFromNumber('max'));
+  elements.opsFollowMaxSpeedRange?.addEventListener('input', () => syncOpsSpeedFromRange('follow'));
+  elements.opsFollowMaxSpeed?.addEventListener('input', () => syncOpsSpeedFromNumber('follow'));
+  elements.opsApplySpeedBtn?.addEventListener('click', applyLineFollowSpeeds);
+  elements.opsRefreshSpeedBtn?.addEventListener('click', () => loadLineFollowSpeeds());
 }
 
 async function startRobot() {
@@ -131,8 +148,155 @@ function setControlsEnabled(enabled) {
       node.disabled = false;
       return;
     }
+    if (node.closest('[data-ops-runner-independent]')) {
+      return;
+    }
     node.disabled = !enabled;
   });
+}
+
+function getOpsSpeedBounds(which) {
+  const b = state.lineFollowBounds || {};
+  const key = which === 'max' ? 'max_speed' : 'follow_max_speed';
+  const r = b[key];
+  if (Array.isArray(r) && r.length >= 2 && Number.isFinite(r[0]) && Number.isFinite(r[1])) {
+    return { min: r[0], max: r[1] };
+  }
+  if (r && typeof r === 'object' && Number.isFinite(r.min) && Number.isFinite(r.max)) {
+    return { min: r.min, max: r.max };
+  }
+  return { min: 0, max: 5 };
+}
+
+function syncOpsSpeedFromRange(which) {
+  const isMax = which === 'max';
+  const range = isMax ? elements.opsMaxSpeedRange : elements.opsFollowMaxSpeedRange;
+  const num = isMax ? elements.opsMaxSpeed : elements.opsFollowMaxSpeed;
+  if (!range || !num) return;
+  num.value = range.value;
+}
+
+function syncOpsSpeedFromNumber(which) {
+  const isMax = which === 'max';
+  const range = isMax ? elements.opsMaxSpeedRange : elements.opsFollowMaxSpeedRange;
+  const num = isMax ? elements.opsMaxSpeed : elements.opsFollowMaxSpeed;
+  if (!range || !num) return;
+  const { min, max } = getOpsSpeedBounds(which);
+  let v = Number(num.value);
+  if (!Number.isFinite(v)) return;
+  v = Math.min(max, Math.max(min, v));
+  num.value = String(v);
+  range.value = String(v);
+}
+
+function applyOpsSpeedInputAttrs(which) {
+  const { min, max } = getOpsSpeedBounds(which);
+  const isMax = which === 'max';
+  const range = isMax ? elements.opsMaxSpeedRange : elements.opsFollowMaxSpeedRange;
+  const num = isMax ? elements.opsMaxSpeed : elements.opsFollowMaxSpeed;
+  const hint = isMax ? elements.opsMaxSpeedHint : elements.opsFollowMaxSpeedHint;
+  if (range) {
+    range.min = String(min);
+    range.max = String(max);
+    range.step = '0.01';
+  }
+  if (num) {
+    num.min = String(min);
+    num.max = String(max);
+  }
+  if (hint) {
+    hint.textContent = `Range: ${min} … ${max}`;
+  }
+}
+
+async function loadLineFollowSpeeds() {
+  const fb = elements.opsSpeedFeedback;
+  if (fb) {
+    fb.textContent = 'Loading line-follow speeds…';
+    fb.classList.remove('success', 'error');
+  }
+  const result = await requestJson('/api/line-follow-pid');
+  if (!result.ok || !result.data?.values) {
+    const msg = extractError(result, 'Could not load line-follow PID (is state machine up?)');
+    if (fb) {
+      fb.textContent = msg;
+      fb.classList.add('error');
+    }
+    return;
+  }
+  state.lineFollowBounds = result.data.bounds || null;
+  applyOpsSpeedInputAttrs('max');
+  applyOpsSpeedInputAttrs('follow');
+
+  const v = result.data.values;
+  const maxS = Number(v.max_speed);
+  const followS = Number(v.follow_max_speed);
+  if (elements.opsMaxSpeed && Number.isFinite(maxS)) {
+    elements.opsMaxSpeed.value = String(maxS);
+  }
+  if (elements.opsMaxSpeedRange && Number.isFinite(maxS)) {
+    elements.opsMaxSpeedRange.value = String(maxS);
+  }
+  if (elements.opsFollowMaxSpeed && Number.isFinite(followS)) {
+    elements.opsFollowMaxSpeed.value = String(followS);
+  }
+  if (elements.opsFollowMaxSpeedRange && Number.isFinite(followS)) {
+    elements.opsFollowMaxSpeedRange.value = String(followS);
+  }
+  if (fb) {
+    fb.textContent = `Loaded: max_speed=${Number.isFinite(maxS) ? maxS.toFixed(3) : '--'}, follow_max_speed=${Number.isFinite(followS) ? followS.toFixed(3) : '--'}`;
+    fb.classList.remove('error');
+    fb.classList.add('success');
+  }
+}
+
+async function applyLineFollowSpeeds() {
+  const fb = elements.opsSpeedFeedback;
+  const maxS = Number(elements.opsMaxSpeed?.value);
+  const followS = Number(elements.opsFollowMaxSpeed?.value);
+  if (!Number.isFinite(maxS) || !Number.isFinite(followS)) {
+    if (fb) {
+      fb.textContent = 'Enter valid numbers for both speeds.';
+      fb.classList.add('error');
+    }
+    return;
+  }
+  const bMax = getOpsSpeedBounds('max');
+  const bFollow = getOpsSpeedBounds('follow');
+  if (maxS < bMax.min || maxS > bMax.max || followS < bFollow.min || followS > bFollow.max) {
+    if (fb) {
+      fb.textContent = 'Values out of allowed range.';
+      fb.classList.add('error');
+    }
+    return;
+  }
+  if (fb) {
+    fb.textContent = 'Applying…';
+    fb.classList.remove('error', 'success');
+  }
+  const result = await requestJson('/api/line-follow-pid', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ max_speed: maxS, follow_max_speed: followS })
+  });
+  if (!result.ok) {
+    const msg =
+      result.data?.errors && typeof result.data.errors === 'object'
+        ? Object.entries(result.data.errors)
+            .map(([k, e]) => `${k}: ${e}`)
+            .join('; ')
+        : extractError(result, 'Update failed.');
+    if (fb) {
+      fb.textContent = msg;
+      fb.classList.add('error');
+    }
+    return;
+  }
+  if (fb) {
+    fb.textContent = 'Speeds updated on state machine.';
+    fb.classList.add('success');
+  }
+  await loadLineFollowSpeeds();
 }
 
 function startRunnerStatusRefresh() {

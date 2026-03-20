@@ -64,6 +64,36 @@
         <pre id="logsOutput" class="ops-log-output">Perception logs will appear here.</pre>
       </section>
 
+      <section class="panel" data-animate data-ops-runner-independent>
+        <h2>Line follow — max speed</h2>
+        <p class="hint">
+          Updates state machine <code>/line-follow-pid</code> (same as PID page). Effective immediately while the robot is running.
+        </p>
+        <div class="field-grid">
+          <label class="field" for="opsMaxSpeed">
+            <span class="field-label">Max speed</span>
+            <div class="slider-control">
+              <input id="opsMaxSpeedRange" type="range" step="0.01" />
+              <input id="opsMaxSpeed" type="number" step="0.01" min="0" max="5" autocomplete="off" inputmode="decimal" />
+            </div>
+            <span class="hint" id="opsMaxSpeedHint">Range: --</span>
+          </label>
+          <label class="field" for="opsFollowMaxSpeed">
+            <span class="field-label">Follow max speed</span>
+            <div class="slider-control">
+              <input id="opsFollowMaxSpeedRange" type="range" step="0.01" />
+              <input id="opsFollowMaxSpeed" type="number" step="0.01" min="0" max="5" autocomplete="off" inputmode="decimal" />
+            </div>
+            <span class="hint" id="opsFollowMaxSpeedHint">Range: --</span>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" id="opsApplySpeedBtn">Apply speeds</button>
+          <button type="button" class="ghost" id="opsRefreshSpeedBtn">Refresh from robot</button>
+        </div>
+        <div class="feedback" id="opsSpeedFeedback" role="status" aria-live="polite">—</div>
+      </section>
+
       <section class="panel" data-animate>
         <h2>Robot Commands</h2>
         <p class="hint">Optional HTTP commands (independent from perception start/stop).</p>

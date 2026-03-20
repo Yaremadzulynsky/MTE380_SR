@@ -30,7 +30,7 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 
 # Ops Dashboard
 - Route: `/ops`
-- Purpose: host-side panel for **perception runner control**, perception logs, vision stream preview, and robot test actions.
+- Purpose: host-side panel for **perception runner control**, perception logs, vision stream preview, **line-follow max / follow-max speed** (via `GET`/`POST /api/line-follow-pid` → state machine), and robot test actions.
 - This page does **not** manage Docker containers anymore; run your containers manually.
 - Perception runner control is enabled by default; disable with `ENABLE_PERCEPTION_RUNNER=false`.
 - Script defaults to `../run_perception_rpicam.sh` relative to `control_screen/server.js`.
