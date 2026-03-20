@@ -8,11 +8,12 @@
 # Examples:
 #   ./start_camera_with_logs.sh
 #   START_MODE=perception ./start_camera_with_logs.sh
-#   CAMERA_SOURCE=webcam MJPEG_PORT=8090 ./start_camera_with_logs.sh
+#   CAMERA_SOURCE=webcam ./start_camera_with_logs.sh   # USB webcam
 #   BACKGROUND=1 ./start_camera_with_logs.sh    # detach; tail log file printed on stdout
 #
 # Env (hough mode):
-#   CAMERA_SOURCE   webcam | video:/path | http://...  (default: webcam)
+#   CAMERA_SOURCE   rpicam (Pi Camera Module 2) | webcam | video:/path | http://...
+#                   default: rpicam (webcam often returns no frames on Pi without /dev/video*)
 #   HOUGH_CONFIG    default configs/docker-rpicam.yaml
 #   MJPEG_PORT      default 8090
 #   MJPEG_HOST      default 0.0.0.0
@@ -76,7 +77,7 @@ run_hough() {
   export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}$(pwd)"
 
   local config="${HOUGH_CONFIG:-configs/docker-rpicam.yaml}"
-  local source="${CAMERA_SOURCE:-webcam}"
+  local source="${CAMERA_SOURCE:-rpicam}"
   local port="${MJPEG_PORT:-8090}"
   local host="${MJPEG_HOST:-0.0.0.0}"
 
