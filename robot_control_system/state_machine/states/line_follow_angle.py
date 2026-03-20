@@ -77,8 +77,9 @@ class LineFollowAngle(State):
 
         # Convert the angle back to a direction vector for add_direction:
         #   add_direction(x, y) computes atan2(-x, abs(y)) internally,
-        #   so pass x = -sin(delta), y = cos(delta) to steer by exactly delta.
-        bx = -math.sin(delta)
+        #   so pass x = +sin(delta), y = cos(delta) → effective heading change = -delta,
+        #   which steers toward the line (same sign convention as line_follow.py).
+        bx =  math.sin(delta)
         by =  math.cos(delta)
         robot.add_direction(bx, by)
         robot.set_speed(FOLLOW_SPEED)
