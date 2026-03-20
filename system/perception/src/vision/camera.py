@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 import time
@@ -71,6 +72,12 @@ class OpenCVCamera:
                 # GStreamer (GLib type errors). Fallback to default backend for local dev.
                 self.cap = cv2.VideoCapture(self.source)
         elif self.backend == "ffmpeg":
+            # Reduce RTSP latency for perception consumers unless user overrides.
+            if isinstance(self.source, str) and self.source.startswith("rtsp://"):
+                if not os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS"):
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                        "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;0"
+                    )
             self.cap = cv2.VideoCapture(self.source, cv2.CAP_FFMPEG)
         else:
             self.cap = cv2.VideoCapture(self.source)

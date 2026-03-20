@@ -194,6 +194,7 @@ def main() -> None:
                 height=cfg.camera.height,
                 fps=cfg.fps,
                 backend=backend,
+                threaded=True,
                 gstreamer_device=cfg.camera.gstreamer_device,
             )
     except RuntimeError as exc:

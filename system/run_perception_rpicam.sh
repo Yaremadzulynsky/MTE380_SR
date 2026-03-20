@@ -194,6 +194,7 @@ start_streamer() {
     rpicam-vid \
       -t 0 \
       -n \
+      --flush \
       --inline \
       --codec libav \
       --libav-format mpegts \
@@ -205,10 +206,16 @@ start_streamer() {
       -loglevel warning \
       -fflags nobuffer \
       -flags low_delay \
+      -avioflags direct \
+      -analyzeduration 0 \
+      -probesize 32 \
       -f mpegts \
       -i - \
       -an \
       -c:v copy \
+      -muxdelay 0 \
+      -muxpreload 0 \
+      -flush_packets 1 \
       -f rtsp \
       -rtsp_transport tcp \
       "${MEDIAMTX_RTSP_URL}"

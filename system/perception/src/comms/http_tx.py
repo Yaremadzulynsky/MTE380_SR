@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import sys
 import threading
 import urllib.request
@@ -31,6 +32,31 @@ class HTTPSender:
         mode_raw = (os.environ.get("PERCEPTION_HTTP_MODE") or "").strip().lower()
         direct_raw = (os.environ.get("PERCEPTION_HTTP_DIRECT_CONTROL") or "").strip().lower()
         self.direct_control = mode_raw == "control" or direct_raw in {"1", "true", "yes", "on"}
+        self._q: "queue.Queue[bytes]" = queue.Queue(maxsize=1)
+        self._stop = threading.Event()
+        self._worker = threading.Thread(target=self._worker_loop, daemon=True)
+        self._worker.start()
+
+    def _enqueue(self, body: bytes) -> None:
+        try:
+            self._q.put_nowait(body)
+        except queue.Full:
+            try:
+                _ = self._q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._q.put_nowait(body)
+            except queue.Full:
+                pass
+
+    def _worker_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                body = self._q.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            _send_post(self.url, body, self.timeout)
 
     def send_line(self, text: str) -> None:
         try:
@@ -64,12 +90,7 @@ class HTTPSender:
             }
             body = json.dumps(payload).encode("utf-8")
             print(f"[perception] send_control: {body.decode('utf-8')}", file=sys.stderr)
-            t = threading.Thread(
-                target=_send_post,
-                args=(self.url, body, self.timeout),
-                daemon=True,
-            )
-            t.start()
+            self._enqueue(body)
             return
         # State machine reads red_line or black_line (prefers black_line when present).
         line_key = "black_line" if path_mask_key == "black" else "red_line"
@@ -89,12 +110,9 @@ class HTTPSender:
         }
         body = json.dumps(payload).encode("utf-8")
         print(f"[perception] send: {body.decode('utf-8')}", file=sys.stderr)
-        t = threading.Thread(
-            target=_send_post,
-            args=(self.url, body, self.timeout),
-            daemon=True,
-        )
-        t.start()
+        self._enqueue(body)
 
     def close(self) -> None:
-        pass
+        self._stop.set()
+        if self._worker.is_alive():
+            self._worker.join(timeout=1.0)
