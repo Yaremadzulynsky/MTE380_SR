@@ -48,8 +48,6 @@ const elements = {
   lfRotationScaleRange: document.getElementById('lfRotationScaleRange'),
   lfLineLagTau: document.getElementById('lfLineLagTau'),
   lfLineLagTauRange: document.getElementById('lfLineLagTauRange'),
-  lfLookaheadRatio: document.getElementById('lfLookaheadRatio'),
-  lfLookaheadRatioRange: document.getElementById('lfLookaheadRatioRange'),
   lfLineLagEnabled: document.getElementById('lfLineLagEnabled'),
   lfLineLagEnabledRange: document.getElementById('lfLineLagEnabledRange'),
   hintLfKp: document.getElementById('hintLfKp'),
@@ -66,7 +64,6 @@ const elements = {
   hintLfDeadband: document.getElementById('hintLfDeadband'),
   hintLfRotationScale: document.getElementById('hintLfRotationScale'),
   hintLfLineLagTau: document.getElementById('hintLfLineLagTau'),
-  hintLfLookaheadRatio: document.getElementById('hintLfLookaheadRatio'),
   hintLfLineLagEnabled: document.getElementById('hintLfLineLagEnabled'),
   fsmStateSelect: document.getElementById('fsmStateSelect'),
   refreshStatesBtn: document.getElementById('refreshStatesBtn'),
@@ -93,7 +90,6 @@ const lineFields = [
   ['deadband', 'lfDeadband', 'lfDeadbandRange', 'hintLfDeadband'],
   ['rotation_scale', 'lfRotationScale', 'lfRotationScaleRange', 'hintLfRotationScale'],
   ['line_lag_tau', 'lfLineLagTau', 'lfLineLagTauRange', 'hintLfLineLagTau'],
-  ['centerline_lookahead_ratio', 'lfLookaheadRatio', 'lfLookaheadRatioRange', 'hintLfLookaheadRatio'],
   ['line_lag_enabled', 'lfLineLagEnabled', 'lfLineLagEnabledRange', 'hintLfLineLagEnabled']
 ];
 

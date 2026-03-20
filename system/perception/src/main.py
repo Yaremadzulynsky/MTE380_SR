@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import queue
 import threading
 import time
 import urllib.request
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Optional
 
@@ -29,9 +27,6 @@ from src.utils.timing import LoopRegulator
 from src.vision.camera import OpenCVCamera, RpicamVidCamera
 from src.vision.debug_draw import draw_overlay, make_mask_preview
 from src.vision.masks import crop_roi
-
-LOOKAHEAD_MIN = 0.05
-LOOKAHEAD_MAX = 0.9
 
 
 def process_roi(
@@ -122,96 +117,6 @@ def _send_zero_http_inputs(url: str, timeout_s: float = 0.5) -> None:
         log("perception_zero_vector_send_failed", error=str(exc), url=url)
 
 
-def _start_runtime_settings_server(
-    cfg: AppConfig,
-    runtime_settings: dict[str, float],
-    settings_lock: threading.Lock,
-) -> ThreadingHTTPServer:
-    port = int((os.environ.get("PERCEPTION_TUNING_PORT") or os.environ.get("PORT") or "4000").strip())
-
-    class RuntimeSettingsHandler(BaseHTTPRequestHandler):
-        def log_message(self, format: str, *args: Any) -> None:
-            return
-
-        def _json(self, status: int, payload: dict[str, Any]) -> None:
-            body = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _values(self) -> dict[str, float]:
-            with settings_lock:
-                return {"centerline_lookahead_ratio": float(runtime_settings["centerline_lookahead_ratio"])}
-
-        def do_GET(self) -> None:
-            if self.path != "/runtime-settings":
-                self._json(404, {"ok": False, "message": "Not found."})
-                return
-            self._json(
-                200,
-                {
-                    "ok": True,
-                    "values": self._values(),
-                    "bounds": {
-                        "centerline_lookahead_ratio": {
-                            "min": LOOKAHEAD_MIN,
-                            "max": LOOKAHEAD_MAX,
-                        }
-                    },
-                },
-            )
-
-        def do_POST(self) -> None:
-            if self.path != "/runtime-settings":
-                self._json(404, {"ok": False, "message": "Not found."})
-                return
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
-                length = 0
-            raw = self.rfile.read(max(0, length)) if length > 0 else b"{}"
-            try:
-                payload = json.loads(raw.decode("utf-8") or "{}")
-            except json.JSONDecodeError:
-                self._json(400, {"ok": False, "message": "Invalid JSON payload."})
-                return
-            if not isinstance(payload, dict):
-                self._json(400, {"ok": False, "message": "Payload must be an object."})
-                return
-            if "centerline_lookahead_ratio" not in payload:
-                self._json(400, {"ok": False, "message": "Missing 'centerline_lookahead_ratio'."})
-                return
-            value = payload.get("centerline_lookahead_ratio")
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                self._json(400, {"ok": False, "message": "'centerline_lookahead_ratio' must be numeric."})
-                return
-            numeric = float(value)
-            if not math.isfinite(numeric):
-                self._json(400, {"ok": False, "message": "'centerline_lookahead_ratio' must be finite."})
-                return
-            if numeric < LOOKAHEAD_MIN or numeric > LOOKAHEAD_MAX:
-                self._json(
-                    400,
-                    {
-                        "ok": False,
-                        "message": f"'centerline_lookahead_ratio' must be between {LOOKAHEAD_MIN} and {LOOKAHEAD_MAX}.",
-                    },
-                )
-                return
-            with settings_lock:
-                runtime_settings["centerline_lookahead_ratio"] = numeric
-                cfg.smoothing.centerline_lookahead_ratio = numeric
-            log("perception_runtime_setting_updated", centerline_lookahead_ratio=numeric)
-            self._json(200, {"ok": True, "values": self._values()})
-
-    server = ThreadingHTTPServer(("0.0.0.0", port), RuntimeSettingsHandler)
-    threading.Thread(target=server.serve_forever, name="perception_runtime_settings", daemon=True).start()
-    log("perception_runtime_settings_server", port=port, path="/runtime-settings")
-    return server
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Pi perception node (Milestone 3.3)")
     parser.add_argument("--config", default="configs/default.yaml", help="Path to YAML config")
@@ -260,11 +165,6 @@ def main() -> None:
     source = _parse_source(cfg.camera.source, cfg)
     sender = _make_sender(cfg.comms.method, cfg)
     regulator = LoopRegulator(target_hz=cfg.fps)
-    settings_lock = threading.Lock()
-    runtime_settings = {
-        "centerline_lookahead_ratio": float(cfg.smoothing.centerline_lookahead_ratio),
-    }
-    settings_server = _start_runtime_settings_server(cfg, runtime_settings, settings_lock)
 
     state = PipelineState()
     state.path_mask_key = "red"
@@ -337,8 +237,6 @@ def main() -> None:
                     break
 
                 roi = crop_roi(item.frame, cfg.roi_y_start)
-                with settings_lock:
-                    cfg.smoothing.centerline_lookahead_ratio = float(runtime_settings["centerline_lookahead_ratio"])
                 out = run_pipeline(roi_bgr=roi, state=state, cfg=cfg)
                 try:
                     result_queue.put(
@@ -423,8 +321,6 @@ def main() -> None:
             regulator.sleep()
     finally:
         stop_event.set()
-        settings_server.shutdown()
-        settings_server.server_close()
         capture_thread.join(timeout=1.0)
         worker_thread.join(timeout=1.0)
         cam.release()
