@@ -30,6 +30,10 @@ def _apply_deadband(value: float) -> float:
     return math.copysign(max(abs(value), MOTOR_DEADBAND), value)
 
 
+def _clamp_unit(value: float) -> float:
+    return max(-1.0, min(1.0, value))
+
+
 # ── Robot ─────────────────────────────────────────────────────────────────────
 
 log = logging.getLogger('robot')
@@ -337,8 +341,21 @@ class Robot:
                 angular_z = self._heading_pid.update(heading_error, rotation_scale)
                 linear_x  = speed_scale
 
-                left  = max(-1.0, min(1.0, linear_x - angular_z))
-                right = max(-1.0, min(1.0, linear_x + angular_z))
+                left = linear_x - angular_z
+                right = linear_x + angular_z
+
+                # For aggressive forward line-follow corrections, stop the inner wheel
+                # instead of reversing it so the robot corners tighter on one wheel.
+                if linear_x > 0.0 and left < 0.0 <= right:
+                    left = 0.0
+                    right = _clamp_unit(linear_x + abs(angular_z))
+                elif linear_x > 0.0 and right < 0.0 <= left:
+                    right = 0.0
+                    left = _clamp_unit(linear_x + abs(angular_z))
+                else:
+                    left = _clamp_unit(left)
+                    right = _clamp_unit(right)
+
                 self._bridge.send_drive(left, right)
 
             log.debug('heading_err=%.1f° hdg_fb=%.1f° speed=%.2f', math.degrees(heading_error), math.degrees(hdg_fb), speed_scale)
