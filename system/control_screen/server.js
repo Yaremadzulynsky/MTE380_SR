@@ -1,6 +1,9 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
 const { spawn } = require('child_process');
 
 const app = express();
@@ -329,8 +332,135 @@ app.get('/api/ops/config', (req, res) => {
     enabled: PERCEPTION_RUNNER_ENABLED,
     perceptionRunnerEnabled: PERCEPTION_RUNNER_ENABLED,
     houghStreamUrl: OPS_HOUGH_STREAM_URL,
+    /** Same-origin MJPEG relay — more reliable than pointing <img> at another host/port. */
+    mjpegProxyPath: '/api/ops/mjpeg-stream',
     perceptionScript: PERCEPTION_RUN_SCRIPT
   });
+});
+
+/**
+ * Proxy MJPEG from OPS_HOUGH_STREAM_URL so the browser loads same-origin video
+ * (avoids mixed-origin quirks and some browsers mishandling long multipart streams).
+ */
+app.get('/api/ops/mjpeg-stream', (req, res) => {
+  let target;
+  try {
+    target = new URL(OPS_HOUGH_STREAM_URL);
+  } catch (e) {
+    res.status(500).type('text/plain').send(`Invalid OPS_HOUGH_STREAM_URL: ${e.message}`);
+    return;
+  }
+  const isHttps = target.protocol === 'https:';
+  const lib = isHttps ? https : http;
+  const opts = {
+    hostname: target.hostname,
+    port: target.port || (isHttps ? 443 : 80),
+    path: `${target.pathname}${target.search}`,
+    method: 'GET',
+    timeout: 20000,
+    headers: { Connection: 'close' }
+  };
+
+  const upstream = lib.request(opts, (upRes) => {
+    const code = upRes.statusCode || 502;
+    if (code < 200 || code >= 300) {
+      if (!res.headersSent) {
+        res.status(502).type('text/plain').send(`Upstream MJPEG returned HTTP ${code}`);
+      }
+      upRes.resume();
+      return;
+    }
+    res.statusCode = 200;
+    const ct = upRes.headers['content-type'];
+    if (ct) {
+      res.setHeader('Content-Type', ct);
+    } else {
+      res.setHeader('Content-Type', 'multipart/x-mixed-replace; boundary=frame');
+    }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    upRes.pipe(res);
+  });
+
+  upstream.on('timeout', () => {
+    upstream.destroy();
+    if (!res.headersSent) {
+      res.status(504).type('text/plain').send('Upstream MJPEG timeout');
+    }
+  });
+  upstream.on('error', (err) => {
+    if (!res.headersSent) {
+      res.status(502).type('text/plain').send(`Upstream MJPEG error: ${err.message}`);
+    } else {
+      try {
+        res.end();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  });
+  req.on('close', () => upstream.destroy());
+  upstream.end();
+});
+
+/** Quick check that OPS_HOUGH_STREAM_URL accepts connections (headers only). */
+app.get('/api/ops/mjpeg-health', (req, res) => {
+  let target;
+  try {
+    target = new URL(OPS_HOUGH_STREAM_URL);
+  } catch (e) {
+    return res.json({
+      ok: false,
+      error: `invalid OPS_HOUGH_STREAM_URL: ${e.message}`,
+      upstreamUrl: OPS_HOUGH_STREAM_URL
+    });
+  }
+  const isHttps = target.protocol === 'https:';
+  const lib = isHttps ? https : http;
+  const opts = {
+    hostname: target.hostname,
+    port: target.port || (isHttps ? 443 : 80),
+    path: `${target.pathname}${target.search}`,
+    method: 'GET',
+    timeout: 5000,
+    headers: { Connection: 'close' }
+  };
+  let answered = false;
+  const finish = (payload) => {
+    if (answered) return;
+    answered = true;
+    res.json(payload);
+  };
+
+  const upstream = lib.request(opts, (upRes) => {
+    const code = upRes.statusCode || 0;
+    const ok = code >= 200 && code < 300;
+    finish({
+      ok,
+      statusCode: code,
+      upstreamUrl: OPS_HOUGH_STREAM_URL,
+      contentType: upRes.headers['content-type'] || null
+    });
+    upRes.resume();
+    upstream.destroy();
+  });
+  upstream.on('timeout', () => {
+    upstream.destroy();
+    finish({
+      ok: false,
+      error: 'timeout',
+      upstreamUrl: OPS_HOUGH_STREAM_URL
+    });
+  });
+  upstream.on('error', (err) => {
+    finish({
+      ok: false,
+      error: err.message,
+      upstreamUrl: OPS_HOUGH_STREAM_URL
+    });
+  });
+  upstream.end();
 });
 
 app.get('/api/ops/services', async (req, res) => {

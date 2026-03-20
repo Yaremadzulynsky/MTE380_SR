@@ -5,6 +5,10 @@ const state = {
   logTailTimer: null,
   logTailMs: 2500,
   defaultStreamUrl: 'http://localhost:8090/stream.mjpg',
+  /** Same-origin path; server proxies OPS_HOUGH_STREAM_URL */
+  mjpegProxyPath: '/api/ops/mjpeg-stream',
+  streamRetryTimer: null,
+  streamFailCount: 0,
   lineFollowBounds: null
 };
 
@@ -22,6 +26,9 @@ const elements = {
   openStreamBtn: document.getElementById('openStreamBtn'),
   reloadStreamBtn: document.getElementById('reloadStreamBtn'),
   copyStreamUrlBtn: document.getElementById('copyStreamUrlBtn'),
+  streamHealthBtn: document.getElementById('streamHealthBtn'),
+  mjpegDirectToggle: document.getElementById('mjpegDirectToggle'),
+  visionStreamFeedback: document.getElementById('visionStreamFeedback'),
   visionStreamImg: document.getElementById('visionStreamImg'),
   visionStreamFrame: document.getElementById('visionStreamFrame'),
   visionRtspHint: document.getElementById('visionRtspHint'),
@@ -53,6 +60,7 @@ initialize().catch((err) => {
 
 async function initialize() {
   bindEvents();
+  bindVisionStreamResilience();
   await loadOpsConfig();
   await loadLineFollowSpeeds();
   await refreshRunnerStatus();
@@ -75,6 +83,8 @@ function bindEvents() {
   elements.copyStreamUrlBtn?.addEventListener('click', copyVisionStreamUrl);
   elements.streamPresetMjpegBtn?.addEventListener('click', applyMjpegPreset);
   elements.streamPresetWebrtcBtn?.addEventListener('click', applyWebrtcPreset);
+  elements.streamHealthBtn?.addEventListener('click', () => testMjpegUpstreamHealth());
+  elements.mjpegDirectToggle?.addEventListener('change', () => openVisionStream());
   elements.streamViewerMode?.addEventListener('change', openVisionStream);
   elements.refreshServicesBtn?.addEventListener('click', refreshRunnerStatus);
   elements.refreshLogsBtn?.addEventListener('click', refreshLogs);
@@ -127,6 +137,7 @@ async function loadOpsConfig() {
   const scriptPath = result.data.perceptionScript || 'run_perception_rpicam.sh';
   elements.opsDetail.textContent = `Perception script: ${scriptPath}`;
   state.defaultStreamUrl = result.data.houghStreamUrl || 'http://localhost:8090/stream.mjpg';
+  state.mjpegProxyPath = result.data.mjpegProxyPath || '/api/ops/mjpeg-stream';
   if (elements.streamUrlInput) {
     elements.streamUrlInput.value = state.defaultStreamUrl;
     openVisionStream();
@@ -365,6 +376,96 @@ async function runStackAction(action) {
   await refreshLogs();
 }
 
+function setVisionFeedback(text, isError = false) {
+  const el = elements.visionStreamFeedback;
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+  el.classList.remove('success', 'error');
+  el.classList.add(isError ? 'error' : 'success');
+}
+
+function useMjpegDirect() {
+  return Boolean(elements.mjpegDirectToggle?.checked);
+}
+
+function getMjpegImageSrc() {
+  const t = `t=${Date.now()}`;
+  if (useMjpegDirect()) {
+    const url = (elements.streamUrlInput?.value || state.defaultStreamUrl || '').trim();
+    if (!url) {
+      return '';
+    }
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}${t}`;
+  }
+  const proxy = state.mjpegProxyPath || '/api/ops/mjpeg-stream';
+  const sep = proxy.includes('?') ? '&' : '?';
+  return `${proxy}${sep}${t}`;
+}
+
+function bindVisionStreamResilience() {
+  const img = elements.visionStreamImg;
+  if (!img || img.dataset.opsBound === '1') {
+    return;
+  }
+  img.dataset.opsBound = '1';
+  img.addEventListener('load', () => {
+    if ((elements.streamViewerMode?.value || '') !== 'mjpeg') {
+      return;
+    }
+    state.streamFailCount = 0;
+    setVisionFeedback('MJPEG receiving frames.', false);
+  });
+  img.addEventListener('error', () => {
+    if ((elements.streamViewerMode?.value || '') !== 'mjpeg') {
+      return;
+    }
+    scheduleMjpegRetry();
+  });
+}
+
+function scheduleMjpegRetry() {
+  if (state.streamRetryTimer) {
+    clearTimeout(state.streamRetryTimer);
+  }
+  state.streamFailCount = (state.streamFailCount || 0) + 1;
+  const delay = Math.min(
+    30000,
+    Math.round(500 * 1.85 ** Math.min(state.streamFailCount, 12))
+  );
+  setVisionFeedback(
+    `Stream error — reconnect in ${(delay / 1000).toFixed(1)}s. Run “Test upstream MJPEG” if this keeps happening.`,
+    true
+  );
+  state.streamRetryTimer = setTimeout(() => {
+    state.streamRetryTimer = null;
+    reloadVisionStream();
+  }, delay);
+}
+
+async function testMjpegUpstreamHealth() {
+  setVisionFeedback('Checking upstream MJPEG (from server)…', false);
+  const result = await requestJson('/api/ops/mjpeg-health');
+  if (!result.ok || !result.data) {
+    setVisionFeedback(extractError(result, 'Health check failed.'), true);
+    return;
+  }
+  const d = result.data;
+  if (d.ok) {
+    setVisionFeedback(
+      `Upstream OK HTTP ${d.statusCode} · ${d.contentType || 'no Content-Type'} · ${d.upstreamUrl}`,
+      false
+    );
+  } else {
+    setVisionFeedback(
+      `Upstream failed: ${d.error || 'unknown'} · ${d.upstreamUrl || ''} — start Hough tool with --mjpeg-port 8090 on the Pi.`,
+      true
+    );
+  }
+}
+
 function setVisionWidgets(mode) {
   const img = elements.visionStreamImg;
   const frame = elements.visionStreamFrame;
@@ -385,51 +486,76 @@ function setVisionWidgets(mode) {
 }
 
 function openVisionStream() {
-  const url = (elements.streamUrlInput?.value || '').trim();
   const mode = elements.streamViewerMode?.value || 'mjpeg';
-  if (!url) {
+  setVisionWidgets(mode);
+
+  if (mode === 'mjpeg' && elements.visionStreamImg) {
+    const src = getMjpegImageSrc();
+    if (!src) {
+      setVisionFeedback('Enter an MJPEG URL or uncheck “direct” to use the dashboard proxy.', true);
+      return;
+    }
+    setVisionFeedback(
+      useMjpegDirect() ? 'Loading MJPEG (direct URL)…' : 'Loading MJPEG via same-origin proxy…',
+      false
+    );
+    elements.visionStreamImg.src = src;
     return;
   }
-  setVisionWidgets(mode);
-  if (mode === 'mjpeg' && elements.visionStreamImg) {
-    elements.visionStreamImg.src = url;
+
+  const url = (elements.streamUrlInput?.value || '').trim();
+  if (!url) {
+    setVisionFeedback('Enter a URL for this viewer mode.', true);
     return;
   }
   if (mode === 'embed' && elements.visionStreamFrame) {
     elements.visionStreamFrame.src = url;
+    setVisionFeedback('Loading embedded viewer…', false);
     return;
   }
   if (mode === 'rtsp' && elements.visionRtspUrl) {
     elements.visionRtspUrl.textContent = url;
+    setVisionFeedback('RTSP URL shown below — open in VLC or ffplay.', false);
   }
 }
 
 function reloadVisionStream() {
-  const url = (elements.streamUrlInput?.value || '').trim();
   const mode = elements.streamViewerMode?.value || 'mjpeg';
+  if (mode === 'mjpeg' && elements.visionStreamImg) {
+    const src = getMjpegImageSrc();
+    if (src) {
+      elements.visionStreamImg.src = src;
+    }
+    return;
+  }
+  const url = (elements.streamUrlInput?.value || '').trim();
   if (!url) {
     return;
   }
   const separator = url.includes('?') ? '&' : '?';
-  if (mode === 'mjpeg' && elements.visionStreamImg) {
-    elements.visionStreamImg.src = `${url}${separator}t=${Date.now()}`;
-    return;
-  }
   if (mode === 'embed' && elements.visionStreamFrame) {
     elements.visionStreamFrame.src = `${url}${separator}t=${Date.now()}`;
   }
 }
 
 async function copyVisionStreamUrl() {
-  const url = (elements.streamUrlInput?.value || '').trim();
-  if (!url) {
+  const mode = elements.streamViewerMode?.value || 'mjpeg';
+  let text = (elements.streamUrlInput?.value || '').trim();
+  if (mode === 'mjpeg' && !useMjpegDirect()) {
+    text =
+      text ||
+      state.defaultStreamUrl ||
+      `${window.location.origin}${state.mjpegProxyPath || '/api/ops/mjpeg-stream'}`;
+  }
+  if (!text) {
+    setVisionFeedback('Nothing to copy.', true);
     return;
   }
   try {
-    await navigator.clipboard.writeText(url);
+    await navigator.clipboard.writeText(text);
+    setVisionFeedback('Copied URL to clipboard.', false);
   } catch {
-    // Fallback
-    window.prompt('Copy stream URL', url);
+    window.prompt('Copy stream URL', text);
   }
 }
 

@@ -122,32 +122,40 @@
         <div class="feedback" id="turnTestFeedback" role="status" aria-live="polite">Idle.</div>
       </section>
 
-      <section class="panel" data-animate>
+      <section class="panel" data-animate data-ops-runner-independent>
         <h2>Vision Stream</h2>
         <p class="hint">
-          MJPEG (legacy) or H.264 via MediaMTX WebRTC page. Use the preset buttons to fill common URLs.
+          <strong>MJPEG</strong> is loaded through this dashboard (same-origin proxy) for reliability. Upstream is
+          <code>OPS_HOUGH_STREAM_URL</code> on the server (default <code>http://localhost:8090/stream.mjpg</code>).
+          Use <strong>Web / WebRTC</strong> for MediaMTX. <strong>RTSP</strong> is copy-only for VLC/ffplay.
         </p>
         <div class="field-grid">
           <label class="field">
             <span class="field-label">Viewer</span>
             <select id="streamViewerMode">
-              <option value="mjpeg">MJPEG (image)</option>
+              <option value="mjpeg">MJPEG (proxied — recommended)</option>
               <option value="embed">Web / WebRTC (iframe)</option>
               <option value="rtsp">RTSP URL (copy / external player)</option>
             </select>
           </label>
           <label class="field">
-            <span class="field-label">Stream URL</span>
+            <span class="field-label">URL (WebRTC / RTSP / direct MJPEG)</span>
             <input id="streamUrlInput" type="text" value="" />
+          </label>
+          <label class="field field-checkbox">
+            <input type="checkbox" id="mjpegDirectToggle" />
+            <span class="field-label">MJPEG: direct URL in browser (legacy — often breaks off-Pi)</span>
           </label>
         </div>
         <div class="actions">
           <button type="button" class="ghost" id="streamPresetMjpegBtn">Use MJPEG Default</button>
           <button type="button" class="ghost" id="streamPresetWebrtcBtn">Use WebRTC Default</button>
+          <button type="button" class="ghost" id="streamHealthBtn">Test upstream MJPEG</button>
           <button type="button" id="openStreamBtn">Open Stream</button>
           <button type="button" class="ghost" id="reloadStreamBtn">Reload Stream</button>
           <button type="button" class="ghost" id="copyStreamUrlBtn">Copy URL</button>
         </div>
+        <div class="feedback" id="visionStreamFeedback" role="status" aria-live="polite">—</div>
         <img id="visionStreamImg" class="ops-stream" alt="Hough overlay stream" />
         <iframe
           id="visionStreamFrame"

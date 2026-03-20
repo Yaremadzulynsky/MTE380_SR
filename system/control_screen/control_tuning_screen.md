@@ -57,7 +57,7 @@ Will send HTTP GET/POST requests to the control communication endpoint.
 ## Security and guardrails
 - Only the configured local runner script is started/stopped by `/ops`.
 - Container lifecycle is intentionally excluded from the UI/API in this dashboard mode.
-- Set `OPS_HOUGH_STREAM_URL` to prefill the Vision Stream URL in the Ops UI (default: `http://localhost:8090/stream.mjpg`).
+- Set `OPS_HOUGH_STREAM_URL` to the **upstream** MJPEG URL the Hough tool serves (default: `http://localhost:8090/stream.mjpg`). The Ops page loads video via **`GET /api/ops/mjpeg-stream`** (same-origin proxy) so the browser does not talk to another port directly — more reliable than `<img src="http://pi:8090/...">`. Use **Test upstream MJPEG** if the picture stays black.
 - **H.264 / WebRTC (recommended):** On the Pi run `docker compose --profile mediamtx up -d mediamtx`, then start the Hough tool with
   `--h264-rtsp-url rtsp://127.0.0.1:8554/hough` (requires `ffmpeg` on the Pi). In Ops, choose viewer **Web / WebRTC (iframe)** and set the URL to
   `http://<pi-tailscale-host>:8889/hough` (MediaMTX embeds the player).
