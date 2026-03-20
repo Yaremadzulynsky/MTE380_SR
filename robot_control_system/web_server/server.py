@@ -128,6 +128,13 @@ class WebServer:
                 mimetype='multipart/x-mixed-replace; boundary=frame',
             )
 
+        @app.route('/video_feed_mask')
+        def video_feed_mask():
+            return Response(
+                self._mjpeg_stream(mask=True),
+                mimetype='multipart/x-mixed-replace; boundary=frame',
+            )
+
         @app.route('/events')
         def events():
             return Response(
@@ -209,6 +216,26 @@ class WebServer:
                 robot.set_speed_gains(float(kp), float(ki), float(kd))
             return jsonify(robot.get_gains())
 
+        @app.route('/api/vision', methods=['GET'])
+        def get_vision():
+            det = self._detector
+            if det is None:
+                return jsonify({'error': 'no detector'}), 503
+            return jsonify(det.get_vision_params())
+
+        @app.route('/api/vision', methods=['POST'])
+        def set_vision():
+            det = self._detector
+            if det is None:
+                return jsonify({'error': 'no detector'}), 503
+            body = request.get_json(silent=True) or {}
+            det.set_vision_params(
+                s_min=body.get('s_min'),
+                v_min=body.get('v_min'),
+                min_mask_pixels=body.get('min_mask_pixels'),
+            )
+            return jsonify(det.get_vision_params())
+
         @app.route('/api/geometry', methods=['GET'])
         def get_geometry():
             import config as _cfg
@@ -235,7 +262,7 @@ class WebServer:
 
     # ── MJPEG stream ───────────────────────────────────────────────────────────
 
-    def _mjpeg_stream(self):
+    def _mjpeg_stream(self, mask: bool = False):
         global _NO_SIGNAL_JPEG
         if _NO_SIGNAL_JPEG is None:
             _NO_SIGNAL_JPEG = _make_no_signal_jpeg()
@@ -243,7 +270,7 @@ class WebServer:
         interval = 1.0 / _STREAM_FPS
         while True:
             t0   = time.monotonic()
-            jpeg = self._get_jpeg()
+            jpeg = self._get_jpeg(mask=mask)
             yield (
                 b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n'
@@ -251,9 +278,9 @@ class WebServer:
             elapsed = time.monotonic() - t0
             time.sleep(max(0.0, interval - elapsed))
 
-    def _get_jpeg(self) -> bytes:
+    def _get_jpeg(self, mask: bool = False) -> bytes:
         if self._detector is not None:
-            frame = self._detector.get_frame()
+            frame = self._detector.get_mask_frame() if mask else self._detector.get_frame()
             if frame is not None:
                 ok, buf = cv2.imencode(
                     '.jpg', frame,

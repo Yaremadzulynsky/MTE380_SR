@@ -212,9 +212,18 @@ class LineDetector:
         self._lock    = threading.Lock()
         self._result: Optional[LineResult] = None
         self._frame:  Optional[np.ndarray] = None   # latest BGR frame (annotated if debug=True)
+        self._mask:   Optional[np.ndarray] = None   # latest binary red mask
         self._detection_rate: float = 0.0
         self._running = False
         self._thread: Optional[threading.Thread] = None
+
+        # Runtime-tunable HSV thresholds (copies so config is not mutated)
+        rc = _config.get()['vision']['red_hsv']
+        self._hsv_lower1 = np.array(rc['lower1'], dtype=np.uint8).copy()
+        self._hsv_upper1 = np.array(rc['upper1'], dtype=np.uint8).copy()
+        self._hsv_lower2 = np.array(rc['lower2'], dtype=np.uint8).copy()
+        self._hsv_upper2 = np.array(rc['upper2'], dtype=np.uint8).copy()
+        self._min_mask_pixels: int = _config.get()['vision']['min_mask_pixels']
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -241,6 +250,32 @@ class LineDetector:
         with self._lock:
             return {'detection_rate': round(self._detection_rate, 3)}
 
+    def get_vision_params(self) -> dict:
+        """Return current tunable detection parameters."""
+        with self._lock:
+            return {
+                's_min':           int(self._hsv_lower1[1]),
+                'v_min':           int(self._hsv_lower1[2]),
+                'min_mask_pixels': self._min_mask_pixels,
+            }
+
+    def set_vision_params(self, *,
+                          s_min: Optional[int] = None,
+                          v_min: Optional[int] = None,
+                          min_mask_pixels: Optional[int] = None) -> None:
+        """Update detection parameters at runtime (thread-safe)."""
+        with self._lock:
+            if s_min is not None:
+                s = int(max(0, min(255, s_min)))
+                self._hsv_lower1[1] = s
+                self._hsv_lower2[1] = s
+            if v_min is not None:
+                v = int(max(0, min(255, v_min)))
+                self._hsv_lower1[2] = v
+                self._hsv_lower2[2] = v
+            if min_mask_pixels is not None:
+                self._min_mask_pixels = max(0, int(min_mask_pixels))
+
     def get_direction(self) -> Optional[Tuple[float, float]]:
         """Convenience wrapper — returns (x, y) direction or None."""
         result = self.get_result()
@@ -259,12 +294,20 @@ class LineDetector:
         with self._lock:
             self._result = result
             self._frame  = display
+            self._mask   = result.mask if result is not None else self._build_red_mask(bgr)
         return result
 
     def get_frame(self) -> Optional[np.ndarray]:
         """Return the latest BGR frame (annotated if debug=True, else raw)."""
         with self._lock:
             return self._frame
+
+    def get_mask_frame(self) -> Optional[np.ndarray]:
+        """Return the latest red mask as a BGR image (white = detected red)."""
+        with self._lock:
+            if self._mask is None:
+                return None
+            return cv2.cvtColor(self._mask, cv2.COLOR_GRAY2BGR)
 
     # ── Camera helpers ─────────────────────────────────────────────────────────
 
@@ -302,12 +345,11 @@ class LineDetector:
 
     # ── Detection ──────────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _build_red_mask(bgr: np.ndarray) -> np.ndarray:
+    def _build_red_mask(self, bgr: np.ndarray) -> np.ndarray:
         """Return a binary mask isolating red pixels."""
         hsv   = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        mask1 = cv2.inRange(hsv, _RED_LOWER1, _RED_UPPER1)
-        mask2 = cv2.inRange(hsv, _RED_LOWER2, _RED_UPPER2)
+        mask1 = cv2.inRange(hsv, self._hsv_lower1, self._hsv_upper1)
+        mask2 = cv2.inRange(hsv, self._hsv_lower2, self._hsv_upper2)
         mask  = cv2.bitwise_or(mask1, mask2)
         # Remove small noise, fill small holes
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
@@ -317,150 +359,122 @@ class LineDetector:
 
     def _detect(self, frame: np.ndarray) -> Optional[LineResult]:
         h, w = frame.shape[:2]
-        cx   = w / 2.0
+        img_cx = w / 2.0
 
         mask = self._build_red_mask(frame)
 
-        if int(cv2.countNonZero(mask)) < MIN_MASK_PIXELS:
+        if int(cv2.countNonZero(mask)) < self._min_mask_pixels:
             return None
 
-        # Fit a line through all red pixels using least-squares.
-        # fitLine returns [vx, vy, x0, y0]: unit direction (vx, vy) and a point
-        # (x0, y0) that lies on the line.
-        points = cv2.findNonZero(mask)
-        if points is None:
+        # ── Contour extraction ────────────────────────────────────────────────
+        # Find contours of the red region; use the largest one as the line.
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return None
+        contour = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(contour) < self._min_mask_pixels:
             return None
 
-        # Sample up to 30 red pixels for world-space splatter map
-        _N = 30
-        n_pts = len(points)
-        if n_pts > _N:
-            idx = np.random.choice(n_pts, _N, replace=False)
-            sampled = [(int(points[i][0][0]), int(points[i][0][1])) for i in idx]
-        else:
-            sampled = [(int(p[0][0]), int(p[0][1])) for p in points]
+        # ── Centroid via moments ──────────────────────────────────────────────
+        M = cv2.moments(contour)
+        if M['m00'] < 1:
+            return None
+        centroid_x = M['m10'] / M['m00']
+        centroid_y = M['m01'] / M['m00']
 
-        [vx], [vy], [x0], [y0] = cv2.fitLine(points, cv2.DIST_L2, 0, 0.01, 0.01)
+        # ── Direction via fitLine on all red pixels ───────────────────────────
+        # Using all mask pixels (not contour edges) gives a stable direction:
+        # the long axis of the full pixel distribution dominates.  Fitting on
+        # contour edges is unreliable because a thick line produces a roughly
+        # rectangular outline whose sides fight the ends in the least-squares fit.
+        all_pts = cv2.findNonZero(mask)
+        if all_pts is None:
+            return None
+        [vx], [vy], [x0], [y0] = cv2.fitLine(all_pts, cv2.DIST_L2, 0, 0.01, 0.01)
         vx, vy, x0, y0 = float(vx), float(vy), float(x0), float(y0)
 
-        # Ensure the tangent points "forward" — upward in the image.
-        # (Image y increases downward, so forward = negative vy.)
+        # Ensure tangent points "forward" (upward in image = negative vy).
         if vy > 0:
             vx, vy = -vx, -vy
 
-        # ── Heading direction vector ──────────────────────────────────────────
-        # angle from vertical: atan2(vx, -vy)
-        # robot.add_direction expects a unit (x, y) in robot frame where
-        #   x = lateral (right +), y = forward (always 1 when following)
         angle_rad = math.atan2(vx, -vy)
         angle_deg = math.degrees(angle_rad)
         direction = (math.sin(angle_rad), math.cos(angle_rad))
 
-        # ── Lateral distance (perpendicular, geometrically correct) ───────────
-        # Robot's ground position in the image = bottom-centre pixel.
-        # True perpendicular distance from that point to the fitted line:
-        #
-        #   lateral_px = (P - Q) × d   (2D cross product, scalar)
-        #              = (px - x0) * vy - (py - y0) * vx
-        #
-        # where Q = (x0, y0) is a point on the line and d = (vx, vy) is its
-        # unit direction.  The sign convention is:
-        #   positive → line is to the RIGHT of the robot (steer right)
-        #   negative → line is to the LEFT  of the robot (steer left)
-        #
-        # This is correct for any line angle, unlike a centroid x-offset which
-        # gives a misleading reading when the line is diagonal.
-        px, py = cx, float(h - 1)
-        lateral_px = (px - x0) * vy - (py - y0) * vx
+        # ── Lateral distance ──────────────────────────────────────────────────
+        # Perpendicular distance from bottom-centre of the image (robot ground
+        # position) to the fitted line, signed: + = line right, - = line left.
+        # The line passes through (x0, y0) with unit tangent (vx, vy); the
+        # centroid is used as the anchor point (x0, y0) for the fit so the
+        # lateral reading reflects the true centre of the detected region.
+        ref_x, ref_y = img_cx, float(h - 1)
+        lateral_px = (ref_x - centroid_x) * vy - (ref_y - centroid_y) * vx
         lateral_m  = (lateral_px / self._pixels_per_meter
                       if self._pixels_per_meter is not None else None)
 
-        # Foot of the perpendicular from robot ref point onto the fitted line
-        # (used for the debug overlay).
-        t_proj   = (px - x0) * vx + (py - y0) * vy
-        foot_x   = x0 + t_proj * vx
-        foot_y   = y0 + t_proj * vy
+        # ── Sample red pixels for world-space splatter ────────────────────────
+        _N  = 30
+        n_pts = len(all_pts)
+        if n_pts > _N:
+            idx     = np.random.choice(n_pts, _N, replace=False)
+            sampled = [(int(all_pts[i][0][0]), int(all_pts[i][0][1])) for i in idx]
+        else:
+            sampled = [(int(p[0][0]), int(p[0][1])) for p in all_pts]
 
         # ── Debug annotation ──────────────────────────────────────────────────
         annotated = None
         if self._debug:
             annotated = frame.copy()
 
-            ARROW_LEN  = 80   # px — max arrow length
-            DEADZONE   = 20   # px — lateral distance within which correction is zero
+            ARROW_LEN  = 80
+            DEADZONE   = 20
             FONT       = cv2.FONT_HERSHEY_SIMPLEX
             FONT_SCALE = 0.42
             THICKNESS  = 1
 
-            # ── (0) Fitted line across the full frame (dim green reference) ──
+            # Contour outline
+            cv2.drawContours(annotated, [contour], -1, (0, 180, 180), 1)
+
+            # Fitted line across the full frame
             t = float(max(w, h))
             cv2.line(annotated,
-                     (int(x0 - vx * t), int(y0 - vy * t)),
-                     (int(x0 + vx * t), int(y0 + vy * t)),
+                     (int(centroid_x - vx * t), int(centroid_y - vy * t)),
+                     (int(centroid_x + vx * t), int(centroid_y + vy * t)),
                      (0, 120, 0), 1)
 
-            robot_pt = (int(px), int(py))
-            foot_pt  = (int(foot_x), int(foot_y))
+            # Centroid dot
+            cv2.circle(annotated, (int(centroid_x), int(centroid_y)), 5, (0, 255, 255), -1)
 
-            # ── (0b) ROBOT FORWARD — straight up from robot reference point ──
-            fwd_end = (int(px), int(py - ARROW_LEN))
+            robot_pt = (int(ref_x), int(ref_y))
+
+            # Robot forward arrow
+            fwd_end = (int(ref_x), int(ref_y - ARROW_LEN))
             cv2.arrowedLine(annotated, robot_pt, fwd_end, (255, 255, 255), 2, tipLength=0.2)
             cv2.putText(annotated, 'FWD', (fwd_end[0] + 4, fwd_end[1]),
                         FONT, FONT_SCALE, (255, 255, 255), THICKNESS)
 
-            # ── (1) TANGENT — direction of the line at the robot's position ──
-            # Drawn from the robot reference point along (vx, vy).
-            # Green: robot is being told to go this way if it were on the line.
-            tan_end = (int(px + vx * ARROW_LEN), int(py + vy * ARROW_LEN))
+            # Tangent arrow
+            tan_end = (int(ref_x + vx * ARROW_LEN), int(ref_y + vy * ARROW_LEN))
             cv2.arrowedLine(annotated, robot_pt, tan_end, (0, 230, 0), 2, tipLength=0.25)
             cv2.putText(annotated, 'TANGENT', (tan_end[0] + 4, tan_end[1]),
                         FONT, FONT_SCALE, (0, 230, 0), THICKNESS)
 
-            # ── (2) LATERAL CORRECTION — perpendicular vector toward the line ─
-            # Scales with actual lateral distance; zero inside the deadzone.
-            # Arrow length = min(lateral_px, ARROW_LEN) so it grows as the
-            # robot drifts further from the line.
-            lat_dx = foot_x - px
-            lat_dy = foot_y - py
-            lat_len = math.hypot(lat_dx, lat_dy)
-            if lat_len > 1e-6:
-                lat_nx, lat_ny = lat_dx / lat_len, lat_dy / lat_len
-            else:
-                lat_nx, lat_ny = 0.0, 0.0
-
-            # Weight: 0 inside deadzone, grows linearly, capped at 1.0
-            lat_weight = max(0.0, abs(lateral_px) - DEADZONE) / ARROW_LEN
-            lat_weight = min(lat_weight, 1.0)
+            # Lateral correction arrow (toward centroid x)
+            lat_nx = math.copysign(1.0, lateral_px) * vy   # perpendicular direction
+            lat_ny = -math.copysign(1.0, lateral_px) * vx
+            lat_weight  = max(0.0, abs(lateral_px) - DEADZONE) / ARROW_LEN
+            lat_weight  = min(lat_weight, 1.0)
             lat_draw_len = lat_weight * ARROW_LEN
-
-            lat_end = (int(px + lat_nx * lat_draw_len), int(py + lat_ny * lat_draw_len))
+            lat_end = (int(ref_x + lat_nx * lat_draw_len), int(ref_y + lat_ny * lat_draw_len))
             if lat_draw_len > 2:
                 cv2.arrowedLine(annotated, robot_pt, lat_end, (255, 220, 0), 2, tipLength=0.25)
-            cv2.putText(annotated, 'LATERAL CORRECTION',
+            cv2.putText(annotated, 'LATERAL',
                         (lat_end[0] + 4, lat_end[1]),
                         FONT, FONT_SCALE, (255, 220, 0), THICKNESS)
-            # Dot at foot of perpendicular on the line
-            cv2.circle(annotated, foot_pt, 5, (255, 220, 0), -1)
 
-            # ── (3) TARGET HEADING — blended command vector sent to the robot ─
-            # Tangent + weighted lateral correction: inside the deadzone the
-            # heading is purely the tangent (no oscillation); outside it angles
-            # toward the line proportionally to how far the robot has drifted.
-            hx = vx + lat_weight * lat_nx
-            hy = vy + lat_weight * lat_ny
-            h_len = math.hypot(hx, hy)
-            if h_len > 1e-6:
-                hx, hy = hx / h_len, hy / h_len
-            hdg_end = (int(px + hx * ARROW_LEN), int(py + hy * ARROW_LEN))
-            cv2.arrowedLine(annotated, robot_pt, hdg_end, (80, 80, 255), 2, tipLength=0.25)
-            cv2.putText(annotated, 'TARGET HEADING',
-                        (hdg_end[0] + 4, hdg_end[1]),
-                        FONT, FONT_SCALE, (80, 80, 255), THICKNESS)
-
-            # Robot reference point
+            # Robot reference dot
             cv2.circle(annotated, robot_pt, 5, (255, 255, 255), -1)
 
-            # ── Status line ───────────────────────────────────────────────────
             lat_label = (f'{lateral_px:+.1f}px'
                          + (f' / {lateral_m:+.3f}m' if lateral_m is not None else ''))
             cv2.putText(
@@ -469,12 +483,11 @@ class LineDetector:
                 (8, 20), FONT, 0.45, (255, 255, 255), THICKNESS,
             )
 
-            # ── Legend ────────────────────────────────────────────────────────
             legend = [
-                ((255, 255, 255), '(0) ROBOT FORWARD      - straight ahead'),
-                ((0, 230, 0),     '(1) TANGENT            - line direction'),
-                ((255, 220, 0),   f'(2) LATERAL CORRECTION - scales w/ dist (deadzone={DEADZONE}px)'),
-                ((80, 80, 255),   '(3) TARGET HEADING      - blended command'),
+                ((0, 180, 180),   '(0) CONTOUR EDGES'),
+                ((0, 255, 255),   '(1) CENTROID'),
+                ((0, 230, 0),     '(2) TANGENT (fitLine on edges)'),
+                ((255, 220, 0),   f'(3) LATERAL (deadzone={DEADZONE}px)'),
             ]
             for i, (colour, text) in enumerate(legend):
                 y = h - 12 - i * 16
@@ -486,7 +499,7 @@ class LineDetector:
             angle_deg=angle_deg,
             lateral_distance_px=lateral_px,
             lateral_distance_m=lateral_m,
-            mask=mask if self._debug else None,
+            mask=mask,
             frame=annotated,
             sampled_pixels=sampled,
         )
@@ -518,6 +531,7 @@ class LineDetector:
             with self._lock:
                 self._result = result
                 self._frame  = display
+                self._mask   = result.mask if result is not None else self._build_red_mask(frame)
                 self._detection_rate = frames_detected / frames_total
 
         self._release_camera()

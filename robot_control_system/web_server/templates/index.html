@@ -310,7 +310,13 @@
   <!-- ── Left column: camera + odometry ─────────────────────── -->
   <div id="camera-col">
     <img src="/video_feed" alt="Camera feed" id="camera-img">
-    <div id="camera-label">CAMERA &nbsp;/&nbsp; LINE OVERLAY</div>
+    <div id="camera-label" style="display:flex; align-items:center; justify-content:center; gap:16px;">
+      <span>CAMERA &nbsp;/&nbsp; LINE OVERLAY</span>
+      <label style="color:var(--dim); font-size:11px; cursor:pointer; display:flex; align-items:center; gap:5px;">
+        <input type="checkbox" id="mask-toggle" onchange="toggleMaskView(this.checked)">
+        MASK VIEW
+      </label>
+    </div>
 
     <!-- Odometry 2D view -->
     <div id="odo-wrap">
@@ -404,21 +410,49 @@
         <div class="tuner-row">
           <span class="tuner-lbl">Max Speed</span>
           <input id="lim-speed" class="tuner-input" type="number" step="0.05" min="0" max="1" value="1.0">
-          <input id="lim-speed-range" type="range" min="0" max="1" step="0.05" value="1.0"
-                 style="flex:1;" oninput="document.getElementById('lim-speed').value = this.value">
+          <input id="lim-speed-range" type="range" min="0" max="1" step="0.05" value="1.0" style="flex:1;">
         </div>
 
         <div class="tuner-row">
           <span class="tuner-lbl">Max Rot Speed</span>
           <input id="lim-rot" class="tuner-input" type="number" step="0.05" min="0" max="1" value="1.0">
-          <input id="lim-rot-range" type="range" min="0" max="1" step="0.05" value="1.0"
-                 style="flex:1;" oninput="document.getElementById('lim-rot').value = this.value">
+          <input id="lim-rot-range" type="range" min="0" max="1" step="0.05" value="1.0" style="flex:1;">
         </div>
 
         <div style="display:flex; gap:8px; align-items:center;">
-          <button class="ctrl-btn" id="btn-lim-apply" onclick="applyLimits()" style="color:var(--accent);">&#10003; APPLY</button>
           <button class="ctrl-btn" onclick="loadLimits()" style="color:var(--dim);">&#8635; LOAD</button>
           <span id="lim-status" style="font-size:11px; color:var(--dim);"></span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Line detector sensitivity -->
+    <div class="panel">
+      <div class="panel-title">LINE DETECTOR SENSITIVITY</div>
+      <div style="padding:10px 14px; display:flex; flex-direction:column; gap:10px;">
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Sat min (S)</span>
+          <input id="vis-s-min" class="tuner-input" type="number" step="1" min="0" max="255" value="50">
+          <input id="vis-s-min-range" type="range" min="0" max="255" step="1" value="50" style="flex:1;">
+        </div>
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Val min (V)</span>
+          <input id="vis-v-min" class="tuner-input" type="number" step="1" min="0" max="255" value="40">
+          <input id="vis-v-min-range" type="range" min="0" max="255" step="1" value="40" style="flex:1;">
+        </div>
+
+        <div class="tuner-row">
+          <span class="tuner-lbl">Min pixels</span>
+          <input id="vis-min-px" class="tuner-input" type="number" step="10" min="0" max="5000" value="200">
+          <input id="vis-min-px-range" type="range" min="0" max="5000" step="10" value="200" style="flex:1;">
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="ctrl-btn" onclick="loadVision()" style="color:var(--dim);">&#8635; LOAD</button>
+          <span id="vis-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
 
       </div>
@@ -453,7 +487,6 @@
         </div>
 
         <div style="display:flex; gap:8px; align-items:center;">
-          <button class="ctrl-btn" id="btn-pid-apply" onclick="applyGains()" style="color:var(--accent);">&#10003; APPLY</button>
           <button class="ctrl-btn" onclick="loadGains()" style="color:var(--dim);">&#8635; LOAD</button>
           <span id="pid-status" style="font-size:11px; color:var(--dim);"></span>
         </div>
@@ -566,6 +599,12 @@
   }
   connect();
 
+  // ── Mask view toggle ──────────────────────────────────────────────────────
+
+  function toggleMaskView(on) {
+    document.getElementById('camera-img').src = on ? '/video_feed_mask' : '/video_feed';
+  }
+
   // ── State control ─────────────────────────────────────────────────────────
 
   function setState(state) {
@@ -659,16 +698,28 @@
     set('vision-det-rate', pct + '%', col);
   }
 
-  // ── Speed limits ──────────────────────────────────────────────────────────
+  // ── Debounce helper ───────────────────────────────────────────────────────
 
-  function syncRangeFromInput(inputId, rangeId) {
-    const v = document.getElementById(inputId).value;
-    document.getElementById(rangeId).value = v;
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   }
-  document.getElementById('lim-speed').addEventListener('input',
-    () => syncRangeFromInput('lim-speed', 'lim-speed-range'));
-  document.getElementById('lim-rot').addEventListener('input',
-    () => syncRangeFromInput('lim-rot', 'lim-rot-range'));
+
+  function setStatus(id, text, ok) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = ok ? 'var(--success)' : 'var(--danger)';
+  }
+
+  function pairInputs(numId, rangeId, onChange) {
+    const num   = document.getElementById(numId);
+    const range = document.getElementById(rangeId);
+    num.addEventListener('input',   () => { range.value = num.value;   onChange(); });
+    range.addEventListener('input', () => { num.value   = range.value; onChange(); });
+  }
+
+  // ── Speed limits ──────────────────────────────────────────────────────────
 
   function loadLimits() {
     fetch('/api/limits')
@@ -678,40 +729,65 @@
         document.getElementById('lim-speed-range').value = d.max_speed;
         document.getElementById('lim-rot').value         = d.max_rot_speed;
         document.getElementById('lim-rot-range').value   = d.max_rot_speed;
-        const st = document.getElementById('lim-status');
-        st.textContent = 'loaded'; st.style.color = 'var(--success)';
+        setStatus('lim-status', 'loaded', true);
       })
-      .catch(() => {
-        const st = document.getElementById('lim-status');
-        st.textContent = 'error'; st.style.color = 'var(--danger)';
-      });
+      .catch(() => setStatus('lim-status', 'error', false));
   }
 
   function applyLimits() {
-    const max_speed    = parseFloat(document.getElementById('lim-speed').value);
-    const max_rot_speed = parseFloat(document.getElementById('lim-rot').value);
-    const btn = document.getElementById('btn-lim-apply');
-    btn.disabled = true;
     fetch('/api/limits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ max_speed, max_rot_speed }),
+      body: JSON.stringify({
+        max_speed:     parseFloat(document.getElementById('lim-speed').value),
+        max_rot_speed: parseFloat(document.getElementById('lim-rot').value),
+      }),
     })
       .then(r => r.json())
-      .then(d => {
-        document.getElementById('lim-speed').value       = d.max_speed;
-        document.getElementById('lim-speed-range').value = d.max_speed;
-        document.getElementById('lim-rot').value         = d.max_rot_speed;
-        document.getElementById('lim-rot-range').value   = d.max_rot_speed;
-        const st = document.getElementById('lim-status');
-        st.textContent = 'applied'; st.style.color = 'var(--success)';
-      })
-      .catch(() => {
-        const st = document.getElementById('lim-status');
-        st.textContent = 'error'; st.style.color = 'var(--danger)';
-      })
-      .finally(() => { btn.disabled = false; });
+      .then(() => setStatus('lim-status', 'applied', true))
+      .catch(() => setStatus('lim-status', 'error', false));
   }
+
+  const _applyLimitsDebounced = debounce(applyLimits, 250);
+  pairInputs('lim-speed', 'lim-speed-range', _applyLimitsDebounced);
+  pairInputs('lim-rot',   'lim-rot-range',   _applyLimitsDebounced);
+
+  // ── Vision sensitivity ────────────────────────────────────────────────────
+
+  function loadVision() {
+    fetch('/api/vision')
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById('vis-s-min').value        = d.s_min;
+        document.getElementById('vis-s-min-range').value  = d.s_min;
+        document.getElementById('vis-v-min').value        = d.v_min;
+        document.getElementById('vis-v-min-range').value  = d.v_min;
+        document.getElementById('vis-min-px').value       = d.min_mask_pixels;
+        document.getElementById('vis-min-px-range').value = d.min_mask_pixels;
+        setStatus('vis-status', 'loaded', true);
+      })
+      .catch(() => setStatus('vis-status', 'error', false));
+  }
+
+  function applyVision() {
+    fetch('/api/vision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        s_min:           parseInt(document.getElementById('vis-s-min').value),
+        v_min:           parseInt(document.getElementById('vis-v-min').value),
+        min_mask_pixels: parseInt(document.getElementById('vis-min-px').value),
+      }),
+    })
+      .then(r => r.json())
+      .then(() => setStatus('vis-status', 'applied', true))
+      .catch(() => setStatus('vis-status', 'error', false));
+  }
+
+  const _applyVisionDebounced = debounce(applyVision, 250);
+  pairInputs('vis-s-min',  'vis-s-min-range',  _applyVisionDebounced);
+  pairInputs('vis-v-min',  'vis-v-min-range',  _applyVisionDebounced);
+  pairInputs('vis-min-px', 'vis-min-px-range', _applyVisionDebounced);
 
   // ── PID tuner ─────────────────────────────────────────────────────────────
 
@@ -723,44 +799,36 @@
     fetch('/api/gains')
       .then(r => r.json())
       .then(d => {
-        const loop = selectedLoop();
-        const g = d[loop];
+        const g = d[selectedLoop()];
         if (!g) return;
         document.getElementById('pid-kp').value = g.kp;
         document.getElementById('pid-ki').value = g.ki;
         document.getElementById('pid-kd').value = g.kd;
-        const st = document.getElementById('pid-status');
-        st.textContent = 'loaded'; st.style.color = 'var(--success)';
+        setStatus('pid-status', 'loaded', true);
       })
-      .catch(() => {
-        const st = document.getElementById('pid-status');
-        st.textContent = 'error'; st.style.color = 'var(--danger)';
-      });
+      .catch(() => setStatus('pid-status', 'error', false));
   }
 
   function applyGains() {
-    const pid = selectedLoop();
-    const kp  = parseFloat(document.getElementById('pid-kp').value);
-    const ki  = parseFloat(document.getElementById('pid-ki').value);
-    const kd  = parseFloat(document.getElementById('pid-kd').value);
-    const btn = document.getElementById('btn-pid-apply');
-    btn.disabled = true;
     fetch('/api/gains', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pid, kp, ki, kd }),
+      body: JSON.stringify({
+        pid: selectedLoop(),
+        kp:  parseFloat(document.getElementById('pid-kp').value),
+        ki:  parseFloat(document.getElementById('pid-ki').value),
+        kd:  parseFloat(document.getElementById('pid-kd').value),
+      }),
     })
       .then(r => r.json())
-      .then(() => {
-        const st = document.getElementById('pid-status');
-        st.textContent = 'applied'; st.style.color = 'var(--success)';
-      })
-      .catch(() => {
-        const st = document.getElementById('pid-status');
-        st.textContent = 'error'; st.style.color = 'var(--danger)';
-      })
-      .finally(() => { btn.disabled = false; });
+      .then(() => setStatus('pid-status', 'applied', true))
+      .catch(() => setStatus('pid-status', 'error', false));
   }
+
+  const _applyGainsDebounced = debounce(applyGains, 250);
+  ['pid-kp', 'pid-ki', 'pid-kd'].forEach(id =>
+    document.getElementById(id).addEventListener('input', _applyGainsDebounced)
+  );
 
   // ── 2D Odometry view ──────────────────────────────────────────────────────
 
@@ -878,39 +946,41 @@
     }
 
     // ── Grid ──────────────────────────────────────────────────
-    const raw = maxSpan / 4;
-    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-    const gridStep = [1, 2, 5].map(f => f * mag).find(s => maxSpan / s <= 6) || mag;
+    const visSpan  = maxSpan / odoZoom;   // world metres visible at current zoom
+    const raw      = visSpan / 6;         // minimum step size for ≤6 divisions
+    const mag      = Math.pow(10, Math.floor(Math.log10(raw)));
+    const gridStep = [1, 2, 5, 10].map(f => f * mag).find(s => s >= raw) || 10 * mag;
 
     odoCtx.strokeStyle = '#1c1c38';
     odoCtx.lineWidth   = 1;
     odoCtx.setLineDash([]);
 
-    const gx0 = Math.floor((cx - maxSpan) / gridStep) * gridStep;
-    const gy0 = Math.floor((cy - maxSpan) / gridStep) * gridStep;
-    for (let gx = gx0; gx < cx + maxSpan; gx += gridStep) {
+    const gx0 = Math.floor((cx - visSpan) / gridStep) * gridStep;
+    const gy0 = Math.floor((cy - visSpan) / gridStep) * gridStep;
+    for (let gx = gx0; gx < cx + visSpan; gx += gridStep) {
       const [px] = toC(gx, 0);
       odoCtx.beginPath(); odoCtx.moveTo(px, 0); odoCtx.lineTo(px, H); odoCtx.stroke();
     }
-    for (let gy = gy0; gy < cy + maxSpan; gy += gridStep) {
+    for (let gy = gy0; gy < cy + visSpan; gy += gridStep) {
       const [, py] = toC(0, gy);
       odoCtx.beginPath(); odoCtx.moveTo(0, py); odoCtx.lineTo(W, py); odoCtx.stroke();
     }
 
     // Grid labels
-    odoCtx.fillStyle  = '#2a2a50';
-    odoCtx.font       = '9px Courier New';
+    const decimals = gridStep < 0.1 ? 3 : gridStep < 1 ? 2 : 1;
+    odoCtx.fillStyle = '#2a2a50';
+    odoCtx.font      = '9px Courier New';
 
     odoCtx.textAlign = 'left';
-    for (let gx = gx0; gx < cx + maxSpan; gx += gridStep) {
+    for (let gx = gx0; gx < cx + visSpan; gx += gridStep) {
       const [px] = toC(gx, 0);
-      if (px > 0 && px < W) odoCtx.fillText(gx.toFixed(1) + 'm', px + 2, H - 4);
+      if (px > 0 && px < W) odoCtx.fillText(gx.toFixed(decimals) + 'm', px + 2, H - 4);
     }
 
     odoCtx.textAlign = 'left';
-    for (let gy = gy0; gy < cy + maxSpan; gy += gridStep) {
+    for (let gy = gy0; gy < cy + visSpan; gy += gridStep) {
       const [, py] = toC(0, gy);
-      if (py > 10 && py < H - 10) odoCtx.fillText(gy.toFixed(1) + 'm', 4, py - 2);
+      if (py > 10 && py < H - 10) odoCtx.fillText(gy.toFixed(decimals) + 'm', 4, py - 2);
     }
 
     // ── World axes ────────────────────────────────────────────
@@ -1199,6 +1269,7 @@
   window.addEventListener('load', () => {
     loadGains();
     loadLimits();
+    loadVision();
     drawOdometry();
   });
 
