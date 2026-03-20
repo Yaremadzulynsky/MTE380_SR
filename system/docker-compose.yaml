@@ -39,8 +39,8 @@ services:
       context: ./control_communication
     container_name: control-communication
     network_mode: host
-    # devices:
-    #   - "/dev/ttyACM0:/dev/ttyACM0"  # Arduino Mega via USB (attach with usbipd on Windows/WSL2)
+    devices:
+      - "/dev/ttyACM0:/dev/ttyACM0"  # Arduino Mega via USB (attach with usbipd on Windows/WSL2)
     environment:
       PORT: 5001
       SERIAL_PORT: "/dev/ttyACM0"
