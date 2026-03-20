@@ -37,10 +37,6 @@ hough:
   max_line_gap: 25
   min_abs_slope: 0.25
   center_weight: 0.2
-  # Faster Hough + less overlay work (~4× fewer edge pixels at 0.5)
-  hough_downscale: 0.5
-  max_hough_candidates: 280
-  max_debug_segments: 48
 
 smoothing:
   window_size: 7

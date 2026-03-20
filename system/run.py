@@ -1057,7 +1057,7 @@ def main() -> None:
                 },
                 "heading_rad": (
                     float(robot.get_heading_rad()[0])
-                    if not use_vision_heading
+                    if robot is not None and not use_vision_heading
                     else float(_last_vision_heading_rad)
                 ),
             }

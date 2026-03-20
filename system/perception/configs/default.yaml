@@ -49,9 +49,6 @@ hough:
   max_line_gap: 20
   min_abs_slope: 0.3
   center_weight: 0.2
-  # Optional speed: hough_downscale: 0.5
-  # max_hough_candidates: 300
-  # max_debug_segments: 50
 
 smoothing:
   window_size: 5
@@ -62,8 +59,8 @@ smoothing:
   segment_lock_frames: 3
   segment_switch_score_margin: 1.2
   segment_max_missed_frames: 2
-  centerline_lookahead_ratio: 0.35
-  centerline_ema_alpha: 0.8
+  centerline_lookahead_ratio: 0.5
+  centerline_ema_alpha: 0.92
 
 zones:
   target_min_area: 300.0

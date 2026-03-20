@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import cv2
@@ -85,6 +84,19 @@ def _nearest_point_on_centerline(
     if smooth_x_vals.size == 0:
         return None, [], np.empty((0,), dtype=np.float32), np.empty((0,), dtype=np.float32), smooth_x_by_row
 
+    # Spatial smoothing: fit a polynomial through the centerline points so the
+    # rendered curve and lookahead point come from a smooth fit rather than the
+    # noisy per-row means.  Degree 1 (line) for short masks, 2 (parabola) when
+    # enough rows are present.
+    n_pts = len(smooth_y_vals)
+    poly_deg = 2 if n_pts >= 12 else (1 if n_pts >= 4 else 0)
+    if poly_deg > 0:
+        try:
+            coeffs = np.polyfit(smooth_y_vals, smooth_x_vals, poly_deg)
+            smooth_x_vals = np.polyval(coeffs, smooth_y_vals)
+        except (np.linalg.LinAlgError, ValueError):
+            pass  # keep original on fit failure
+
     # Downsample points for lighter debug payload and rendering.
     stride = max(1, int(len(smooth_x_vals) / 120) + 1)
     centerline_points = [[float(x), float(y)] for x, y in zip(smooth_x_vals[::stride], smooth_y_vals[::stride])]
@@ -110,19 +122,6 @@ def _lookahead_point_on_centerline(
         return None
     idx = int(np.argmin(np.abs(y_vals - float(target_y))))
     return float(x_vals[idx]), float(y_vals[idx])
-
-
-def _select_longest_segments(rows: np.ndarray, cap: int) -> np.ndarray:
-    """Keep up to `cap` segments with largest Euclidean length (cheap pre-filter before scoring)."""
-    if cap <= 0 or rows.shape[0] <= cap:
-        return rows
-    x0 = rows[:, 0].astype(np.float64)
-    y0 = rows[:, 1].astype(np.float64)
-    x1 = rows[:, 2].astype(np.float64)
-    y1 = rows[:, 3].astype(np.float64)
-    lens = np.hypot(x1 - x0, y1 - y0)
-    idx = np.argpartition(-lens, cap - 1)[:cap]
-    return rows[idx]
 
 
 def _segment_distance(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
@@ -160,29 +159,8 @@ def extract_hough_heading(
     if h <= 0 or w <= 0:
         return unit(prev_heading), 0.0, 0.0, False, {"fit_ok": False}, centerline_prev_x
 
-    scale = _clamp(float(cfg.hough_downscale), 0.25, 1.0)
-    sx = 1.0
-    sy = 1.0
-    path_hough = path_mask
-    if scale < 0.999:
-        small_w = max(16, int(round(w * scale)))
-        small_h = max(16, int(round(h * scale)))
-        path_hough = cv2.resize(path_mask, (small_w, small_h), interpolation=cv2.INTER_AREA)
-        sx = w / float(small_w)
-        sy = h / float(small_h)
-        s = min(sx, sy)
-        min_ll = max(8, int(round(cfg.min_line_length / s)))
-        max_gap = max(1, int(round(cfg.max_line_gap / s)))
-        area_ratio = (small_w * small_h) / float(w * h)
-        # Fewer edge pixels when downscaled; sqrt keeps vote counts roughly in family with full-res threshold
-        hough_thresh = max(8, int(round(cfg.threshold * math.sqrt(area_ratio))))
-    else:
-        min_ll = int(cfg.min_line_length)
-        max_gap = int(cfg.max_line_gap)
-        hough_thresh = int(cfg.threshold)
-
     edges = cv2.Canny(
-        path_hough,
+        path_mask,
         threshold1=int(cfg.canny_threshold1),
         threshold2=int(cfg.canny_threshold2),
     )
@@ -191,22 +169,14 @@ def extract_hough_heading(
         edges,
         rho=float(cfg.rho),
         theta=theta_rad,
-        threshold=hough_thresh,
-        minLineLength=min_ll,
-        maxLineGap=max_gap,
+        threshold=int(cfg.threshold),
+        minLineLength=int(cfg.min_line_length),
+        maxLineGap=int(cfg.max_line_gap),
     )
-
-    if scale < 0.999:
-        edges_dbg = cv2.resize(edges, (w, h), interpolation=cv2.INTER_NEAREST)
-    else:
-        edges_dbg = edges
 
     area_used = float(cv2.countNonZero(path_mask))
     if lines is None or len(lines) == 0:
-        return unit(prev_heading), area_used, 0.0, False, {"fit_ok": False, "edges": edges_dbg}, centerline_prev_x
-
-    rows = lines.reshape(-1, 4)
-    rows = _select_longest_segments(rows, int(cfg.max_hough_candidates))
+        return unit(prev_heading), area_used, 0.0, False, {"fit_ok": False, "edges": edges}, centerline_prev_x
 
     center_x = (w - 1) / 2.0
     half_w = max(1.0, w / 2.0)
@@ -215,12 +185,8 @@ def extract_hough_heading(
     lock_nearest: tuple[float, float, tuple[int, int, int, int]] | None = None
     considered = []
 
-    for row in rows:
-        r = row.astype(np.float64)
-        x1 = int(round(float(r[0]) * sx))
-        y1 = int(round(float(r[1]) * sy))
-        x2 = int(round(float(r[2]) * sx))
-        y2 = int(round(float(r[3]) * sy))
+    for row in lines.reshape(-1, 4):
+        x1, y1, x2, y2 = [int(v) for v in row]
         dx = float(x2 - x1)
         dy = float(y2 - y1)
         if abs(dx) < 1e-6 and abs(dy) < 1e-6:
@@ -246,7 +212,7 @@ def extract_hough_heading(
                     lock_match = (score, (x1, y1, x2, y2))
 
     if best is None:
-        return unit(prev_heading), area_used, 0.0, False, {"fit_ok": False, "edges": edges_dbg}, centerline_prev_x
+        return unit(prev_heading), area_used, 0.0, False, {"fit_ok": False, "edges": edges}, centerline_prev_x
 
     selected_source = "best"
     next_lock_missed = 0
@@ -326,14 +292,10 @@ def extract_hough_heading(
         )
         nearest_source = "segment_fallback"
     line_error_x = _clamp((nearest_x - center_x) / half_w, -1.0, 1.0)
-    seg_cap = int(cfg.max_debug_segments)
-    hough_segments_out = considered
-    if seg_cap > 0 and len(considered) > seg_cap:
-        hough_segments_out = sorted(considered, key=lambda t: t[4], reverse=True)[:seg_cap]
     debug = {
         "fit_ok": True,
-        "edges": edges_dbg,
-        "hough_segments": hough_segments_out,
+        "edges": edges,
+        "hough_segments": considered,
         "selected_segment": [x1, y1, x2, y2],
         "centerline_points": centerline_points,
         "nearest_point": [float(nearest_x), float(nearest_y)],
