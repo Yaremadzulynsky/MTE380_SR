@@ -65,7 +65,12 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--width",         type=int,   default=640)
     p.add_argument("--height",        type=int,   default=480)
     p.add_argument("--fps",           type=float, default=30.0)
-    p.add_argument("--roi-top-ratio", type=float, default=0.5)
+    p.add_argument(
+        "--roi-top-ratio",
+        type=float,
+        default=0.0,
+        help="Crop this fraction from the top of the frame before line detection (0 = full frame).",
+    )
     p.add_argument("--serial-port",   default="/dev/ttyACM0")
     p.add_argument("--baud",          type=int,   default=115200)
     p.add_argument("--dry-run",       action="store_true")

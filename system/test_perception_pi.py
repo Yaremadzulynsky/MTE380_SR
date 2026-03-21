@@ -16,7 +16,7 @@ Pipeline
   capture_array → HSV with the *matching* COLOR_*2HSV for your buffer
   → inRange (red + blue masks) → contours → bbox + centroid
 
-Keys:  q quit   s save frame   [ ] ROI   - = min areas   c cycle input order
+Keys:  q quit   s save   [ ] adjust ROI crop (0 = full frame)   - = min areas   c input order
 """
 from __future__ import annotations
 
@@ -141,14 +141,18 @@ def draw(frame_bgr: np.ndarray, d: dict) -> np.ndarray:
     overlay[d["red_mask_full"] > 0] = (0, 0, 180)
     cv2.addWeighted(overlay, 0.3, out, 0.7, 0, out)
 
-    cv2.line(out, (0, roi_y), (w - 1, roi_y), (180, 180, 180), 1)
-    cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
+    if roi_y <= 0:
+        cv2.line(out, (w // 2, 0), (w // 2, h - 1), (255, 255, 255), 2)
+    else:
+        cv2.line(out, (0, roi_y), (w - 1, roi_y), (180, 180, 180), 1)
+        cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
 
     if d["red_found"] and d["bbox"]:
         bx, by, bw, bh = d["bbox"]
         cv2.rectangle(out, (bx, by), (bx + bw, by + bh), (0, 255, 0), 2)
-        cv2.line(out, (bx, roi_y), (bx, h - 1), (0, 200, 0), 1)
-        cv2.line(out, (bx + bw, roi_y), (bx + bw, h - 1), (0, 200, 0), 1)
+        y0 = roi_y if roi_y > 0 else 0
+        cv2.line(out, (bx, y0), (bx, h - 1), (0, 200, 0), 1)
+        cv2.line(out, (bx + bw, y0), (bx + bw, h - 1), (0, 200, 0), 1)
         cx, cy = d["cx_px"], d["cy_px"]
         cv2.line(out, (w // 2, cy), (cx, cy), (0, 140, 255), 2)
         cv2.circle(out, (cx, cy), 8, (0, 0, 255), -1)
@@ -180,7 +184,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--roi", type=float, default=0.5)
+    ap.add_argument(
+        "--roi",
+        type=float,
+        default=0.0,
+        help="Fraction of frame height to crop from the top (0 = use full frame for detection and display).",
+    )
     ap.add_argument("--red-min-area", type=float, default=80.0)
     ap.add_argument("--blue-min-area", type=float, default=1500.0)
     ap.add_argument("--t-ratio", type=float, default=0.5)

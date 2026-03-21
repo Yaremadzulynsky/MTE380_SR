@@ -45,7 +45,7 @@ class Perception:
         self,
         width:  int   = 640,
         height: int   = 480,
-        roi_top_ratio: float = 0.5,   # ignore top fraction of frame (avoids far-ahead noise)
+        roi_top_ratio: float = 0.0,   # 0 = full frame; else ignore top fraction (e.g. 0.5 = bottom half)
         red_min_area:  float = 80.0,
         blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
@@ -102,9 +102,12 @@ class Perception:
         h, w = out.shape[:2]
         roi_y = int(h * self.roi_top_ratio)
 
-        # ROI boundary and centre line
-        cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
-        cv2.line(out, (0, roi_y), (w - 1, roi_y), (200, 200, 200), 1)
+        # Full frame: one vertical centre line. With ROI: grey bar + centre line in ROI only.
+        if roi_y <= 0:
+            cv2.line(out, (w // 2, 0), (w // 2, h - 1), (255, 255, 255), 2)
+        else:
+            cv2.line(out, (0, roi_y), (w - 1, roi_y), (200, 200, 200), 1)
+            cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
 
         tags = [
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
