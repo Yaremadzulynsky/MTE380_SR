@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+from picamera2 import Picamera2
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -39,7 +40,6 @@ class Perception:
 
     def __init__(
         self,
-        camera_index: int = 0,
         width:  int   = 640,
         height: int   = 480,
         roi_top_ratio: float = 0.5,   # ignore top fraction of frame (avoids far-ahead noise)
@@ -54,18 +54,18 @@ class Perception:
         self.blue_min_area = blue_min_area
         self.t_junction_width_ratio = t_junction_width_ratio
 
-        self.cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  float(width))
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(height))
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open camera {camera_index}.")
+        self._cam = Picamera2()
+        cfg = self._cam.create_preview_configuration(
+            main={"size": (width, height), "format": "BGR888"},
+            buffer_count=2,
+        )
+        self._cam.configure(cfg)
+        self._cam.start()
 
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
-        ok, frame = self.cap.read()
-        return frame if ok else None
+        return self._cam.capture_array("main")
 
     def detect(self, frame: np.ndarray) -> FrameDetection:
         h, w = frame.shape[:2]
@@ -84,7 +84,8 @@ class Perception:
         )
 
     def release(self) -> None:
-        self.cap.release()
+        self._cam.stop()
+        self._cam.close()
 
     def draw_debug(self, frame: np.ndarray, det: FrameDetection) -> np.ndarray:
         out = frame.copy()

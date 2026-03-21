@@ -57,7 +57,6 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     )
 
     # Camera / runtime
-    p.add_argument("--camera-index",  type=int,   default=0)
     p.add_argument("--width",         type=int,   default=640)
     p.add_argument("--height",        type=int,   default=480)
     p.add_argument("--fps",           type=float, default=30.0)
@@ -121,7 +120,6 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_stop)
 
     perception = Perception(
-        camera_index=args.camera_index,
         width=args.width,
         height=args.height,
         roi_top_ratio=args.roi_top_ratio,
@@ -157,7 +155,7 @@ def main() -> None:
     control.send_claw(args.claw_open)
 
     print(
-        f"Mission started — camera={args.camera_index}  serial={args.serial_port}  dry_run={args.dry_run}\n"
+        f"Mission started — serial={args.serial_port}  dry_run={args.dry_run}\n"
         f"  config      : {cfg_path}\n"
         f"  steering PID: kp={args.steer_kp}  ki={args.steer_ki}  kd={args.steer_kd}\n"
         f"  motor    PID: kp={args.motor_kp:.6f}  ki={args.motor_ki}  kd={args.motor_kd}",

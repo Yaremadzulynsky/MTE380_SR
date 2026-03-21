@@ -3,3 +3,4 @@ numpy
 pyserial
 flask
 simple-pid
+picamera2
