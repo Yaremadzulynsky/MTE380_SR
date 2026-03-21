@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import cv2
 import numpy as np
@@ -48,6 +49,7 @@ class Perception:
         red_min_area:  float = 80.0,
         blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
+        camera_channel_order: Literal["rgb", "bgr"] = "bgr",
     ) -> None:
         self.width  = width
         self.height = height
@@ -55,6 +57,9 @@ class Perception:
         self.red_min_area  = red_min_area
         self.blue_min_area = blue_min_area
         self.t_junction_width_ratio = t_junction_width_ratio
+        # Picamera2 main stream is often labeled "RGB888" but the buffer is frequently BGR order
+        # on Raspberry Pi; using COLOR_RGB2BGR then BGR2HSV swaps R/B and breaks hue detection.
+        self._camera_channel_order = camera_channel_order
 
         self._cam = Picamera2()
         cfg = self._cam.create_preview_configuration(
@@ -67,8 +72,10 @@ class Perception:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
-        frame = self._cam.capture_array("main")
-        return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        raw = self._cam.capture_array("main")
+        if self._camera_channel_order == "rgb":
+            return cv2.cvtColor(raw, cv2.COLOR_RGB2BGR)
+        return np.ascontiguousarray(raw)
 
     def detect(self, frame: np.ndarray) -> FrameDetection:
         h, w = frame.shape[:2]

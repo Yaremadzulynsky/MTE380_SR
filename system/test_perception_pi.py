@@ -4,11 +4,12 @@ Red / blue tape test — Pi Camera Module 2 (Picamera2 + OpenCV).
 
 Why “red and blue look switched”
 --------------------------------
-Picamera2 returns RGB888 as **RGB** order in memory. OpenCV uses **BGR** for imshow
-and for cv2.cvtColor(..., COLOR_BGR2HSV).
+The main stream is often labeled ``RGB888``, but on many Pis the numpy buffer is
+**BGR channel order**. OpenCV’s ``BGR2HSV`` expects BGR; ``RGB2HSV`` expects RGB.
+Using the wrong pair swaps R/B in hue space (red tape can read as blue).
 
-If you run BGR2HSV on an RGB buffer (or RGB2BGR twice, or treat BGR as RGB), red and
-blue swap in hue space — red tape lands in the blue HSV wedge and vice versa.
+Default here is ``--input bgr``, matching ``local/perception.py`` (``camera_channel_order="bgr"``).
+Use ``--input rgb`` only if your buffer is true RGB order.
 
 Pipeline
 --------
@@ -186,8 +187,8 @@ def main() -> None:
     ap.add_argument(
         "--input",
         choices=("rgb", "bgr"),
-        default="rgb",
-        help="Picamera2 RGB888 buffer is RGB order — use rgb. Try bgr if hues are swapped.",
+        default="bgr",
+        help="Channel order of capture_array (Pi: default bgr, matches local/perception.py).",
     )
     ap.add_argument("--debug", action="store_true")
     ap.add_argument("--debug-every", type=int, default=15)
