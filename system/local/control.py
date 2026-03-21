@@ -135,7 +135,7 @@ class LocalMotorController:
         self._pid_right.setpoint = target_right_rpm
 
         voltage_left  = self._pid_left(measured_left)
-        voltage_right = self._pid_right(measured_right)
+        voltage_right = self._pid_right(-measured_right)
 
         if self.dry_run:
             print(
