@@ -109,6 +109,9 @@ class MissionStateMachine:
         self._t0         = time.time()
         self._enc0_left  = 0
         self._enc0_right = 0
+        # Last red_error while line was visible — used to spin *toward* the line when lost
+        # (same sign convention as perception: + = line right of image centre).
+        self._last_red_error = 0.0
 
         # Steering PID: drives line_error → 0
         #   setpoint = 0, measurement = line_error, output = turn correction
@@ -156,12 +159,10 @@ class MissionStateMachine:
             # Lost the line — reset so stale integral doesn't spike on re-acquisition
             self._steer_pid.reset()
             st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
-            return ControlOutput(
-                left=st,
-                right=-st,
-                claw=None, state=self.state,
-            )
+            left, right = self._search_spin_pair(st)
+            return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
+        self._last_red_error = det.red_error
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
@@ -193,16 +194,29 @@ class MissionStateMachine:
         if not det.red_found:
             self._steer_pid.reset()
             st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
-            return ControlOutput(
-                left=st,
-                right=-st,
-                claw=None, state=self.state,
-            )
+            left, right = self._search_spin_pair(st)
+            return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
+        self._last_red_error = det.red_error
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _search_spin_pair(self, st: float) -> tuple[float, float]:
+        """
+        In-place spin while the line is lost.
+
+        Perception: red_error > 0 means the line was to the *right* of frame centre.
+        To sweep back toward that side, rotate clockwise: left forward, right reverse.
+        If the line was last seen on the *left* (negative error), rotate the other way.
+
+        A fixed CW spin (always left=+st, right=-st) often looks like it turns *away*
+        from the line when the line left the FOV on the left.
+        """
+        if self._last_red_error >= 0.0:
+            return st, -st
+        return -st, st
 
     def _cap_wheel(self, v: float) -> float:
         """Clamp motor fraction to ±max_speed (pid_config / PID tuner)."""
