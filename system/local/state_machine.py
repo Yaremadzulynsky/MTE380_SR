@@ -118,7 +118,8 @@ class MissionStateMachine:
         self._consecutive_lost = 0  # frames without red (reset when line reacquired)
 
         # Steering PID: drives line_error → 0
-        #   setpoint = 0, measurement = line_error, output = turn correction
+        #   Measurement is red_error ∈ [-1,1], already (cx − frame_w/2) / (frame_w/2) in
+        #   perception — so "centered" is 0, not frame_w/2 pixels. Setpoint must match units.
         #   output_limits provides anti-windup (integral freezes when output saturates)
         self._steer_pid = PID(
             Kp=self.cfg.steer_kp,
