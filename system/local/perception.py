@@ -54,7 +54,7 @@ class Perception:
         self.blue_min_area = blue_min_area
         self.t_junction_width_ratio = t_junction_width_ratio
 
-        self.cap = cv2.VideoCapture(camera_index)
+        self.cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  float(width))
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(height))
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
