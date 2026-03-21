@@ -67,7 +67,8 @@ def detect(frame: np.ndarray, roi_top_ratio: float, red_min_area: float,
 
     # ── Blue mask ─────────────────────────────────────────────────────────────
     blue_mask = cv2.inRange(hsv, BLUE_LO, BLUE_HI)
-
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
     # ── Red contour ───────────────────────────────────────────────────────────
     contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     red_found = False
@@ -174,7 +175,7 @@ def draw(frame: np.ndarray, d: dict) -> np.ndarray:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source",        default="0",   help="Camera index, image, or video path")
-    ap.add_argument("--roi",           type=float, default=0.5)
+    ap.add_argument("--roi",           type=float, default=1)
     ap.add_argument("--red-min-area",  type=float, default=80.0)
     ap.add_argument("--blue-min-area", type=float, default=1500.0)
     ap.add_argument("--t-ratio",       type=float, default=0.5)

@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """
-Minimal red-tape finder for Pi Camera Module 2 (Picamera2 + OpenCV).
+Perception tuner — Pi Camera Module 2 version.
 
-Pipeline (standard OpenCV, see docs):
-  BGR frame → HSV → inRange (red has two hue bands) → findContours → largest contour
-  → boundingRect (left/right edges) + moments (centroid)
-
-  - Contours: https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html
-  - Moments / centroid: https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html#ga556a180f043780e241de946b872a4920
-
-Run (Pi with display):
+Run on the Pi with a display (VNC or HDMI):
     python test_perception_pi.py
 
-Keys:  q quit   s save frame   [ ] ROI   - = min area
+Controls:
+    q           quit
+    s           save current frame as 'saved_frame.jpg'
+    [ / ]       decrease / increase roi_top_ratio by 0.05
+    - / =       decrease / increase red_min_area by 50
+
+What is shown:
+    Grey line    : ROI boundary
+    White line   : frame centre (zero error target)
+    Green rect   : bounding box of detected red contour
+    Green lines  : left/right tape edges
+    Red dot      : centroid the robot steers toward
+    Orange line  : error — centre to centroid
+    Red overlay  : HSV red mask (semi-transparent)
+    Yellow nums  : contour areas (tune red_min_area until only tape shows)
 """
 from __future__ import annotations
 
@@ -22,150 +29,210 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 
-# Red in HSV: hue wraps at 0/179 — two ranges (tune on your lighting).
-RED_LO1 = np.array([0, 100, 70], np.uint8)
-RED_HI1 = np.array([12, 255, 255], np.uint8)
-RED_LO2 = np.array([168, 100, 70], np.uint8)
+
+# ── HSV ranges (must match local/perception.py) ───────────────────────────────
+
+# Red often wraps around 0/179 in HSV, so keep two bands.
+RED_LO1 = np.array([  0, 120,  80], np.uint8)
+RED_HI1 = np.array([ 10, 255, 255], np.uint8)
+RED_LO2 = np.array([170, 120,  80], np.uint8)
 RED_HI2 = np.array([179, 255, 255], np.uint8)
 
+BLUE_LO = np.array([100, 150, 100], np.uint8)
+BLUE_HI = np.array([130, 255, 255], np.uint8)
 
-def find_tape(frame_bgr: np.ndarray, roi_top_ratio: float, min_area: float):
-    """
-    Returns dict with roi_y, bbox (full-frame x,y,w,h) or None, centroid (cx,cy) or None.
-    """
-    h, w = frame_bgr.shape[:2]
-    roi_y = int(h * roi_top_ratio)
-    roi = frame_bgr[roi_y:, :]
 
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.bitwise_or(
+# ── Detection ─────────────────────────────────────────────────────────────────
+
+def detect(frame, roi_top_ratio, red_min_area, blue_min_area, t_ratio):
+    h, w  = frame.shape[:2]
+    
+    roi_y = 0
+    roi   = frame
+    hsv   = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+
+    red_mask = cv2.bitwise_or(
         cv2.inRange(hsv, RED_LO1, RED_HI1),
         cv2.inRange(hsv, RED_LO2, RED_HI2),
     )
-    k = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k, iterations=1)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k, iterations=1)
+    
+    kernel   = np.ones((5, 5), np.uint8)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return {"roi_y": roi_y, "bbox": None, "centroid": None, "mask": mask}
+    blue_mask = cv2.inRange(hsv, BLUE_LO, BLUE_HI)
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
 
-    cnt = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(cnt) < min_area:
-        return {"roi_y": roi_y, "bbox": None, "centroid": None, "mask": mask}
+    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    red_found = False
+    red_error = 0.0
+    t_junction = False
+    bbox = None
+    cx_px = w // 2
+    cy_px = roi_y + (h - roi_y) // 2
 
-    x, y, bw, bh = cv2.boundingRect(cnt)
-    bbox = (x, roi_y + y, bw, bh)
+    if contours:
+        largest = max(contours, key=cv2.contourArea)
+        area    = cv2.contourArea(largest)
+        if area >= red_min_area:
+            red_found = True
+            bx, by, bw, bh = cv2.boundingRect(largest)
+            bbox       = (bx, roi_y + by, bw, bh)
+            t_junction = (bw / w) > t_ratio
+            M = cv2.moments(largest)
+            if M["m00"] > 1e-6:
+                cx_raw = M["m10"] / M["m00"]
+                red_error = max(-1.0, min(1.0, (cx_raw - w / 2.0) / (w / 2.0)))
+                cx_px = int(cx_raw)
+                cy_px = roi_y + by + bh // 2
 
-    m = cv2.moments(cnt)
-    if m["m00"] <= 1e-6:
-        cx, cy = x + bw // 2, roi_y + y + bh // 2
-    else:
-        cx = int(m["m10"] / m["m00"])
-        cy = int(m["m01"] / m["m00"]) + roi_y
+    blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    blue_found = any(cv2.contourArea(c) >= blue_min_area for c in blue_contours)
+
+    largest_red_area = float(max((cv2.contourArea(c) for c in contours), default=0.0))
+    largest_blue_area = float(max((cv2.contourArea(c) for c in blue_contours), default=0.0))
+    red_pixels = int(np.count_nonzero(red_mask))
+    blue_pixels = int(np.count_nonzero(blue_mask))
 
     return {
-        "roi_y": roi_y,
-        "bbox": bbox,
-        "centroid": (cx, cy),
-        "mask": mask,
+        "red_found":    red_found,
+        "red_error":    red_error,
+        "blue_found":   blue_found,
+        "t_junction":   t_junction,
+        "roi_y":        roi_y,
+        "bbox":         bbox,
+        "cx_px":        cx_px if red_found else None,
+        "cy_px":        cy_px if red_found else None,
+        "red_mask":     red_mask,
+        "blue_mask":    blue_mask,
+        "all_contours": [(cv2.contourArea(c), cv2.boundingRect(c)) for c in contours],
+        "debug": {
+            "red_pixels": red_pixels,
+            "blue_pixels": blue_pixels,
+            "largest_red_area": largest_red_area,
+            "largest_blue_area": largest_blue_area,
+        },
     }
 
 
-def draw(frame_bgr: np.ndarray, d: dict) -> np.ndarray:
-    out = frame_bgr.copy()
+# ── Overlay drawing ───────────────────────────────────────────────────────────
+
+def draw(frame, d):
+    out  = frame.copy()
     h, w = out.shape[:2]
     roi_y = d["roi_y"]
 
-    # Light mask tint (optional visual only)
-    tint = np.zeros_like(out)
-    tint[roi_y:, :, 2] = np.where(d["mask"] > 0, 120, 0)  # red channel in BGR
-    cv2.addWeighted(tint, 0.25, out, 0.75, 0, out)
+    red_full = np.zeros((h, w), np.uint8)
+    red_full[roi_y:, :] = d["red_mask"]
+    overlay = out.copy()
+    overlay[red_full > 0] = (0, 0, 180)
+    cv2.addWeighted(overlay, 0.35, out, 0.65, 0, out)
 
-    cv2.line(out, (0, roi_y), (w - 1, roi_y), (160, 160, 160), 1)
-    cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 1)
+    cv2.line(out, (0, roi_y), (w - 1, roi_y), (180, 180, 180), 1)
+    cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
 
-    if d["bbox"] is None or d["centroid"] is None:
-        cv2.putText(out, "no tape", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-        return out
+    if d["red_found"] and d["bbox"]:
+        bx, by, bw, bh = d["bbox"]
+        cv2.rectangle(out, (bx, by), (bx + bw, by + bh), (0, 255, 0), 2)
+        cv2.line(out, (bx,      roi_y), (bx,      h - 1), (0, 200, 0), 1)
+        cv2.line(out, (bx + bw, roi_y), (bx + bw, h - 1), (0, 200, 0), 1)
+        cx, cy = d["cx_px"], d["cy_px"]
+        cv2.line(out, (w // 2, cy), (cx, cy), (0, 140, 255), 2)
+        cv2.circle(out, (cx, cy), 8, (0, 0, 255), -1)
+        cv2.circle(out, (cx, cy), 8, (255, 255, 255), 2)
 
-    x, y, bw, bh = d["bbox"]
-    cx, cy = d["centroid"]
+    for area, (bx, by, bw, bh) in d["all_contours"][:6]:
+        fy = roi_y + by
+        cv2.putText(out, f"{int(area)}", (bx, max(fy - 4, 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 0), 1, cv2.LINE_AA)
 
-    # Edges of tape (vertical sides of bounding box)
-    cv2.line(out, (x, y), (x + bw, y), (0, 255, 0), 2)
-    cv2.line(out, (x, y + bh), (x + bw, y + bh), (0, 255, 0), 2)
-    cv2.line(out, (x, y), (x, y + bh), (0, 255, 0), 2)
-    cv2.line(out, (x + bw, y), (x + bw, y + bh), (0, 255, 0), 2)
+    lines = [
+        f"red={'Y' if d['red_found'] else 'N'}  err={d['red_error']:+.3f}",
+        f"blue={'Y' if d['blue_found'] else 'N'}  T={'Y' if d['t_junction'] else 'N'}",
+    ]
+    for i, txt in enumerate(lines):
+        cv2.putText(out, txt, (10, 28 + i * 26),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
 
-    # Center of the tape (centroid)
-    cv2.drawMarker(out, (cx, cy), (0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=16, thickness=2)
-
-    err = (cx - w / 2.0) / (w / 2.0)
-    cv2.putText(
-        out,
-        f"cx={cx}  err={err:+.2f}",
-        (10, 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.7,
-        (0, 255, 255),
-        2,
-    )
+    cv2.putText(out,
+                f"roi={d['roi_y']/h:.2f}  [/]=ROI  -/==red_area",
+                (10, h - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1, cv2.LINE_AA)
     return out
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Simple red tape: contour + bbox + centroid")
-    ap.add_argument("--width", type=int, default=640)
-    ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--roi", type=float, default=0.5, help="Fraction of frame height to skip at top")
-    ap.add_argument("--min-area", type=float, default=80.0, help="Min contour area (pixels)")
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--width",         type=int,   default=640)
+    ap.add_argument("--height",        type=int,   default=480)
+    ap.add_argument("--roi",           type=float, default=0.5)
+    ap.add_argument("--red-min-area",  type=float, default=80.0)
+    ap.add_argument("--blue-min-area", type=float, default=1500.0)
+    ap.add_argument("--t-ratio",       type=float, default=0.5)
+    ap.add_argument("--debug",         action="store_true",
+                    help="Print detection debug stats to stdout.")
+    ap.add_argument("--debug-every",   type=int,   default=10,
+                    help="Print debug stats every N frames (default: 10).")
     args = ap.parse_args()
 
     cam = Picamera2()
-    cam.configure(
-        cam.create_preview_configuration(
-            main={"size": (args.width, args.height), "format": "RGB888"},
-            buffer_count=2,
-        )
-    )
+    cam.configure(cam.create_preview_configuration(
+        main={"size": (args.width, args.height), "format": "RGB888"},
+        buffer_count=2,
+    ))
     cam.start()
 
-    roi_ratio = args.roi
-    min_area = args.min_area
-    print("q=quit  s=save  [/]=ROI  -/==min-area")
+    roi_ratio    = args.roi
+    red_min_area = args.red_min_area
 
-    try:
-        while True:
-            rgb = cam.capture_array("main")
-            frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    print("Controls: q=quit  s=save  [/]=ROI  -/==red area")
 
-            d = find_tape(frame, roi_ratio, min_area)
-            vis = draw(frame, d)
+    frame_i = 0
+    while True:
+        frame_i += 1
+        frame = cv2.cvtColor(cam.capture_array("main"), cv2.COLOR_RGB2BGR)
+        d = detect(frame, roi_ratio, red_min_area, args.blue_min_area, args.t_ratio)
+        vis   = draw(frame, d)
 
-            cv2.imshow("tape", vis)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                break
-            if key == ord("s"):
-                cv2.imwrite("saved_frame.jpg", frame)
-                print("saved saved_frame.jpg")
-            elif key == ord("["):
-                roi_ratio = max(0.0, roi_ratio - 0.05)
-                print(f"roi={roi_ratio:.2f}")
-            elif key == ord("]"):
-                roi_ratio = min(0.95, roi_ratio + 0.05)
-                print(f"roi={roi_ratio:.2f}")
-            elif key == ord("-"):
-                min_area = max(10.0, min_area - 50)
-                print(f"min_area={min_area:.0f}")
-            elif key == ord("="):
-                min_area += 50
-                print(f"min_area={min_area:.0f}")
-    finally:
-        cam.stop()
-        cam.close()
-        cv2.destroyAllWindows()
+        if args.debug and (frame_i % max(1, args.debug_every) == 0):
+            dbg = d["debug"]
+            print(
+                f"[dbg {frame_i:05d}] "
+                f"red_found={d['red_found']} err={d['red_error']:+.3f} "
+                f"blue_found={d['blue_found']} T={d['t_junction']} "
+                f"red_px={dbg['red_pixels']} blue_px={dbg['blue_pixels']} "
+                f"red_area_max={dbg['largest_red_area']:.1f} "
+                f"blue_area_max={dbg['largest_blue_area']:.1f}",
+                flush=True,
+            )
+
+        cv2.imshow("perception test", vis)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            break
+        elif key == ord("s"):
+            cv2.imwrite("saved_frame.jpg", frame)
+            print("Saved saved_frame.jpg")
+        elif key == ord("["):
+            roi_ratio = max(0.0, roi_ratio - 0.05)
+            print(f"roi_top_ratio = {roi_ratio:.2f}")
+        elif key == ord("]"):
+            roi_ratio = min(0.95, roi_ratio + 0.05)
+            print(f"roi_top_ratio = {roi_ratio:.2f}")
+        elif key == ord("-"):
+            red_min_area = max(10, red_min_area - 50)
+            print(f"red_min_area = {red_min_area:.0f}")
+        elif key == ord("="):
+            red_min_area += 50
+            print(f"red_min_area = {red_min_area:.0f}")
+
+    cam.stop()
+    cam.close()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
