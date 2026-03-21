@@ -56,7 +56,7 @@ class Perception:
 
         self._cam = Picamera2()
         cfg = self._cam.create_preview_configuration(
-            main={"size": (width, height), "format": "BGR888"},
+            main={"size": (width, height), "format": "RGB888"},
             buffer_count=2,
         )
         self._cam.configure(cfg)
@@ -65,7 +65,8 @@ class Perception:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
-        return self._cam.capture_array("main")
+        frame = self._cam.capture_array("main")
+        return cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
     def detect(self, frame: np.ndarray) -> FrameDetection:
         h, w = frame.shape[:2]

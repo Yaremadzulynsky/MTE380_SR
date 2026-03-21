@@ -159,7 +159,7 @@ def main():
 
     cam = Picamera2()
     cam.configure(cam.create_preview_configuration(
-        main={"size": (args.width, args.height), "format": "BGR888"},
+        main={"size": (args.width, args.height), "format": "RGB888"},
         buffer_count=2,
     ))
     cam.start()
@@ -170,7 +170,7 @@ def main():
     print("Controls: q=quit  s=save  [/]=ROI  -/==red area")
 
     while True:
-        frame = cam.capture_array("main")
+        frame = cv2.cvtColor(cam.capture_array("main"), cv2.COLOR_RGB2BGR)
         d     = detect(frame, roi_ratio, red_min_area, args.blue_min_area, args.t_ratio)
         vis   = draw(frame, d)
 
