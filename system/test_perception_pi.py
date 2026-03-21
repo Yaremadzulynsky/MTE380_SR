@@ -33,14 +33,14 @@ from picamera2 import Picamera2
 # ── HSV ranges (must match local/perception.py) ───────────────────────────────
 
 # Red often wraps around 0/179 in HSV, so keep two bands.
-RED_LO1 = np.array([  0, 100,  70], np.uint8)
-RED_HI1 = np.array([ 12, 255, 255], np.uint8)
-RED_LO2 = np.array([168, 100,  70], np.uint8)
-RED_HI2 = np.array([179, 255, 255], np.uint8)
+RED_LO1 = np.array([0, 50, 20])
+RED_HI1 = np.array([170, 50, 20])
+RED_LO2 = np.array([10, 255, 255])
+RED_HI2 = np.array([180, 255, 255])
 
 # Blue tuned to be a bit more forgiving but still reject washed-out noise.
-BLUE_LO = np.array([ 95, 120,  70], np.uint8)
-BLUE_HI = np.array([135, 255, 255], np.uint8)
+BLUE_LO = np.array([110,50,50])
+BLUE_HI = np.array([130,255,255])
 
 
 # ── Detection ─────────────────────────────────────────────────────────────────
