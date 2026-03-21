@@ -94,6 +94,24 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
                    default=not bool(os.environ.get("DISPLAY", "")))
     p.add_argument("--pid-config",    default=str(_DEFAULT_CONFIG),
                    help="Path to pid_config.json")
+    p.add_argument(
+        "--no-telemetry",
+        action="store_true",
+        help="Disable periodic terminal logs (vision + wheels + errors).",
+    )
+    p.add_argument(
+        "--telemetry-every",
+        type=int,
+        default=1,
+        metavar="N",
+        help="While running, print telemetry every N camera frames (default: 1 = every frame).",
+    )
+    p.add_argument(
+        "--telemetry-idle-s",
+        type=float,
+        default=0.5,
+        help="When IDLE, print a short perception line at most this often (seconds).",
+    )
 
     # ── All tunable values — defaults come from the config file ──────────────
     p.add_argument("--steer-kp",              type=float, default=cfg["steer_kp"])
@@ -228,9 +246,21 @@ def main() -> None:
     kb = KeyboardListener()
     kb.start()
 
+    telemetry = not args.no_telemetry
+    frame_n = 0
+    t_start = time.monotonic()
+    last_idle_log = 0.0
+
+    if telemetry:
+        print(
+            "# telemetry: t_s | state | vision | enc_L/R | motor cmd/tgt_rpm/rpm/V | claw | iter_ms",
+            flush=True,
+        )
+
     try:
         while not should_stop:
             t0 = time.time()
+            frame_n += 1
 
             # ── Keyboard ──────────────────────────────────────────────────────
             key = kb.get()
@@ -282,9 +312,9 @@ def main() -> None:
                 status_line = "IDLE — press 'g' to start"
 
             # ── Display ───────────────────────────────────────────────────────
-            if args.no_display:
+            if args.no_display and not telemetry:
                 print(status_line, flush=True)
-            else:
+            elif not args.no_display:
                 overlay = perception.draw_debug(frame, det)
                 label   = (
                     f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
@@ -306,6 +336,33 @@ def main() -> None:
                     print("[KEY] stop (motors idle, serial still open)", flush=True)
 
             elapsed = time.time() - t0
+            iter_ms = elapsed * 1000.0
+
+            # ── Terminal telemetry (after work + GUI; includes camera + draw time) ──
+            if telemetry:
+                t_run = time.monotonic() - t_start
+                if output is not None and (frame_n % max(1, args.telemetry_every) == 0):
+                    enc_l, enc_r = control.encoder_ticks
+                    mt = control.motor_telemetry_line()
+                    claw_s = f"{output.claw:.0f}°" if output.claw is not None else "--"
+                    print(
+                        f"{t_run:8.3f}s  {output.state.value:12s}  "
+                        f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
+                        f"blue={'Y' if det.blue_found else 'N'} T={'Y' if det.t_junction else 'N'}  "
+                        f"claw={claw_s}  "
+                        f"enc_L={enc_l:6d} enc_R={enc_r:6d}  {mt}  "
+                        f"iter_ms={iter_ms:5.1f}",
+                        flush=True,
+                    )
+                elif output is None and (time.monotonic() - last_idle_log >= args.telemetry_idle_s):
+                    last_idle_log = time.monotonic()
+                    print(
+                        f"{t_run:8.3f}s  IDLE  "
+                        f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
+                        f"blue={'Y' if det.blue_found else 'N'} T={'Y' if det.t_junction else 'N'}  "
+                        f"iter_ms={iter_ms:5.1f}",
+                        flush=True,
+                    )
             if elapsed < period:
                 time.sleep(period - elapsed)
 

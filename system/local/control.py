@@ -114,6 +114,14 @@ class LocalMotorController:
         self._rpm_right   = 0.0
 
         self.bridge: SerialBridge | None = None
+        # Last loop values for terminal telemetry (updated in send_drive)
+        self._last_cmd_l = 0.0
+        self._last_cmd_r = 0.0
+        self._last_target_rpm_l = 0.0
+        self._last_target_rpm_r = 0.0
+        self._last_voltage_l = 0.0
+        self._last_voltage_r = 0.0
+
         if not dry_run:
             self.bridge = SerialBridge(serial_port, baud)
             self.bridge.on_encoders = self._on_encoders
@@ -136,6 +144,13 @@ class LocalMotorController:
 
         voltage_left  = self._pid_left(measured_left)
         voltage_right = self._pid_right(measured_right)
+
+        self._last_cmd_l = float(cmd.left)
+        self._last_cmd_r = float(cmd.right)
+        self._last_target_rpm_l = target_left_rpm
+        self._last_target_rpm_r = target_right_rpm
+        self._last_voltage_l = voltage_left
+        self._last_voltage_r = voltage_right
 
         if self.dry_run:
             print(
@@ -192,6 +207,17 @@ class LocalMotorController:
         """Latest measured (left_rpm, right_rpm). Negative = reverse."""
         with self._lock:
             return self._rpm_left, self._rpm_right
+
+    def motor_telemetry_line(self) -> str:
+        """One-line summary: fractions, RPM targets, measured RPM, PID voltage out."""
+        with self._lock:
+            ml, mr = self._rpm_left, self._rpm_right
+        return (
+            f"cmd_L={self._last_cmd_l:+.3f} cmd_R={self._last_cmd_r:+.3f}  "
+            f"tgt_rpm_L={self._last_target_rpm_l:+7.1f} tgt_rpm_R={self._last_target_rpm_r:+7.1f}  "
+            f"rpm_L={ml:+7.1f} rpm_R={mr:+7.1f}  "
+            f"V_L={self._last_voltage_l:+.3f} V_R={self._last_voltage_r:+.3f}"
+        )
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
