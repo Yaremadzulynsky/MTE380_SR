@@ -56,10 +56,13 @@ DEFAULTS: dict[str, float | int] = {
 
     "geom_enable":         True,
     "geom_lateral_norm_m": 0.10,
+
+    "red_loss_debounce_frames": 4,
+    "red_error_ema_alpha":      0.35,
 }
 
 # Keys that must be integers (not floats)
-INT_KEYS = {"forward_ticks"}
+INT_KEYS = {"forward_ticks", "red_loss_debounce_frames"}
 
 # Keys stored as bool in JSON
 BOOL_KEYS = {"geom_enable"}

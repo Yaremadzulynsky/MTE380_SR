@@ -44,6 +44,8 @@ _FALLBACK: dict = {
     # Ground error: height/pitch/FOV are fixed in local/perception.py — tune scale only
     "geom_enable": True,
     "geom_lateral_norm_m": 0.10,
+    "red_loss_debounce_frames": 4,
+    "red_error_ema_alpha": 0.35,
 }
 
 
@@ -83,6 +85,8 @@ def apply_pid_config_to_args(cfg: dict, args: argparse.Namespace) -> None:
             args.pickup_hold = float(v)
         elif k == "forward_ticks":
             setattr(args, "forward_ticks", int(v))
+        elif k == "red_loss_debounce_frames":
+            setattr(args, "red_loss_debounce_frames", int(v))
         else:
             setattr(args, k, v)
 
@@ -175,6 +179,18 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         default=cfg["geom_lateral_norm_m"],
         help="Metres of lateral offset → ~1.0 steering error (track-tune).",
     )
+    p.add_argument(
+        "--red-loss-debounce-frames",
+        type=int,
+        default=int(cfg["red_loss_debounce_frames"]),
+        help="Consecutive raw misses before red_found=False (holds last smoothed error).",
+    )
+    p.add_argument(
+        "--red-error-ema-alpha",
+        type=float,
+        default=cfg["red_error_ema_alpha"],
+        help="Low-pass on red_error when line visible (0=off, ~0.2–0.5 typical).",
+    )
     return p
 
 
@@ -245,6 +261,8 @@ def main() -> None:
         roi_top_ratio=args.roi_top_ratio,
         geom_enable=args.geom_enable,
         geom_lateral_norm_m=args.geom_lateral_norm_m,
+        red_loss_debounce_frames=args.red_loss_debounce_frames,
+        red_error_ema_alpha=args.red_error_ema_alpha,
     )
     control = LocalMotorController(
         serial_port=args.serial_port,
@@ -286,6 +304,10 @@ def main() -> None:
         perception.configure_geometry(
             geom_enable=args.geom_enable,
             geom_lateral_norm_m=args.geom_lateral_norm_m,
+        )
+        perception.configure_red_stability(
+            red_loss_debounce_frames=args.red_loss_debounce_frames,
+            red_error_ema_alpha=args.red_error_ema_alpha,
         )
         sm = _make_sm()
         running = True

@@ -99,6 +99,11 @@ class Perception:
 
     When ``geom_enable`` is True, ``red_error`` uses a ground-plane ray (camera pose is
     fixed in code; tune only ``geom_lateral_norm_m`` in config to map metres → ±1).
+
+    ``red_loss_debounce_frames``: require this many consecutive raw misses before reporting
+    ``red_found=False`` (holds last smoothed error meanwhile).
+
+    ``red_error_ema_alpha``: low-pass on ``red_error`` when raw red is visible (0 = off).
     """
 
     # ── HSV colour ranges ─────────────────────────────────────────────────────
@@ -123,6 +128,8 @@ class Perception:
         camera_channel_order: Literal["rgb", "bgr"] = "bgr",
         geom_enable: bool = True,
         geom_lateral_norm_m: float = 0.10,
+        red_loss_debounce_frames: int = 4,
+        red_error_ema_alpha: float = 0.35,
     ) -> None:
         self.width  = width
         self.height = height
@@ -136,6 +143,16 @@ class Perception:
 
         self.geom_enable = geom_enable
         self.geom_lateral_norm_m = float(geom_lateral_norm_m)
+        self.red_loss_debounce_frames = max(1, int(red_loss_debounce_frames))
+        self.red_error_ema_alpha = _clamp(float(red_error_ema_alpha), 0.0, 1.0)
+
+        # Raw-red debounce + EMA (see _stabilize_red)
+        self._red_miss_streak = 0
+        self._tracking_line = False
+        self._red_error_ema = 0.0
+        self._red_ema_seeded = False
+        self._last_t_junction = False
+
         self._fx = _focal_px(width, _CAMERA_HORIZONTAL_FOV_DEG)
         self._fy = self._fx  # square pixels
         self._cx = width / 2.0
@@ -161,6 +178,17 @@ class Perception:
         if geom_lateral_norm_m is not None:
             self.geom_lateral_norm_m = float(geom_lateral_norm_m)
 
+    def configure_red_stability(
+        self,
+        *,
+        red_loss_debounce_frames: int | None = None,
+        red_error_ema_alpha: float | None = None,
+    ) -> None:
+        if red_loss_debounce_frames is not None:
+            self.red_loss_debounce_frames = max(1, int(red_loss_debounce_frames))
+        if red_error_ema_alpha is not None:
+            self.red_error_ema_alpha = _clamp(float(red_error_ema_alpha), 0.0, 1.0)
+
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
@@ -175,7 +203,8 @@ class Perception:
         roi   = frame[roi_y:, :]
         hsv   = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        red_found, red_error, t_junction = self._detect_red(hsv, w, roi_y)
+        raw_found, raw_err, raw_tj = self._detect_red(hsv, w, roi_y)
+        red_found, red_error, t_junction = self._stabilize_red(raw_found, raw_err, raw_tj)
         blue_found = self._detect_blue(hsv)
 
         return FrameDetection(
@@ -212,6 +241,50 @@ class Perception:
         return out
 
     # ── Internals ─────────────────────────────────────────────────────────────
+
+    def _stabilize_red(
+        self, raw_found: bool, raw_err: float, raw_t_junction: bool
+    ) -> tuple[bool, float, bool]:
+        """
+        Debounce loss: brief raw misses keep red_found True and hold last smoothed error.
+
+        EMA: when raw red is visible, low-pass red_error to reduce frame-to-frame jitter.
+        """
+        a = self.red_error_ema_alpha
+
+        if raw_found:
+            self._red_miss_streak = 0
+            self._tracking_line = True
+
+            if a <= 1e-12:
+                smooth = raw_err
+            elif not self._red_ema_seeded:
+                smooth = raw_err
+                self._red_ema_seeded = True
+            else:
+                smooth = a * raw_err + (1.0 - a) * self._red_error_ema
+
+            self._red_error_ema = smooth
+            self._last_t_junction = raw_t_junction
+            return True, smooth, raw_t_junction
+
+        # Raw miss
+        if not self._tracking_line:
+            self._red_miss_streak = 0
+            return False, 0.0, False
+
+        self._red_miss_streak += 1
+        if self._red_miss_streak < self.red_loss_debounce_frames:
+            # Hold line-follow semantics so the state machine does not enter coast/search
+            return True, self._red_error_ema, self._last_t_junction
+
+        # Confirmed lost
+        self._tracking_line = False
+        self._red_miss_streak = 0
+        self._red_ema_seeded = False
+        self._red_error_ema = 0.0
+        self._last_t_junction = False
+        return False, 0.0, False
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int

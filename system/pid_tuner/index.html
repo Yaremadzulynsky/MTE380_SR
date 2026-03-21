@@ -153,10 +153,12 @@
   <!-- Line error: ground model -->
   <div class="card">
     <h2>Line error — ground model</h2>
-    <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Here: on/off and how many metres ≈ full steering error.</p>
+    <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Here: on/off and how many metres ≈ full steering error. Red debounce / EMA reduce one-frame glitches.</p>
     <div class="fields">
       <div class="field"><label>use ground model</label> <input type="checkbox" id="geom_enable" /></div>
       <div class="field"><label>scale (m → ±1)</label> <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" title="geom_lateral_norm_m" /></div>
+      <div class="field"><label>red miss frames</label> <input type="number" id="red_loss_debounce_frames" step="1" min="1" title="Consecutive raw misses before line lost" /></div>
+      <div class="field"><label>red error EMA α</label> <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" title="0 = off; smooth steering error when line visible" /></div>
     </div>
   </div>
 
@@ -200,6 +202,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
       "geom_enable", "geom_lateral_norm_m",
+      "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
