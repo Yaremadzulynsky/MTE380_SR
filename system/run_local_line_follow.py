@@ -16,7 +16,11 @@ import argparse
 import json
 import os
 import signal
+import sys
+import termios
+import threading
 import time
+import tty
 from pathlib import Path
 
 import cv2
@@ -97,6 +101,43 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     return p
 
 
+# ── Keyboard listener ─────────────────────────────────────────────────────────
+
+class KeyboardListener:
+    """Background thread that reads single keypresses without blocking the loop."""
+
+    def __init__(self) -> None:
+        self._ch: str | None = None
+        self._lock = threading.Lock()
+        self._old: list | None = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self._old = termios.tcgetattr(sys.stdin)
+        tty.setraw(sys.stdin.fileno())
+        self._thread.start()
+
+    def stop(self) -> None:
+        if self._old is not None:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._old)
+            self._old = None
+
+    def get(self) -> str | None:
+        """Return and clear the last keypress, or None if none pending."""
+        with self._lock:
+            ch, self._ch = self._ch, None
+            return ch
+
+    def _run(self) -> None:
+        while True:
+            try:
+                ch = sys.stdin.read(1)
+            except Exception:
+                break
+            with self._lock:
+                self._ch = ch
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -136,85 +177,119 @@ def main() -> None:
             kd=args.motor_kd,
         ),
     )
-    sm = MissionStateMachine(Config(
-        steer_kp=args.steer_kp,
-        steer_ki=args.steer_ki,
-        steer_kd=args.steer_kd,
-        steer_out_limit=args.steer_out_limit,
-        base_speed=args.base_speed,
-        min_speed=args.min_speed,
-        max_speed=args.max_speed,
-        search_turn=args.search_turn,
-        forward_ticks=args.forward_ticks,
-        forward_speed=args.forward_speed,
-        turn_speed=args.turn_speed,
-        turn_duration_s=args.turn_duration,
-        claw_open=args.claw_open,
-        claw_closed=args.claw_closed,
-        pickup_hold_s=args.pickup_hold,
-    ))
+
+    def _make_sm() -> MissionStateMachine:
+        return MissionStateMachine(Config(
+            steer_kp=args.steer_kp,       steer_ki=args.steer_ki,
+            steer_kd=args.steer_kd,       steer_out_limit=args.steer_out_limit,
+            base_speed=args.base_speed,   min_speed=args.min_speed,
+            max_speed=args.max_speed,     search_turn=args.search_turn,
+            forward_ticks=args.forward_ticks, forward_speed=args.forward_speed,
+            turn_speed=args.turn_speed,   turn_duration_s=args.turn_duration,
+            claw_open=args.claw_open,     claw_closed=args.claw_closed,
+            pickup_hold_s=args.pickup_hold,
+        ))
+
+    sm      = _make_sm()
+    running = False   # waiting for 'g' to start
 
     control.send_claw(args.claw_open)
 
     print(
-        f"Mission started — serial={args.serial_port}  dry_run={args.dry_run}\n"
+        f"Ready — serial={args.serial_port}  dry_run={args.dry_run}\n"
         f"  config      : {cfg_path}\n"
         f"  steering PID: kp={args.steer_kp}  ki={args.steer_ki}  kd={args.steer_kd}\n"
-        f"  motor    PID: kp={args.motor_kp:.6f}  ki={args.motor_ki}  kd={args.motor_kd}",
+        f"  motor    PID: kp={args.motor_kp:.6f}  ki={args.motor_ki}  kd={args.motor_kd}\n"
+        f"  Press 'g' to go, 's' to stop, 'q' to quit.",
         flush=True,
     )
 
+    kb = KeyboardListener()
+    kb.start()
+
     try:
         while not should_stop:
-            t0    = time.time()
+            t0 = time.time()
+
+            # ── Keyboard ──────────────────────────────────────────────────────
+            key = kb.get()
+            if key == "g" and not running:
+                sm = _make_sm()
+                running = True
+                print("[KEY] go", flush=True)
+            elif key == "s" and running:
+                running = False
+                control.stop()
+                print("[KEY] stop", flush=True)
+            elif key in ("q", "\x03"):   # q or Ctrl-C
+                break
+
+            # ── Vision (always, so display stays live) ────────────────────────
             frame = perception.read_frame()
             if frame is None:
                 print("Camera read failed — stopping.", flush=True)
                 break
 
-            det         = perception.detect(frame)
-            left, right = control.encoder_ticks
-            output      = sm.step(det, left, right)
+            det = perception.detect(frame)
 
-            control.send_drive(MotorCommand(left=output.left, right=output.right))
+            # ── Control (only when running) ───────────────────────────────────
+            if running:
+                left, right = control.encoder_ticks
+                output      = sm.step(det, left, right)
 
-            if output.claw is not None:
-                control.send_claw(output.claw)
+                control.send_drive(MotorCommand(left=output.left, right=output.right))
+                if output.claw is not None:
+                    control.send_claw(output.claw)
 
-            if output.state == State.DONE:
-                print("Mission complete.", flush=True)
-                break
+                if output.state == State.DONE:
+                    running = False
+                    control.stop()
+                    print("Mission complete. Press 'g' to run again.", flush=True)
 
-            rpm_l, rpm_r = control.measured_rpm
-            if args.no_display:
-                print(
+                rpm_l, rpm_r = control.measured_rpm
+                status_line = (
                     f"state={output.state.value:14s}  "
                     f"err={det.red_error:+.2f}  "
                     f"blue={'Y' if det.blue_found else 'N'}  "
                     f"T={'Y' if det.t_junction else 'N'}  "
                     f"L={output.left:+.2f}({rpm_l:+.0f}rpm)  "
-                    f"R={output.right:+.2f}({rpm_r:+.0f}rpm)",
-                    flush=True,
+                    f"R={output.right:+.2f}({rpm_r:+.0f}rpm)"
                 )
             else:
+                output     = None
+                rpm_l = rpm_r = 0.0
+                status_line = "IDLE — press 'g' to start"
+
+            # ── Display ───────────────────────────────────────────────────────
+            if args.no_display:
+                print(status_line, flush=True)
+            else:
                 overlay = perception.draw_debug(frame, det)
-                cv2.putText(
-                    overlay,
-                    f"{output.state.value}  "
-                    f"L={output.left:+.2f}({rpm_l:+.0f})  "
-                    f"R={output.right:+.2f}({rpm_r:+.0f})",
-                    (10, overlay.shape[0] - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA,
+                label   = (
+                    f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
+                    if output else "IDLE — press 'g'"
                 )
+                cv2.putText(overlay, label, (10, overlay.shape[0] - 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA)
                 cv2.imshow("mission", overlay)
-                if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                k = cv2.waitKey(1) & 0xFF
+                if k == ord("q"):
                     break
+                elif k == ord("g") and not running:
+                    sm = _make_sm()
+                    running = True
+                    print("[KEY] go", flush=True)
+                elif k == ord("s") and running:
+                    running = False
+                    control.stop()
+                    print("[KEY] stop", flush=True)
 
             elapsed = time.time() - t0
             if elapsed < period:
                 time.sleep(period - elapsed)
 
     finally:
+        kb.stop()
         control.stop()
         perception.release()
         cv2.destroyAllWindows()

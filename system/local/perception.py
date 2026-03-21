@@ -115,19 +115,17 @@ class Perception:
             cv2.inRange(hsv, self._RED_LO2, self._RED_HI2),
         )
         kernel = np.ones((5, 5), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
+        mask   = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return False, 0.0, False
 
         largest = max(contours, key=cv2.contourArea)
-        area    = float(cv2.contourArea(largest))
-        if area < self.red_min_area:
+        if cv2.contourArea(largest) < self.red_min_area:
             return False, 0.0, False
 
-        # T-junction check: bounding rect spans most of the frame width
         _, _, bw, _ = cv2.boundingRect(largest)
         t_junction  = (bw / frame_w) > self.t_junction_width_ratio
 
