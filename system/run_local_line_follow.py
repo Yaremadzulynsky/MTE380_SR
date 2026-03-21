@@ -2,8 +2,8 @@
 """
 Main runner: perception → state machine → motor/servo control.
 
-PID values are loaded from pid_config.json at startup. Edit them live via
-the PID tuner web UI (pid_tuner/app.py) and restart the runner to apply.
+PID values are loaded from pid_config.json at startup and **reloaded from the same
+file each time you press `g`** (so saves from the PID tuner apply on the next go).
 
 CLI flags override the config file when provided explicitly.
 Run:
@@ -67,6 +67,21 @@ def load_pid_config(path: Path) -> dict:
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"[config] Could not read {path}: {e} — using built-in defaults.", flush=True)
         return dict(_FALLBACK)
+
+
+def apply_pid_config_to_args(cfg: dict, args: argparse.Namespace) -> None:
+    """Copy merged pid_config dict onto argparse Namespace (field names differ for a few keys)."""
+    for k, v in cfg.items():
+        if k not in _FALLBACK:
+            continue
+        if k == "turn_duration_s":
+            args.turn_duration = float(v)
+        elif k == "pickup_hold_s":
+            args.pickup_hold = float(v)
+        elif k == "forward_ticks":
+            setattr(args, "forward_ticks", int(v))
+        else:
+            setattr(args, k, v)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -242,12 +257,29 @@ def main() -> None:
 
     control.send_claw(args.claw_open)
 
+    def go_reload_and_start() -> None:
+        """Reload pid_config.json (dashboard), apply motor + state machine, then run."""
+        nonlocal sm, running
+        fresh = load_pid_config(cfg_path)
+        apply_pid_config_to_args(fresh, args)
+        control.set_motor_pid(
+            MotorPIDConfig(kp=args.motor_kp, ki=args.motor_ki, kd=args.motor_kd)
+        )
+        sm = _make_sm()
+        running = True
+        print(
+            f"[KEY] go — reloaded {cfg_path}  "
+            f"steer_kp={args.steer_kp}  max_speed={args.max_speed}  "
+            f"motor_kp={args.motor_kp:.6f}",
+            flush=True,
+        )
+
     print(
         f"Ready — serial={args.serial_port}  dry_run={args.dry_run}\n"
         f"  config      : {cfg_path}\n"
         f"  steering PID: kp={args.steer_kp}  ki={args.steer_ki}  kd={args.steer_kd}\n"
         f"  motor    PID: kp={args.motor_kp:.6f}  ki={args.motor_ki}  kd={args.motor_kd}\n"
-        f"  Press 'g' to go, 's' to stop, 'q' to quit.",
+        f"  Press 'g' to go (reloads config from file), 's' to stop, 'q' to quit.",
         flush=True,
     )
 
@@ -273,9 +305,7 @@ def main() -> None:
             # ── Keyboard ──────────────────────────────────────────────────────
             key = kb.get()
             if key == "g" and not running:
-                sm = _make_sm()
-                running = True
-                print("[KEY] go", flush=True)
+                go_reload_and_start()
             elif key == "s" and running:
                 running = False
                 control.idle()
@@ -335,9 +365,7 @@ def main() -> None:
                 if k == ord("q"):
                     break
                 elif k == ord("g") and not running:
-                    sm = _make_sm()
-                    running = True
-                    print("[KEY] go", flush=True)
+                    go_reload_and_start()
                 elif k == ord("s") and running:
                     running = False
                     control.idle()

@@ -276,9 +276,14 @@ class MissionStateMachine:
 
         ``fwd ± turn`` is scaled down uniformly if either wheel would exceed ``max_speed``,
         so base/min/max still matter when steering is strong.
+
+        simple-pid uses ``error = setpoint - measurement``. With ``setpoint=0`` and
+        ``measurement=red_error``, a line to the *right* (positive error) yields a
+        *negative* P term and ``turn < 0`` → ``left < right``, i.e. steer the wrong way.
+        Passing ``-error`` as the measurement fixes the sign for ``left=fwd+turn``.
         """
         error = _clamp(error, -1.0, 1.0)
-        turn  = self._steer_pid(error)   # simple-pid: call with measurement, returns output
+        turn  = self._steer_pid(-error)
 
         speed_scale = 1.0 - abs(error)
         fwd = self.cfg.min_speed + (self.cfg.base_speed - self.cfg.min_speed) * speed_scale

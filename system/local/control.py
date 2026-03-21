@@ -127,6 +127,14 @@ class LocalMotorController:
             self.bridge.on_encoders = self._on_encoders
             self.bridge.start()
 
+    def set_motor_pid(self, cfg: MotorPIDConfig) -> None:
+        """Update wheel PID gains (e.g. after reloading pid_config.json); resets integrators."""
+        t = (cfg.kp, cfg.ki, cfg.kd)
+        self._pid_left.tunings = t
+        self._pid_right.tunings = t
+        self._pid_left.reset()
+        self._pid_right.reset()
+
     # ── Commands ──────────────────────────────────────────────────────────────
 
     def send_drive(self, cmd: MotorCommand) -> None:
