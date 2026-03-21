@@ -132,10 +132,10 @@ class LocalMotorController:
 
         # Update setpoints then call each PID with the current measurement
         self._pid_left.setpoint  = target_left_rpm
-        self._pid_right.setpoint = target_right_rpm
+        self._pid_right.setpoint = -target_right_rpm
 
         voltage_left  = self._pid_left(measured_left)
-        voltage_right = self._pid_right(-measured_right)
+        voltage_right = self._pid_right(measured_right)
 
         if self.dry_run:
             print(
