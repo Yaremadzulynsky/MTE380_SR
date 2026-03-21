@@ -67,6 +67,8 @@ class SerialBridge:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _send(self, msg_type: int, payload: bytes):
+        if self._ser is None or not self._ser.is_open:
+            return
         crc = (0xFF - ((msg_type + len(payload) + sum(payload)) % 256)) & 0xFF
         packet = bytes([SYNC, msg_type, len(payload)]) + payload + bytes([crc])
         try:

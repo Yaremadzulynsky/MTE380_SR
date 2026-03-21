@@ -150,6 +150,18 @@ class LocalMotorController:
         assert self.bridge is not None
         self.bridge.send_drive(voltage_left, voltage_right)
 
+    def idle(self) -> None:
+        """Zero motors and reset wheel PIDs; keep the serial port open (e.g. after pause / mission leg)."""
+        self._pid_left.reset()
+        self._pid_right.reset()
+        if self.dry_run:
+            return
+        if self.bridge is not None:
+            try:
+                self.bridge.send_drive(0.0, 0.0)
+            except Exception:
+                pass
+
     def send_claw(self, angle: float) -> None:
         if self.dry_run:
             print(f"[dry-run]  claw  angle={angle:.1f}°", flush=True)
@@ -157,15 +169,15 @@ class LocalMotorController:
         assert self.bridge is not None
         self.bridge.send_claw(angle)
 
-    def stop(self) -> None:
-        self._pid_left.reset()
-        self._pid_right.reset()
+    def shutdown(self) -> None:
+        """Stop motors and close serial — call once on process exit."""
+        self.idle()
         if self.dry_run:
-            print("[dry-run]  stop", flush=True)
+            print("[dry-run]  shutdown", flush=True)
             return
-        assert self.bridge is not None
-        self.bridge.send_drive(0.0, 0.0)
-        self.bridge.stop()
+        if self.bridge is not None:
+            self.bridge.stop()
+            self.bridge = None
 
     # ── Encoder access ────────────────────────────────────────────────────────
 

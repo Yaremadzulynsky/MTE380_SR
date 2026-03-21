@@ -46,7 +46,23 @@ _FALLBACK: dict = {
 def load_pid_config(path: Path) -> dict:
     try:
         raw = json.loads(path.read_text())
-        return {**_FALLBACK, **{k: v for k, v in raw.items() if k in _FALLBACK}}
+        merged = {**_FALLBACK, **{k: v for k, v in raw.items() if k in _FALLBACK}}
+        # Recover from an empty / zeroed JSON (e.g. bad PID tuner save)
+        if merged.get("steer_kp", 0) == merged.get("steer_ki", 0) == merged.get("steer_kd", 0) == 0:
+            print(
+                "[config] steer PID all zero — restoring built-in steering gains from code.",
+                flush=True,
+            )
+            for k in ("steer_kp", "steer_ki", "steer_kd", "steer_out_limit"):
+                merged[k] = _FALLBACK[k]
+        if merged.get("motor_kp", 0) == 0:
+            print(
+                "[config] motor_kp is zero — restoring built-in motor PID gains.",
+                flush=True,
+            )
+            for k in ("motor_kp", "motor_ki", "motor_kd"):
+                merged[k] = _FALLBACK[k]
+        return merged
     except (FileNotFoundError, json.JSONDecodeError) as e:
         print(f"[config] Could not read {path}: {e} — using built-in defaults.", flush=True)
         return dict(_FALLBACK)
@@ -224,8 +240,8 @@ def main() -> None:
                 print("[KEY] go", flush=True)
             elif key == "s" and running:
                 running = False
-                control.stop()
-                print("[KEY] stop", flush=True)
+                control.idle()
+                print("[KEY] stop (motors idle, serial still open)", flush=True)
             elif key in ("q", "\x03"):   # q or Ctrl-C
                 break
 
@@ -248,7 +264,7 @@ def main() -> None:
 
                 if output.state == State.DONE:
                     running = False
-                    control.stop()
+                    control.idle()
                     print("Mission complete. Press 'g' to run again.", flush=True)
 
                 rpm_l, rpm_r = control.measured_rpm
@@ -286,8 +302,8 @@ def main() -> None:
                     print("[KEY] go", flush=True)
                 elif k == ord("s") and running:
                     running = False
-                    control.stop()
-                    print("[KEY] stop", flush=True)
+                    control.idle()
+                    print("[KEY] stop (motors idle, serial still open)", flush=True)
 
             elapsed = time.time() - t0
             if elapsed < period:
@@ -295,7 +311,7 @@ def main() -> None:
 
     finally:
         kb.stop()
-        control.stop()
+        control.shutdown()
         perception.release()
         cv2.destroyAllWindows()
         print("Stopped.", flush=True)
