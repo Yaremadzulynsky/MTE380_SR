@@ -155,9 +155,10 @@ class MissionStateMachine:
         if not det.red_found:
             # Lost the line — reset so stale integral doesn't spike on re-acquisition
             self._steer_pid.reset()
+            st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
             return ControlOutput(
-                left= self.cfg.search_turn,
-                right=-self.cfg.search_turn,
+                left=st,
+                right=-st,
                 claw=None, state=self.state,
             )
 
@@ -169,7 +170,7 @@ class MissionStateMachine:
         if abs(avg_delta) >= self.cfg.forward_ticks:
             self._enter(State.PICKUP)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
-        spd = self.cfg.forward_speed
+        spd = min(self.cfg.forward_speed, self.cfg.max_speed)
         return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
 
     def _pickup(self) -> ControlOutput:
@@ -181,7 +182,7 @@ class MissionStateMachine:
         if time.time() - self._t0 >= self.cfg.turn_duration_s:
             self._enter(State.RETURN)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
-        spd = self.cfg.turn_speed
+        spd = min(self.cfg.turn_speed, self.cfg.max_speed)
         return ControlOutput(left=spd, right=-spd, claw=None, state=self.state)
 
     def _return_follow(self, det: FrameDetection) -> ControlOutput:
@@ -191,9 +192,10 @@ class MissionStateMachine:
 
         if not det.red_found:
             self._steer_pid.reset()
+            st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
             return ControlOutput(
-                left= self.cfg.search_turn,
-                right=-self.cfg.search_turn,
+                left=st,
+                right=-st,
                 claw=None, state=self.state,
             )
 
@@ -202,6 +204,11 @@ class MissionStateMachine:
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
+    def _cap_wheel(self, v: float) -> float:
+        """Clamp motor fraction to ±max_speed (pid_config / PID tuner)."""
+        ms = self.cfg.max_speed
+        return _clamp(v, -ms, ms)
+
     def _steer(self, error: float) -> tuple[float, float]:
         """
         Steering PID output:
@@ -209,15 +216,21 @@ class MissionStateMachine:
           error < 0 → line is left  of centre → steer left
 
         Forward speed scales down with |error| so the robot slows into sharp turns.
+
+        Previously only ``fwd`` was capped by max_speed; ``turn`` (±steer_out_limit) was
+        added on top, so wheels could still hit ±1.0. We now clamp each wheel to ±max_speed.
         """
         error = _clamp(error, -1.0, 1.0)
         turn  = self._steer_pid(error)   # simple-pid: call with measurement, returns output
 
         speed_scale = 1.0 - abs(error)
         fwd = self.cfg.min_speed + (self.cfg.base_speed - self.cfg.min_speed) * speed_scale
-        fwd = _clamp(fwd, self.cfg.min_speed, self.cfg.max_speed)
+        lo, hi = sorted((self.cfg.min_speed, self.cfg.max_speed))
+        fwd = _clamp(fwd, lo, hi)
 
-        return _clamp(fwd + turn, -1.0, 1.0), _clamp(fwd - turn, -1.0, 1.0)
+        left = _clamp(fwd + turn, -1.0, 1.0)
+        right = _clamp(fwd - turn, -1.0, 1.0)
+        return self._cap_wheel(left), self._cap_wheel(right)
 
     def _enter(self, new_state: State, left_ticks: int = 0, right_ticks: int = 0) -> None:
         print(f"[STATE] {self.state.value} → {new_state.value}", flush=True)
