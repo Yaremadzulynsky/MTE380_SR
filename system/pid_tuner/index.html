@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PID Tuner</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #ddd;
+      font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+      font-size: 14px;
+      padding: 1.25rem;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 1.5rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Section cards ───────────────────────────────────────── */
+    .card {
+      background: #1c1c1c;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 1rem 1.1rem 1.2rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .card h2 {
+      font-size: 0.72rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #666;
+      margin-bottom: 0.85rem;
+    }
+
+    /* ── Field grid ──────────────────────────────────────────── */
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.65rem;
+    }
+
+    .field label {
+      display: block;
+      font-size: 0.72rem;
+      color: #888;
+      margin-bottom: 0.3rem;
+    }
+
+    .field input {
+      width: 100%;
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 5px;
+      color: #e8e8e8;
+      padding: 0.38rem 0.55rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: border-color 0.15s;
+    }
+
+    .field input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    .field input.changed {
+      border-color: #f59e0b;
+    }
+
+    /* ── Footer bar ──────────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.55rem 1.5rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button:hover  { background: #1d4ed8; }
+    button:active { background: #1e40af; }
+
+    #status        { font-size: 0.8rem; color: #4ade80; }
+    #status.error  { color: #f87171;  }
+    #status.saving { color: #94a3b8;  }
+  </style>
+</head>
+<body>
+
+  <h1>PID Tuner</h1>
+
+  <!-- Steering PID -->
+  <div class="card">
+    <h2>Steering PID — line error → turn correction</h2>
+    <div class="fields">
+      <div class="field"><label>kp</label>           <input type="number" id="steer_kp"        step="0.01"   /></div>
+      <div class="field"><label>ki</label>           <input type="number" id="steer_ki"        step="0.001"  /></div>
+      <div class="field"><label>kd</label>           <input type="number" id="steer_kd"        step="0.01"   /></div>
+      <div class="field"><label>out_limit</label>    <input type="number" id="steer_out_limit" step="0.01" min="0" max="1" /></div>
+    </div>
+  </div>
+
+  <!-- Motor Speed PID -->
+  <div class="card">
+    <h2>Motor Speed PID — RPM feedback, one per wheel</h2>
+    <div class="fields">
+      <div class="field"><label>kp</label>              <input type="number" id="motor_kp"            step="0.0001" /></div>
+      <div class="field"><label>ki</label>              <input type="number" id="motor_ki"            step="0.0001" /></div>
+      <div class="field"><label>kd</label>              <input type="number" id="motor_kd"            step="0.0001" /></div>
+    </div>
+  </div>
+
+  <!-- Speed settings -->
+  <div class="card">
+    <h2>Speed — fraction of max RPM (320)</h2>
+    <div class="fields">
+      <div class="field"><label>base</label>        <input type="number" id="base_speed"  step="0.01" min="0" max="1" /></div>
+      <div class="field"><label>min</label>         <input type="number" id="min_speed"   step="0.01" min="0" max="1" /></div>
+      <div class="field"><label>max</label>         <input type="number" id="max_speed"   step="0.01" min="0" max="1" /></div>
+      <div class="field"><label>search_turn</label> <input type="number" id="search_turn" step="0.01" min="0" max="1" /></div>
+    </div>
+  </div>
+
+  <!-- Drive forward -->
+  <div class="card">
+    <h2>Drive Forward — to pickup point</h2>
+    <div class="fields">
+      <div class="field"><label>ticks (encoder counts)</label> <input type="number" id="forward_ticks" step="10"  min="0" /></div>
+      <div class="field"><label>speed (fraction)</label>       <input type="number" id="forward_speed" step="0.01" min="0" max="1" /></div>
+    </div>
+  </div>
+
+  <!-- 180 turn -->
+  <div class="card">
+    <h2>180° Turn</h2>
+    <div class="fields">
+      <div class="field"><label>speed (fraction)</label>  <input type="number" id="turn_speed"      step="0.01" min="0" max="1" /></div>
+      <div class="field"><label>duration (seconds)</label><input type="number" id="turn_duration_s" step="0.05" min="0" /></div>
+    </div>
+  </div>
+
+  <!-- Claw -->
+  <div class="card">
+    <h2>Claw / Servo</h2>
+    <div class="fields">
+      <div class="field"><label>open (degrees)</label>    <input type="number" id="claw_open"    step="1" min="0" max="180" /></div>
+      <div class="field"><label>closed (degrees)</label>  <input type="number" id="claw_closed"  step="1" min="0" max="180" /></div>
+      <div class="field"><label>hold time (seconds)</label><input type="number" id="pickup_hold_s" step="0.1" min="0" /></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button onclick="save()">Save to Robot</button>
+    <span id="status"></span>
+  </div>
+
+  <script>
+    // All keys match the JSON keys in pid_config.json exactly.
+    const KEYS = [
+      "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
+      "motor_kp", "motor_ki", "motor_kd",
+      "base_speed", "min_speed", "max_speed", "search_turn",
+      "forward_ticks", "forward_speed",
+      "turn_speed", "turn_duration_s",
+      "claw_open", "claw_closed", "pickup_hold_s",
+    ];
+
+    let savedValues = {};
+
+    function setStatus(msg, type = "") {
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className   = type;
+    }
+
+    function populate(cfg) {
+      savedValues = { ...cfg };
+      for (const key of KEYS) {
+        const el = document.getElementById(key);
+        if (el && cfg[key] !== undefined) {
+          el.value = cfg[key];
+          el.classList.remove("changed");
+        }
+      }
+    }
+
+    function collect() {
+      const out = {};
+      for (const key of KEYS) {
+        const el = document.getElementById(key);
+        if (!el) continue;
+        const val = key === "forward_ticks" ? parseInt(el.value, 10) : parseFloat(el.value);
+        if (!isNaN(val)) out[key] = val;
+      }
+      return out;
+    }
+
+    // Highlight fields that differ from last-saved values
+    function markChanges() {
+      for (const key of KEYS) {
+        const el = document.getElementById(key);
+        if (!el) continue;
+        const current = key === "forward_ticks"
+          ? parseInt(el.value, 10)
+          : parseFloat(el.value);
+        el.classList.toggle("changed", current !== savedValues[key]);
+      }
+    }
+
+    document.querySelectorAll("input").forEach(el => {
+      el.addEventListener("input", markChanges);
+    });
+
+    async function load() {
+      try {
+        const res = await fetch("/api/pid");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        populate(await res.json());
+        setStatus("Loaded.", "");
+        setTimeout(() => setStatus(""), 2000);
+      } catch (e) {
+        setStatus("Load failed: " + e.message, "error");
+      }
+    }
+
+    async function save() {
+      setStatus("Saving…", "saving");
+      try {
+        const res = await fetch("/api/pid", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(collect()),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        populate(body.saved);
+        setStatus("Saved ✓");
+        setTimeout(() => setStatus(""), 3000);
+      } catch (e) {
+        setStatus("Save failed: " + e.message, "error");
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
