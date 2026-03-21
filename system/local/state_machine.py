@@ -70,8 +70,11 @@ class Config:
     # ── Forward speed (fraction of MAX_RPM) ──────────────────────────────────
     base_speed:      float = 0.28   # speed at zero line error
     min_speed:       float = 0.16   # speed at maximum line error
-    max_speed:       float = 0.45   # hard ceiling
-    search_turn:     float = 0.18   # rotation speed when line is lost
+    max_speed:       float = 0.45   # hard ceiling (line follow + steer mix)
+    search_turn:     float = 0.18   # desired differential magnitude when line is lost
+    # Caps search spin only — independent of max_speed so a low line-follow cap does not
+    # force a tiny in-place search (~0.08 → wheels barely move).
+    search_turn_max: float = 0.32
     # Require this many consecutive frames with no red before starting search spin.
     # Stops brief contour flicker from looking like “rotating on the line”.
     lost_frames_before_search: int = 5
@@ -172,7 +175,7 @@ class MissionStateMachine:
                 )
             # Hard loss: search spin toward last known line side (see _search_spin_pair)
             self._steer_pid.reset()
-            st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
+            st = self._clamp_search_turn()
             left, right = self._search_spin_pair(st)
             return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
@@ -216,7 +219,7 @@ class MissionStateMachine:
                     left=coast, right=coast, claw=None, state=self.state
                 )
             self._steer_pid.reset()
-            st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
+            st = self._clamp_search_turn()
             left, right = self._search_spin_pair(st)
             return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
@@ -226,6 +229,10 @@ class MissionStateMachine:
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _clamp_search_turn(self) -> float:
+        m = self.cfg.search_turn_max
+        return _clamp(self.cfg.search_turn, -m, m)
 
     def _search_spin_pair(self, st: float) -> tuple[float, float]:
         """
@@ -242,10 +249,22 @@ class MissionStateMachine:
             return st, -st
         return -st, st
 
-    def _cap_wheel(self, v: float) -> float:
-        """Clamp motor fraction to ±max_speed (pid_config / PID tuner)."""
+    def _scale_pair_to_max_speed(self, left: float, right: float) -> tuple[float, float]:
+        """
+        Limit both wheels to ±max_speed without changing the turn / forward *mix*.
+
+        Clamping each wheel independently (old behaviour) made ``fwd ± turn`` collapse
+        toward full ±max_speed whenever steering was active, so base/min/max speed
+        looked “ignored” as soon as Kp > 0.
+        """
         ms = self.cfg.max_speed
-        return _clamp(v, -ms, ms)
+        m = max(abs(left), abs(right))
+        if m <= 1e-12:
+            return left, right
+        if m <= ms:
+            return left, right
+        s = ms / m
+        return left * s, right * s
 
     def _steer(self, error: float) -> tuple[float, float]:
         """
@@ -255,8 +274,8 @@ class MissionStateMachine:
 
         Forward speed scales down with |error| so the robot slows into sharp turns.
 
-        Previously only ``fwd`` was capped by max_speed; ``turn`` (±steer_out_limit) was
-        added on top, so wheels could still hit ±1.0. We now clamp each wheel to ±max_speed.
+        ``fwd ± turn`` is scaled down uniformly if either wheel would exceed ``max_speed``,
+        so base/min/max still matter when steering is strong.
         """
         error = _clamp(error, -1.0, 1.0)
         turn  = self._steer_pid(error)   # simple-pid: call with measurement, returns output
@@ -268,7 +287,7 @@ class MissionStateMachine:
 
         left = _clamp(fwd + turn, -1.0, 1.0)
         right = _clamp(fwd - turn, -1.0, 1.0)
-        return self._cap_wheel(left), self._cap_wheel(right)
+        return self._scale_pair_to_max_speed(left, right)
 
     def _enter(self, new_state: State, left_ticks: int = 0, right_ticks: int = 0) -> None:
         print(f"[STATE] {self.state.value} → {new_state.value}", flush=True)

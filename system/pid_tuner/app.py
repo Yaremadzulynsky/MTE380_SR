@@ -42,6 +42,7 @@ DEFAULTS: dict[str, float | int] = {
     "min_speed":           0.16,
     "max_speed":           0.45,
     "search_turn":         0.18,
+    "search_turn_max":     0.32,
 
     "forward_ticks":       800,
     "forward_speed":       0.25,

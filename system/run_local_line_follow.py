@@ -36,7 +36,8 @@ _DEFAULT_CONFIG = Path(__file__).parent / "pid_config.json"
 _FALLBACK: dict = {
     "steer_kp": 0.65,   "steer_ki": 0.04,    "steer_kd": 0.10,  "steer_out_limit": 0.80,
     "motor_kp": 0.003125, "motor_ki": 0.0005, "motor_kd": 0.0,
-    "base_speed": 0.28, "min_speed": 0.16,   "max_speed": 0.45, "search_turn": 0.18,
+    "base_speed": 0.28, "min_speed": 0.16,   "max_speed": 0.45,
+    "search_turn": 0.18, "search_turn_max": 0.32,
     "forward_ticks": 800, "forward_speed": 0.25,
     "turn_speed": 0.30,   "turn_duration_s": 2.2,
     "claw_open": 0.0,     "claw_closed": 90.0, "pickup_hold_s": 0.8,
@@ -127,6 +128,12 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--min-speed",             type=float, default=cfg["min_speed"])
     p.add_argument("--max-speed",             type=float, default=cfg["max_speed"])
     p.add_argument("--search-turn",           type=float, default=cfg["search_turn"])
+    p.add_argument(
+        "--search-turn-max",
+        type=float,
+        default=cfg["search_turn_max"],
+        help="Max wheel fraction for lost-line search (independent of --max-speed).",
+    )
 
     p.add_argument("--forward-ticks",         type=int,   default=cfg["forward_ticks"])
     p.add_argument("--forward-speed",         type=float, default=cfg["forward_speed"])
@@ -222,7 +229,8 @@ def main() -> None:
             steer_kp=args.steer_kp,       steer_ki=args.steer_ki,
             steer_kd=args.steer_kd,       steer_out_limit=args.steer_out_limit,
             base_speed=args.base_speed,   min_speed=args.min_speed,
-            max_speed=args.max_speed,     search_turn=args.search_turn,
+            max_speed=args.max_speed,
+            search_turn=args.search_turn, search_turn_max=args.search_turn_max,
             forward_ticks=args.forward_ticks, forward_speed=args.forward_speed,
             turn_speed=args.turn_speed,   turn_duration_s=args.turn_duration,
             claw_open=args.claw_open,     claw_closed=args.claw_closed,
