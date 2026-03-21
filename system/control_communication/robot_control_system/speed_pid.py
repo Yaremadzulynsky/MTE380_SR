@@ -1,37 +1,59 @@
-"""Speed PID — wraps the generic PID for forward/backward velocity control."""
+"""
+Forward speed control using simple-pid (linear velocity in m/s).
 
-from .pid import PID
+setpoint: desired speed
+measurement: current speed from encoders
 
-SPEED_KP = 1
+Output is a normalized motor command in [-1, 1] with a small deadband so tiny commands
+don’t chatter the H-bridge.
+
+Docs: https://simple-pid.readthedocs.io/en/latest/user_guide.html
+"""
+
+from __future__ import annotations
+
+import math
+
+from simple_pid import PID
+
+from .heading_pid import MOTOR_DEADBAND
+
+SPEED_KP = 1.0
 SPEED_KI = 0.0
 SPEED_KD = 0.0
 
-MOTOR_DEADBAND = 0.015   # minimum output to actually move the motors
-SPEED_DEADBAND = 0.02    # speed error (m/s) below which correction stops
+SPEED_DEADBAND = 0.02  # m/s — treat as “close enough”, hold zero output
 
 
 class SpeedPID:
+    """PI(D) on forward speed; output is linear_x before mixing to left/right wheels."""
 
-    def __init__(self):
-        self._pid = PID(SPEED_KP, SPEED_KI, SPEED_KD)
+    def __init__(self) -> None:
+        self._pid = PID(
+            SPEED_KP,
+            SPEED_KI,
+            SPEED_KD,
+            setpoint=0.0,
+            output_limits=(-1.0, 1.0),
+            sample_time=None,
+        )
+        self._pid.differential_on_measurement = False
 
-    def set_gains(self, kp: float, ki: float, kd: float):
-        self._pid.kp = kp
-        self._pid.ki = ki
-        self._pid.kd = kd
+    def set_gains(self, kp: float, ki: float, kd: float) -> None:
+        self._pid.tunings = (kp, ki, kd)
         self._pid.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         self._pid.reset()
 
     def update(self, setpoint: float, current_speed: float) -> float:
-        """Return linear_x given setpoint and current speed in m/s."""
-        error = setpoint - current_speed
-        if abs(error) < SPEED_DEADBAND:
+        err = setpoint - current_speed
+        if abs(err) < SPEED_DEADBAND:
             self._pid.reset()
             return 0.0
-        raw = self._pid.update(setpoint, current_speed)
+
+        self._pid.setpoint = setpoint
+        raw = self._pid(current_speed)
         if abs(raw) < 1e-6:
             return 0.0
-        import math
         return math.copysign(max(abs(raw), MOTOR_DEADBAND), raw)

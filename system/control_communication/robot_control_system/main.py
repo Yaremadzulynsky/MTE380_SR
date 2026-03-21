@@ -1,17 +1,17 @@
 """
 Robot control entry point.
 
-Two PID loops run at RATE_HZ and write /cmd to the Arduino via SerialBridge:
+PID controllers use simple-pid (https://simple-pid.readthedocs.io/).
 
-  Heading PID
-    setpoint  : desired heading = atan2(dir.x, dir.y)   (radians from forward)
-    feedback  : set via robot.set_heading_feedback(radians)   (e.g. from IMU)
-    output    : angular_z
+At RATE_HZ the control loop sends /cmd over SerialBridge:
 
-  Speed PID
-    setpoint  : dir.y * MAX_SPEED
-    feedback  : set via robot.set_speed_feedback(m/s)         (e.g. from encoders)
-    output    : linear_x
+  Heading PID (active)
+    Incremental target heading from set_direction(x, y); feedback from wheel odometry
+    in Robot._on_encoders. Output feeds the differential (angular_z) term.
+
+  Speed PID (optional / not wired in Robot._control_loop yet)
+    Gains are tunable via CLI; closed-loop forward speed would use encoder linear_speed.
+    Today forward motion uses set_speed() as an open-loop scale (linear_x = speed_scale).
 
 Direction input:
   Call robot.set_direction(x, y) from any thread.
