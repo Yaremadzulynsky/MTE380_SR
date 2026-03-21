@@ -33,14 +33,14 @@ from picamera2 import Picamera2
 # ── HSV ranges (must match local/perception.py) ───────────────────────────────
 
 # Red often wraps around 0/179 in HSV, so keep two bands.
-RED_LO1 = np.array([0, 50, 20])
-RED_HI1 = np.array([170, 50, 20])
-RED_LO2 = np.array([10, 255, 255])
-RED_HI2 = np.array([180, 255, 255])
+RED_LO1 = np.array([0, 120, 80], np.uint8)
+RED_HI1 = np.array([10, 255, 255], np.uint8)
+RED_LO2 = np.array([170, 120, 80], np.uint8)
+RED_HI2 = np.array([179, 255, 255], np.uint8)
 
 # Blue tuned to be a bit more forgiving but still reject washed-out noise.
-BLUE_LO = np.array([110,50,50])
-BLUE_HI = np.array([130,255,255])
+BLUE_LO = np.array([100, 150, 100], np.uint8)
+BLUE_HI = np.array([130, 255, 255], np.uint8)
 
 
 # ── Detection ─────────────────────────────────────────────────────────────────
@@ -87,6 +87,11 @@ def detect(frame, roi_top_ratio, red_min_area, blue_min_area, t_ratio):
     blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     blue_found = any(cv2.contourArea(c) >= blue_min_area for c in blue_contours)
 
+    largest_red_area = float(max((cv2.contourArea(c) for c in contours), default=0.0))
+    largest_blue_area = float(max((cv2.contourArea(c) for c in blue_contours), default=0.0))
+    red_pixels = int(np.count_nonzero(red_mask))
+    blue_pixels = int(np.count_nonzero(blue_mask))
+
     return {
         "red_found":    red_found,
         "red_error":    red_error,
@@ -97,7 +102,14 @@ def detect(frame, roi_top_ratio, red_min_area, blue_min_area, t_ratio):
         "cx_px":        cx_px if red_found else None,
         "cy_px":        cy_px if red_found else None,
         "red_mask":     red_mask,
+        "blue_mask":    blue_mask,
         "all_contours": [(cv2.contourArea(c), cv2.boundingRect(c)) for c in contours],
+        "debug": {
+            "red_pixels": red_pixels,
+            "blue_pixels": blue_pixels,
+            "largest_red_area": largest_red_area,
+            "largest_blue_area": largest_blue_area,
+        },
     }
 
 
@@ -157,6 +169,10 @@ def main():
     ap.add_argument("--red-min-area",  type=float, default=80.0)
     ap.add_argument("--blue-min-area", type=float, default=1500.0)
     ap.add_argument("--t-ratio",       type=float, default=0.5)
+    ap.add_argument("--debug",         action="store_true",
+                    help="Print detection debug stats to stdout.")
+    ap.add_argument("--debug-every",   type=int,   default=10,
+                    help="Print debug stats every N frames (default: 10).")
     args = ap.parse_args()
 
     cam = Picamera2()
@@ -171,10 +187,24 @@ def main():
 
     print("Controls: q=quit  s=save  [/]=ROI  -/==red area")
 
+    frame_i = 0
     while True:
+        frame_i += 1
         frame = cv2.cvtColor(cam.capture_array("main"), cv2.COLOR_RGB2BGR)
         d     = detect(frame, roi_ratio, red_min_area, args.blue_min_area, args.t_ratio)
         vis   = draw(frame, d)
+
+        if args.debug and (frame_i % max(1, args.debug_every) == 0):
+            dbg = d["debug"]
+            print(
+                f"[dbg {frame_i:05d}] "
+                f"red_found={d['red_found']} err={d['red_error']:+.3f} "
+                f"blue_found={d['blue_found']} T={d['t_junction']} "
+                f"red_px={dbg['red_pixels']} blue_px={dbg['blue_pixels']} "
+                f"red_area_max={dbg['largest_red_area']:.1f} "
+                f"blue_area_max={dbg['largest_blue_area']:.1f}",
+                flush=True,
+            )
 
         cv2.imshow("perception test", vis)
 
