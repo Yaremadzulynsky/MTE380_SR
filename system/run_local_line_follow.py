@@ -41,6 +41,9 @@ _FALLBACK: dict = {
     "forward_ticks": 800, "forward_speed": 0.25,
     "turn_speed": 0.30,   "turn_duration_s": 2.2,
     "claw_open": 0.0,     "claw_closed": 90.0, "pickup_hold_s": 0.8,
+    # Ground error: height/pitch/FOV are fixed in local/perception.py — tune scale only
+    "geom_enable": True,
+    "geom_lateral_norm_m": 0.10,
 }
 
 
@@ -159,6 +162,19 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--claw-open",             type=float, default=cfg["claw_open"])
     p.add_argument("--claw-closed",           type=float, default=cfg["claw_closed"])
     p.add_argument("--pickup-hold",           type=float, default=cfg["pickup_hold_s"])
+
+    p.add_argument(
+        "--geom-enable",
+        action=argparse.BooleanOptionalAction,
+        default=bool(cfg.get("geom_enable", True)),
+        help="Use ground-plane lateral error (camera pose is fixed in perception.py).",
+    )
+    p.add_argument(
+        "--geom-lateral-norm-m",
+        type=float,
+        default=cfg["geom_lateral_norm_m"],
+        help="Metres of lateral offset → ~1.0 steering error (track-tune).",
+    )
     return p
 
 
@@ -227,6 +243,8 @@ def main() -> None:
         width=args.width,
         height=args.height,
         roi_top_ratio=args.roi_top_ratio,
+        geom_enable=args.geom_enable,
+        geom_lateral_norm_m=args.geom_lateral_norm_m,
     )
     control = LocalMotorController(
         serial_port=args.serial_port,
@@ -265,12 +283,16 @@ def main() -> None:
         control.set_motor_pid(
             MotorPIDConfig(kp=args.motor_kp, ki=args.motor_ki, kd=args.motor_kd)
         )
+        perception.configure_geometry(
+            geom_enable=args.geom_enable,
+            geom_lateral_norm_m=args.geom_lateral_norm_m,
+        )
         sm = _make_sm()
         running = True
         print(
             f"[KEY] go — reloaded {cfg_path}  "
             f"steer_kp={args.steer_kp}  max_speed={args.max_speed}  "
-            f"motor_kp={args.motor_kp:.6f}",
+            f"motor_kp={args.motor_kp:.6f}  geom={args.geom_enable}",
             flush=True,
         )
 

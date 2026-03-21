@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 import cv2
@@ -11,6 +12,73 @@ from picamera2 import Picamera2
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
+
+
+def _focal_px(width: int, horizontal_fov_deg: float) -> float:
+    """Pinhole focal length in pixels from horizontal field of view."""
+    half = math.radians(horizontal_fov_deg) / 2.0
+    return (width / 2.0) / math.tan(half)
+
+
+def ground_xz_from_pixel(
+    u: float,
+    v: float,
+    *,
+    camera_height_m: float,
+    pitch_deg: float,
+    fx: float,
+    fy: float,
+    cx: float,
+    cy: float,
+) -> tuple[float, float] | None:
+    """
+    Ray through pixel (u,v) intersected with ground plane Y=0.
+
+    World: X right, Y up, Z forward (robot forward). Camera at (0, camera_height_m, 0)
+    looking ~forward and down; pitch_deg is depression below horizontal (optical axis).
+
+    Returns (X, Z) in metres on the ground, or None if the ray is degenerate.
+    """
+    pitch = math.radians(pitch_deg)
+    s, c = math.sin(pitch), math.cos(pitch)
+    # Columns = camera basis vectors expressed in world (OpenCV cam: +X right, +Y down, +Z forward).
+    R = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, c, -s],
+            [0.0, s, c],
+        ],
+        dtype=np.float64,
+    )
+    xn = (u - cx) / fx
+    yn = (v - cy) / fy
+    d_cam = np.array([xn, yn, 1.0], dtype=np.float64)
+    n = float(np.linalg.norm(d_cam))
+    if n < 1e-12:
+        return None
+    d_cam /= n
+    d_w = R @ d_cam
+    if abs(d_w[1]) < 1e-9:
+        return None
+    # Ray: (0, h, 0) + t * d_w, intersect Y=0  =>  h + t * d_w[1] = 0
+    t = -camera_height_m / d_w[1]
+    if t <= 0.0:
+        return None
+    p = np.array([0.0, camera_height_m, 0.0], dtype=np.float64) + t * d_w
+    return float(p[0]), float(p[2])
+
+
+def lateral_error_normalized(x_m: float, lateral_norm_m: float) -> float:
+    """Map lateral offset (m) to [-1, 1] for steering PID (scale ≈ half track width)."""
+    if lateral_norm_m <= 1e-9:
+        return 0.0
+    return _clamp(x_m / lateral_norm_m, -1.0, 1.0)
+
+
+# Measured on robot — change in code if you remount the camera (not in pid_config).
+_CAMERA_HEIGHT_M = 0.095
+_CAMERA_PITCH_DEG = 39.0
+_CAMERA_HORIZONTAL_FOV_DEG = 62.2
 
 
 @dataclass
@@ -25,9 +93,12 @@ class Perception:
     """
     Reads one camera frame and returns a FrameDetection.
 
-    Red line : HSV mask → largest contour → centroid error
+    Red line : HSV mask → largest contour → lateral error (image or ground-plane model)
     Blue target : HSV mask → any contour above min area
     T-junction  : red bounding-rect width > half the frame = horizontal end bar
+
+    When ``geom_enable`` is True, ``red_error`` uses a ground-plane ray (camera pose is
+    fixed in code; tune only ``geom_lateral_norm_m`` in config to map metres → ±1).
     """
 
     # ── HSV colour ranges ─────────────────────────────────────────────────────
@@ -50,6 +121,8 @@ class Perception:
         blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
         camera_channel_order: Literal["rgb", "bgr"] = "bgr",
+        geom_enable: bool = True,
+        geom_lateral_norm_m: float = 0.10,
     ) -> None:
         self.width  = width
         self.height = height
@@ -61,6 +134,13 @@ class Perception:
         # on Raspberry Pi; using COLOR_RGB2BGR then BGR2HSV swaps R/B and breaks hue detection.
         self._camera_channel_order = camera_channel_order
 
+        self.geom_enable = geom_enable
+        self.geom_lateral_norm_m = float(geom_lateral_norm_m)
+        self._fx = _focal_px(width, _CAMERA_HORIZONTAL_FOV_DEG)
+        self._fy = self._fx  # square pixels
+        self._cx = width / 2.0
+        self._cy = height / 2.0
+
         self._cam = Picamera2()
         cfg = self._cam.create_preview_configuration(
             main={"size": (width, height), "format": "RGB888"},
@@ -68,6 +148,18 @@ class Perception:
         )
         self._cam.configure(cfg)
         self._cam.start()
+
+    def configure_geometry(
+        self,
+        *,
+        geom_enable: bool | None = None,
+        geom_lateral_norm_m: float | None = None,
+    ) -> None:
+        """Update geometry toggles from pid_config without reopening the camera."""
+        if geom_enable is not None:
+            self.geom_enable = bool(geom_enable)
+        if geom_lateral_norm_m is not None:
+            self.geom_lateral_norm_m = float(geom_lateral_norm_m)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -83,7 +175,7 @@ class Perception:
         roi   = frame[roi_y:, :]
         hsv   = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        red_found, red_error, t_junction = self._detect_red(hsv, w)
+        red_found, red_error, t_junction = self._detect_red(hsv, w, roi_y)
         blue_found = self._detect_blue(hsv)
 
         return FrameDetection(
@@ -121,7 +213,9 @@ class Perception:
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
-    def _detect_red(self, hsv: np.ndarray, frame_w: int) -> tuple[bool, float, bool]:
+    def _detect_red(
+        self, hsv: np.ndarray, frame_w: int, roi_y: int
+    ) -> tuple[bool, float, bool]:
         """Returns (found, error, t_junction)."""
         mask = cv2.bitwise_or(
             cv2.inRange(hsv, self._RED_LO1, self._RED_HI1),
@@ -146,9 +240,39 @@ class Perception:
         if moments["m00"] <= 1e-6:
             return True, 0.0, t_junction
 
-        cx    = moments["m10"] / moments["m00"]
-        error = _clamp((cx - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
-        return True, error, t_junction
+        cx_roi = moments["m10"] / moments["m00"]
+        cy_roi = moments["m01"] / moments["m00"]
+
+        # Bottom of blob → ground point nearer the wheels than the centroid
+        pts = largest.reshape(-1, 2)
+        v_max = float(np.max(pts[:, 1]))
+        row = pts[pts[:, 1] >= v_max - 1.0]
+        u_pix = float(np.mean(row[:, 0])) if len(row) > 0 else cx_roi
+        v_pix = float(roi_y + v_max)
+
+        image_err = _clamp(
+            (cx_roi - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0
+        )
+
+        if not self.geom_enable:
+            return True, image_err, t_junction
+
+        g = ground_xz_from_pixel(
+            u_pix,
+            v_pix,
+            camera_height_m=_CAMERA_HEIGHT_M,
+            pitch_deg=_CAMERA_PITCH_DEG,
+            fx=self._fx,
+            fy=self._fy,
+            cx=self._cx,
+            cy=self._cy,
+        )
+        if g is None:
+            return True, image_err, t_junction
+
+        x_m, _ = g
+        err = lateral_error_normalized(x_m, self.geom_lateral_norm_m)
+        return True, err, t_junction
 
     def _detect_blue(self, hsv: np.ndarray) -> bool:
         """Returns True when a blue marker of sufficient area is visible."""

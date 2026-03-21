@@ -53,10 +53,16 @@ DEFAULTS: dict[str, float | int] = {
     "claw_open":           0.0,
     "claw_closed":         90.0,
     "pickup_hold_s":       0.8,
+
+    "geom_enable":         True,
+    "geom_lateral_norm_m": 0.10,
 }
 
 # Keys that must be integers (not floats)
 INT_KEYS = {"forward_ticks"}
+
+# Keys stored as bool in JSON
+BOOL_KEYS = {"geom_enable"}
 
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
@@ -89,9 +95,27 @@ def validate(data: dict) -> tuple[dict, dict]:
             out[key] = default
             continue
         try:
-            val = int(raw) if key in INT_KEYS else float(raw)
+            if key in BOOL_KEYS:
+                if isinstance(raw, bool):
+                    val = raw
+                else:
+                    s = str(raw).lower()
+                    if s in ("false", "no", "0", "off"):
+                        val = False
+                    elif s in ("true", "yes", "on", "1"):
+                        val = True
+                    else:
+                        errors[key] = "Must be a boolean."
+                        continue
+            elif key in INT_KEYS:
+                val = int(raw)
+            else:
+                val = float(raw)
         except (TypeError, ValueError):
             errors[key] = "Must be a number."
+            continue
+        if type(val) is bool:
+            out[key] = val
             continue
         if not isinstance(val, (int, float)) or val != val:   # NaN check
             errors[key] = "Must be a finite number."

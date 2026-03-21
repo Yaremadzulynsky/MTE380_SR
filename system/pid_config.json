@@ -22,5 +22,8 @@
 
   "claw_open": 0.0,
   "claw_closed": 90.0,
-  "pickup_hold_s": 0.8
+  "pickup_hold_s": 0.8,
+
+  "geom_enable": true,
+  "geom_lateral_norm_m": 0.10
 }
