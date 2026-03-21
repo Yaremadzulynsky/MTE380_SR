@@ -72,6 +72,9 @@ class Config:
     min_speed:       float = 0.16   # speed at maximum line error
     max_speed:       float = 0.45   # hard ceiling
     search_turn:     float = 0.18   # rotation speed when line is lost
+    # Require this many consecutive frames with no red before starting search spin.
+    # Stops brief contour flicker from looking like “rotating on the line”.
+    lost_frames_before_search: int = 5
 
     # ── Drive-forward (encoder-based) ────────────────────────────────────────
     forward_ticks:   int   = 800    # average encoder ticks — tune on hardware
@@ -112,6 +115,7 @@ class MissionStateMachine:
         # Last red_error while line was visible — used to spin *toward* the line when lost
         # (same sign convention as perception: + = line right of image centre).
         self._last_red_error = 0.0
+        self._consecutive_lost = 0  # frames without red (reset when line reacquired)
 
         # Steering PID: drives line_error → 0
         #   setpoint = 0, measurement = line_error, output = turn correction
@@ -156,12 +160,22 @@ class MissionStateMachine:
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
 
         if not det.red_found:
-            # Lost the line — reset so stale integral doesn't spike on re-acquisition
+            self._consecutive_lost += 1
+            n = max(1, self.cfg.lost_frames_before_search)
+            if self._consecutive_lost < n:
+                # Soft loss: contour flicker — coast straight, keep steering PID state
+                lo, hi = sorted((self.cfg.min_speed, self.cfg.max_speed))
+                coast = _clamp(self.cfg.min_speed, lo, hi)
+                return ControlOutput(
+                    left=coast, right=coast, claw=None, state=self.state
+                )
+            # Hard loss: search spin toward last known line side (see _search_spin_pair)
             self._steer_pid.reset()
             st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
             left, right = self._search_spin_pair(st)
             return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
+        self._consecutive_lost = 0
         self._last_red_error = det.red_error
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
@@ -192,11 +206,20 @@ class MissionStateMachine:
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
 
         if not det.red_found:
+            self._consecutive_lost += 1
+            n = max(1, self.cfg.lost_frames_before_search)
+            if self._consecutive_lost < n:
+                lo, hi = sorted((self.cfg.min_speed, self.cfg.max_speed))
+                coast = _clamp(self.cfg.min_speed, lo, hi)
+                return ControlOutput(
+                    left=coast, right=coast, claw=None, state=self.state
+                )
             self._steer_pid.reset()
             st = _clamp(self.cfg.search_turn, -self.cfg.max_speed, self.cfg.max_speed)
             left, right = self._search_spin_pair(st)
             return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
+        self._consecutive_lost = 0
         self._last_red_error = det.red_error
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
@@ -252,4 +275,5 @@ class MissionStateMachine:
         self._t0         = time.time()
         self._enc0_left  = left_ticks
         self._enc0_right = right_ticks
+        self._consecutive_lost = 0
         self._steer_pid.reset()
