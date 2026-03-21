@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import signal
 import time
 from pathlib import Path
@@ -64,7 +65,8 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--serial-port",   default="/dev/ttyACM0")
     p.add_argument("--baud",          type=int,   default=115200)
     p.add_argument("--dry-run",       action="store_true")
-    p.add_argument("--no-display",    action="store_true")
+    p.add_argument("--no-display",    action="store_true",
+                   default=not bool(os.environ.get("DISPLAY", "")))
     p.add_argument("--pid-config",    default=str(_DEFAULT_CONFIG),
                    help="Path to pid_config.json")
 

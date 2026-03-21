@@ -1,5 +1,6 @@
-opencv-python
-numpy
+# opencv and numpy are provided by the system package manager (python3-opencv).
+# Install with: sudo apt install python3-opencv
+# Create the venv with: python3 -m venv --system-site-packages .venv
 pyserial
 flask
 simple-pid

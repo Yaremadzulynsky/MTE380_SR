@@ -35,7 +35,7 @@ class Perception:
     _RED_LO2 = np.array([170, 120,  80], np.uint8)
     _RED_HI2 = np.array([179, 255, 255], np.uint8)
 
-    _BLUE_LO = np.array([100, 120,  80], np.uint8)
+    _BLUE_LO = np.array([100, 150, 100], np.uint8)   # tighter saturation/value floor
     _BLUE_HI = np.array([130, 255, 255], np.uint8)
 
     def __init__(
@@ -44,7 +44,7 @@ class Perception:
         height: int   = 480,
         roi_top_ratio: float = 0.5,   # ignore top fraction of frame (avoids far-ahead noise)
         red_min_area:  float = 80.0,
-        blue_min_area: float = 400.0,
+        blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
     ) -> None:
         self.width  = width
