@@ -57,11 +57,117 @@
       gap: 0.65rem;
     }
 
+    .field-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .field-label-row label {
+      flex: 1;
+      min-width: 0;
+    }
+
     .field label {
       display: block;
       font-size: 0.72rem;
       color: #888;
-      margin-bottom: 0.3rem;
+    }
+
+    .info-btn {
+      flex-shrink: 0;
+      width: 1.15rem;
+      height: 1.15rem;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid #444;
+      background: #2a2a2a;
+      color: #94a3b8;
+      font-size: 0.62rem;
+      font-weight: 700;
+      font-style: italic;
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .info-btn:hover,
+    .info-btn:focus-visible {
+      background: #333;
+      border-color: #3b82f6;
+      color: #e2e8f0;
+      outline: none;
+    }
+
+    /* Help dialog */
+    .help-dialog {
+      max-width: min(420px, 92vw);
+      padding: 0;
+      border: 1px solid #333;
+      border-radius: 10px;
+      background: #1a1a1a;
+      color: #ddd;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    }
+
+    .help-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.55);
+    }
+
+    .help-dialog-inner {
+      padding: 1rem 1.1rem 1.15rem;
+      position: relative;
+    }
+
+    .help-dialog h3 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 0.75rem;
+      padding-right: 1.75rem;
+    }
+
+    .help-dialog .help-close {
+      position: absolute;
+      top: 0.65rem;
+      right: 0.65rem;
+      width: 1.75rem;
+      height: 1.75rem;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: #888;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .help-dialog .help-close:hover {
+      color: #fff;
+      background: #2a2a2a;
+    }
+
+    .help-section {
+      font-size: 0.78rem;
+      line-height: 1.45;
+      margin-bottom: 0.65rem;
+    }
+
+    .help-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .help-section strong {
+      display: block;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      margin-bottom: 0.25rem;
+      font-weight: 600;
     }
 
     .field input {
@@ -121,10 +227,22 @@
   <div class="card">
     <h2>Steering PID — line error → turn correction</h2>
     <div class="fields">
-      <div class="field"><label>kp</label>           <input type="number" id="steer_kp"        step="0.01"   /></div>
-      <div class="field"><label>ki</label>           <input type="number" id="steer_ki"        step="0.001"  /></div>
-      <div class="field"><label>kd</label>           <input type="number" id="steer_kd"        step="0.01"   /></div>
-      <div class="field"><label>out_limit</label>    <input type="number" id="steer_out_limit" step="0.01" min="0" max="1" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="steer_kp">kp</label><button type="button" class="info-btn" data-help="steer_kp" aria-label="Help: steer_kp">i</button></div>
+        <input type="number" id="steer_kp" step="0.01" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="steer_ki">ki</label><button type="button" class="info-btn" data-help="steer_ki" aria-label="Help: steer_ki">i</button></div>
+        <input type="number" id="steer_ki" step="0.001" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="steer_kd">kd</label><button type="button" class="info-btn" data-help="steer_kd" aria-label="Help: steer_kd">i</button></div>
+        <input type="number" id="steer_kd" step="0.01" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="steer_out_limit">out_limit</label><button type="button" class="info-btn" data-help="steer_out_limit" aria-label="Help: steer_out_limit">i</button></div>
+        <input type="number" id="steer_out_limit" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -132,9 +250,18 @@
   <div class="card">
     <h2>Motor Speed PID — RPM feedback, one per wheel</h2>
     <div class="fields">
-      <div class="field"><label>kp</label>              <input type="number" id="motor_kp"            step="0.0001" /></div>
-      <div class="field"><label>ki</label>              <input type="number" id="motor_ki"            step="0.0001" /></div>
-      <div class="field"><label>kd</label>              <input type="number" id="motor_kd"            step="0.0001" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="motor_kp">kp</label><button type="button" class="info-btn" data-help="motor_kp" aria-label="Help: motor_kp">i</button></div>
+        <input type="number" id="motor_kp" step="0.0001" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="motor_ki">ki</label><button type="button" class="info-btn" data-help="motor_ki" aria-label="Help: motor_ki">i</button></div>
+        <input type="number" id="motor_ki" step="0.0001" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="motor_kd">kd</label><button type="button" class="info-btn" data-help="motor_kd" aria-label="Help: motor_kd">i</button></div>
+        <input type="number" id="motor_kd" step="0.0001" />
+      </div>
     </div>
   </div>
 
@@ -142,11 +269,26 @@
   <div class="card">
     <h2>Speed — fraction of max RPM (320)</h2>
     <div class="fields">
-      <div class="field"><label>base</label>        <input type="number" id="base_speed"  step="0.01" min="0" max="1" /></div>
-      <div class="field"><label>min</label>         <input type="number" id="min_speed"   step="0.01" min="0" max="1" /></div>
-      <div class="field"><label>max</label>         <input type="number" id="max_speed"   step="0.01" min="0" max="1" /></div>
-      <div class="field"><label>search_turn</label>     <input type="number" id="search_turn"     step="0.01" min="0" max="1" title="Differential magnitude when line lost" /></div>
-      <div class="field"><label>search_turn_max</label> <input type="number" id="search_turn_max" step="0.01" min="0" max="1" title="Cap for search only; not limited by max speed" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="base_speed">base</label><button type="button" class="info-btn" data-help="base_speed" aria-label="Help: base_speed">i</button></div>
+        <input type="number" id="base_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="min_speed">min</label><button type="button" class="info-btn" data-help="min_speed" aria-label="Help: min_speed">i</button></div>
+        <input type="number" id="min_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="max_speed">max</label><button type="button" class="info-btn" data-help="max_speed" aria-label="Help: max_speed">i</button></div>
+        <input type="number" id="max_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="search_turn">search_turn</label><button type="button" class="info-btn" data-help="search_turn" aria-label="Help: search_turn">i</button></div>
+        <input type="number" id="search_turn" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="search_turn_max">search_turn_max</label><button type="button" class="info-btn" data-help="search_turn_max" aria-label="Help: search_turn_max">i</button></div>
+        <input type="number" id="search_turn_max" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -155,10 +297,22 @@
     <h2>Line error — ground model</h2>
     <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Here: on/off and how many metres ≈ full steering error. Red debounce / EMA reduce one-frame glitches.</p>
     <div class="fields">
-      <div class="field"><label>use ground model</label> <input type="checkbox" id="geom_enable" /></div>
-      <div class="field"><label>scale (m → ±1)</label> <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" title="geom_lateral_norm_m" /></div>
-      <div class="field"><label>red miss frames</label> <input type="number" id="red_loss_debounce_frames" step="1" min="1" title="Consecutive raw misses before line lost" /></div>
-      <div class="field"><label>red error EMA α</label> <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" title="0 = off; smooth steering error when line visible" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="geom_enable">use ground model</label><button type="button" class="info-btn" data-help="geom_enable" aria-label="Help: geom_enable">i</button></div>
+        <input type="checkbox" id="geom_enable" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="geom_lateral_norm_m">scale (m → ±1)</label><button type="button" class="info-btn" data-help="geom_lateral_norm_m" aria-label="Help: geom_lateral_norm_m">i</button></div>
+        <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="red_loss_debounce_frames">red miss frames</label><button type="button" class="info-btn" data-help="red_loss_debounce_frames" aria-label="Help: red_loss_debounce_frames">i</button></div>
+        <input type="number" id="red_loss_debounce_frames" step="1" min="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="red_error_ema_alpha">red error EMA α</label><button type="button" class="info-btn" data-help="red_error_ema_alpha" aria-label="Help: red_error_ema_alpha">i</button></div>
+        <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -166,8 +320,14 @@
   <div class="card">
     <h2>Drive Forward — to pickup point</h2>
     <div class="fields">
-      <div class="field"><label>ticks (encoder counts)</label> <input type="number" id="forward_ticks" step="10"  min="0" /></div>
-      <div class="field"><label>speed (fraction)</label>       <input type="number" id="forward_speed" step="0.01" min="0" max="1" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="forward_ticks">ticks (encoder counts)</label><button type="button" class="info-btn" data-help="forward_ticks" aria-label="Help: forward_ticks">i</button></div>
+        <input type="number" id="forward_ticks" step="10" min="0" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="forward_speed">speed (fraction)</label><button type="button" class="info-btn" data-help="forward_speed" aria-label="Help: forward_speed">i</button></div>
+        <input type="number" id="forward_speed" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -175,8 +335,14 @@
   <div class="card">
     <h2>180° Turn</h2>
     <div class="fields">
-      <div class="field"><label>speed (fraction)</label>  <input type="number" id="turn_speed"      step="0.01" min="0" max="1" /></div>
-      <div class="field"><label>duration (seconds)</label><input type="number" id="turn_duration_s" step="0.05" min="0" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn_speed">speed (fraction)</label><button type="button" class="info-btn" data-help="turn_speed" aria-label="Help: turn_speed">i</button></div>
+        <input type="number" id="turn_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn_duration_s">duration (seconds)</label><button type="button" class="info-btn" data-help="turn_duration_s" aria-label="Help: turn_duration_s">i</button></div>
+        <input type="number" id="turn_duration_s" step="0.05" min="0" />
+      </div>
     </div>
   </div>
 
@@ -184,11 +350,28 @@
   <div class="card">
     <h2>Claw / Servo</h2>
     <div class="fields">
-      <div class="field"><label>open (degrees)</label>    <input type="number" id="claw_open"    step="1" min="0" max="180" /></div>
-      <div class="field"><label>closed (degrees)</label>  <input type="number" id="claw_closed"  step="1" min="0" max="180" /></div>
-      <div class="field"><label>hold time (seconds)</label><input type="number" id="pickup_hold_s" step="0.1" min="0" /></div>
+      <div class="field">
+        <div class="field-label-row"><label for="claw_open">open (degrees)</label><button type="button" class="info-btn" data-help="claw_open" aria-label="Help: claw_open">i</button></div>
+        <input type="number" id="claw_open" step="1" min="0" max="180" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="claw_closed">closed (degrees)</label><button type="button" class="info-btn" data-help="claw_closed" aria-label="Help: claw_closed">i</button></div>
+        <input type="number" id="claw_closed" step="1" min="0" max="180" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="pickup_hold_s">hold time (seconds)</label><button type="button" class="info-btn" data-help="pickup_hold_s" aria-label="Help: pickup_hold_s">i</button></div>
+        <input type="number" id="pickup_hold_s" step="0.1" min="0" />
+      </div>
     </div>
   </div>
+
+  <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
+    <div class="help-dialog-inner">
+      <button type="button" class="help-close" aria-label="Close help">&times;</button>
+      <h3 id="help-title"></h3>
+      <div id="help-body"></div>
+    </div>
+  </dialog>
 
   <div class="footer">
     <button onclick="save()">Save to Robot</button>
@@ -208,6 +391,233 @@
       "claw_open", "claw_closed", "pickup_hold_s",
     ];
     const BOOL_KEYS = new Set(["geom_enable"]);
+
+    /** Rich help for each config key — shown in the (i) dialog */
+    const HELP = {
+      steer_kp: {
+        title: "steer_kp",
+        what: "Proportional gain: how strongly the robot reacts to line error (offset from center). Larger → sharper turns for the same error.",
+        inc: "Steering reacts faster and more aggressively; can reduce steady offset but may oscillate or overshoot.",
+        dec: "Gentler steering; smoother path but may wander or correct slowly on curves.",
+        whenInc: "Line following feels sluggish, persistent offset from the line, or wide gentle curves where you need quicker correction.",
+        whenDec: "Oscillation, weaving, or jerky steering; overshoot on straight segments; wheel commands hitting limits often.",
+      },
+      steer_ki: {
+        title: "steer_ki",
+        what: "Integral gain: accumulates error over time to trim out bias (e.g. persistent left/right drift). Fights constant small errors.",
+        inc: "Removes steady-state offset faster; can cause overshoot, windup, or slow oscillation if too high.",
+        dec: "Less risk of integral windup and overshoot; may leave a small constant offset on the line.",
+        whenInc: "Robot consistently sits to one side of the line (same sign error) even when kp seems tuned.",
+        whenDec: "Oscillation that grows over time, slow hunting, or bad behavior after sharp turns (integral windup).",
+      },
+      steer_kd: {
+        title: "steer_kd",
+        what: "Derivative gain: damps rapid changes in error — resists zig-zagging when the error changes quickly.",
+        inc: "More damping; can calm oscillations but too much adds noise sensitivity and sluggish response.",
+        dec: "Snappier response to error changes; can help if steering feels “mushy,” but may increase oscillation.",
+        whenInc: "Visible weaving or high-frequency wobble on the line; overshoot after corrections.",
+        whenDec: "Steering feels overdamped or slow to react when error spikes; kd was raised too far.",
+      },
+      steer_out_limit: {
+        title: "steer_out_limit",
+        what: "Maximum magnitude of the steering PID output (caps how hard the robot can command differential turn).",
+        inc: "Allows tighter / sharper turns at the cost of possible saturation and harsher motion.",
+        dec: "Softer maximum steering; smoother but may not correct enough on sharp turns or large errors.",
+        whenInc: "Understeering on tight corners when error is large; robot never “turns hard enough.”",
+        whenDec: "Harsh jerks, wheel commands pegged, or instability when error is large.",
+      },
+      motor_kp: {
+        title: "motor_kp",
+        what: "Proportional gain on each wheel’s speed error (target RPM vs measured RPM). Core of the inner speed loop.",
+        inc: "Faster correction of speed errors; motors track targets more tightly; too high → oscillation or buzzing.",
+        dec: "Softer speed tracking; smoother voltage but sluggish RPM response and larger lag.",
+        whenInc: "Measured RPM lags target badly, slow recovery after load changes.",
+        whenDec: "Wheel speed oscillation, audible hunting, or voltage twitching at steady speed.",
+      },
+      motor_ki: {
+        title: "motor_ki",
+        what: "Integral on speed error: helps each wheel reach the commanded RPM under steady load (friction, slope).",
+        inc: "Better steady-state RPM match; risk of overshoot or slow oscillation if excessive.",
+        dec: "Less integral action; may leave a steady RPM error under load.",
+        whenInc: "Persistent gap between target and actual RPM at constant command (one or both wheels).",
+        whenDec: "RPM overshoots target, slow hunting, or bad transients after speed steps.",
+      },
+      motor_kd: {
+        title: "motor_kd",
+        what: "Derivative on speed error: damps quick RPM changes — reduces overshoot when the target changes.",
+        inc: "Less overshoot on speed steps; can help noisy encoders behave worse if too high.",
+        dec: "Faster inner-loop response; may ring or overshoot when targets change quickly.",
+        whenInc: "Overshoot when base speed or steering changes target RPM quickly.",
+        whenDec: "Speed loop feels sluggish or overdamped; encoder noise causes jitter.",
+      },
+      base_speed: {
+        title: "base_speed",
+        what: "Nominal forward speed (fraction of max RPM) used as the baseline during line following before steering mix.",
+        inc: "Faster mission; less time per segment but harder control and less margin for error.",
+        dec: "Slower, more stable following; easier tuning at the cost of time.",
+        whenInc: "Line follow is stable and you need shorter lap time; good lighting and reliable line.",
+        whenDec: "Frequent loss of line, overshoot, or control feels on the edge; rough surface or tight course.",
+      },
+      min_speed: {
+        title: "min_speed",
+        what: "Lower clamp on commanded wheel speed (fraction) so wheels never go below this in normal operation.",
+        inc: "Keeps minimum drive higher; avoids stalling on low commands but may prevent very slow corrections.",
+        dec: "Allows slower wheel speeds; finer low-speed control but risk of stall or cogging.",
+        whenInc: "Motors stall or stop when steering asks for a large differential at low speed.",
+        whenDec: "Robot can’t slow one wheel enough for gentle corrections; jerky at low speed.",
+      },
+      max_speed: {
+        title: "max_speed",
+        what: "Upper cap on commanded wheel speed (fraction) during line follow — limits top speed regardless of base.",
+        inc: "Allows higher top speed if other logic permits; faster but harder to control.",
+        dec: "Safer ceiling; reduces top speed for stability or battery/heat limits.",
+        whenInc: "You raised base_speed or need more headroom; course is open and control is solid.",
+        whenDec: "Overspeed on straights, instability, or hardware limits (current, vibration).",
+      },
+      search_turn: {
+        title: "search_turn",
+        what: "Strength of the differential turn used when the line is lost (search / reacquire behavior).",
+        inc: "More aggressive search rotation; finds the line faster but can overshoot or look erratic.",
+        dec: "Gentler search; smoother but may take longer to find the line.",
+        whenInc: "Robot spins in place too slowly or fails to sweep the camera across the line when lost.",
+        whenDec: "Search looks violent, loses position, or overshoots past the line repeatedly.",
+      },
+      search_turn_max: {
+        title: "search_turn_max",
+        what: "Hard cap on search differential — independent of max_speed so search can stay bounded.",
+        inc: "Allows stronger search turns without raising overall max_speed elsewhere.",
+        dec: "Limits how hard search can turn even if search_turn is high — safer, gentler recovery.",
+        whenInc: "Search needs more bite but you don’t want to raise max_speed for normal follow.",
+        whenDec: "Search is still too aggressive after tuning search_turn; add a safety ceiling.",
+      },
+      geom_enable: {
+        title: "use ground model (geom_enable)",
+        boolean: true,
+        what: "When on, lateral line error is converted using a fixed camera geometry in code (height, pitch, FOV) so “error” is closer to metres on the ground. When off, perception typically uses image-plane error only.",
+        on: "More consistent error units across distance; better if tuning steering against physical offset.",
+        off: "Simpler path if geometry in code doesn’t match your robot; tune steering against raw image error.",
+        whenOn: "You’ve verified camera pose in perception matches the robot; you want error to scale like real lateral offset.",
+        whenOff: "Ground model disagrees with reality, or you prefer to tune purely in image space.",
+      },
+      geom_lateral_norm_m: {
+        title: "geom_lateral_norm_m",
+        what: "Roughly how many metres of lateral line offset correspond to a steering error of about ±1 after the ground model (gain from physical offset to normalized error).",
+        inc: "Same physical offset produces a larger steering error → stronger correction per centimetre.",
+        dec: "Softer response per metre; robot under-corrects for the same physical offset.",
+        whenInc: "Robot consistently undershoots corrections (error stays same sign) with ground model on.",
+        whenDec: "Oscillation or over-correction; steering too twitchy for small real-world offsets.",
+      },
+      red_loss_debounce_frames: {
+        title: "red_loss_debounce_frames",
+        what: "How many consecutive camera frames the raw detector must miss the line before perception reports “line lost.” Until then it can hold the previous smoothed error.",
+        inc: "More tolerant of brief dropouts; slower to declare lost line (may stay in follow through flicker).",
+        dec: "Faster transition to lost-line when the line disappears; less latency for search, more false loss on noise.",
+        whenInc: "Brief flashes to “no line” cause unwanted search mode; camera glitches or tape gaps.",
+        whenDec: "Robot stays in line follow too long after the line is really gone; slow to start recovery.",
+      },
+      red_error_ema_alpha: {
+        title: "red_error_ema_alpha",
+        what: "Low-pass filter on line error when the line is visible (0 = off, raw error; higher = more smoothing). Reduces single-frame noise.",
+        inc: "Smoother error, less jitter; more lag behind real moves (sluggish response to real curves).",
+        dec: "Snappier error tracking; more noise passes through to steering.",
+        whenInc: "Erratic err values frame-to-frame while red=Y; steering jitters though the line is stable.",
+        whenDec: "Steering feels laggy in real corners; error trails behind when the line bends.",
+      },
+      forward_ticks: {
+        title: "forward_ticks",
+        what: "Encoder count to drive forward during the “drive to pickup” phase (distance scales with wheel circumference and gearing).",
+        inc: "Longer forward segment; stops farther along the path.",
+        dec: "Shorter segment; stops earlier.",
+        whenInc: "Robot stops short of the pickup target; increase until reach is consistent.",
+        whenDec: "Overshoots the pickup point or hits obstacles; reduce until stop position is correct.",
+      },
+      forward_speed: {
+        title: "forward_speed",
+        what: "Motor speed fraction during that forward drive segment (not the same as base line-follow speed).",
+        inc: "Faster approach; less time but harder to stop accurately.",
+        dec: "Slower approach; easier precision, longer segment time.",
+        whenInc: "Approach is reliable but slow; you need shorter mission time.",
+        whenDec: "Overshoots or slip at the end; reduce for repeatable stopping.",
+      },
+      turn_speed: {
+        title: "turn_speed",
+        what: "Wheel speed fraction used during the scripted 180° (or similar) turn state.",
+        inc: "Faster rotation; shorter turn time but more slip and harder to match duration.",
+        dec: "Slower, more controlled rotation; easier to tune with duration.",
+        whenInc: "Turn completes too slowly; duration is already at a practical minimum.",
+        whenDec: "Wheel slip, inconsistent heading after turn, or instability.",
+      },
+      turn_duration_s: {
+        title: "turn_duration_s",
+        what: "How long the turn behavior runs at turn_speed (open-loop timing; pair with speed for total angle).",
+        inc: "Longer turn → more rotation if speed fixed; use to fix under-rotation.",
+        dec: "Shorter turn → less rotation; use if robot overturns.",
+        whenInc: "Robot consistently ends up short of 180° (or target heading).",
+        whenDec: "Robot passes the desired heading or spins too far.",
+      },
+      claw_open: {
+        title: "claw_open",
+        what: "Servo angle (degrees) for the fully open claw — release / clear to drive.",
+        inc: "Opens wider if your servo range allows; needed if mechanism binds before fully open.",
+        dec: "Less open; use if open position is too wide and hits structure.",
+        whenInc: "Object doesn’t release or claw snags when “open.”",
+        whenDec: "Open position collides with frame or over-stresses servo.",
+      },
+      claw_closed: {
+        title: "claw_closed",
+        what: "Servo angle (degrees) for gripping — closed around the payload.",
+        inc: "More closure force / travel if servo allows; can crush fragile objects.",
+        dec: "Looser grip; safer for soft objects but may drop.",
+        whenInc: "Payload slips when closed; need firmer grip (within mechanical limits).",
+        whenDec: "Object damaged or servo stalls when closing.",
+      },
+      pickup_hold_s: {
+        title: "pickup_hold_s",
+        what: "Time to wait after closing the claw (or at pickup) so the grip settles before the next motion.",
+        inc: "Longer settle time; safer for heavy or slippery objects.",
+        dec: "Shorter mission time; risk of moving before grip is secure.",
+        whenInc: "Payload drops when leaving pickup; inconsistent grabs.",
+        whenDec: "Mission delay with no benefit; next state already stable.",
+      },
+    };
+
+    function openHelp(key) {
+      const entry = HELP[key];
+      const dlg = document.getElementById("help-dialog");
+      const titleEl = document.getElementById("help-title");
+      const bodyEl = document.getElementById("help-body");
+      if (!entry || !dlg) return;
+
+      titleEl.textContent = entry.title;
+      if (entry.boolean) {
+        bodyEl.innerHTML = [
+          section("What it does", entry.what),
+          section("When enabled (on)", entry.on),
+          section("When disabled (off)", entry.off),
+          section("Enable when…", entry.whenOn),
+          section("Disable when…", entry.whenOff),
+        ].join("");
+      } else {
+        bodyEl.innerHTML = [
+          section("What it does", entry.what),
+          section("If you increase ▲", entry.inc),
+          section("If you decrease ▼", entry.dec),
+          section("When to increase", entry.whenInc),
+          section("When to decrease", entry.whenDec),
+        ].join("");
+      }
+      dlg.showModal();
+    }
+
+    function section(heading, text) {
+      return `<div class="help-section"><strong>${heading}</strong>${escapeHtml(text)}</div>`;
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
 
     let savedValues = {};
 
@@ -259,6 +669,16 @@
 
     document.querySelectorAll("input").forEach(el => {
       el.addEventListener("input", markChanges);
+    });
+
+    document.querySelectorAll(".info-btn").forEach(btn => {
+      btn.addEventListener("click", () => openHelp(btn.getAttribute("data-help")));
+    });
+
+    const helpDialog = document.getElementById("help-dialog");
+    document.querySelector(".help-close")?.addEventListener("click", () => helpDialog?.close());
+    helpDialog?.addEventListener("click", (e) => {
+      if (e.target === helpDialog) helpDialog.close();
     });
 
     async function load() {
