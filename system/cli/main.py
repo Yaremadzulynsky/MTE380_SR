@@ -7,6 +7,10 @@ Start the full mission (perception + state machine + motors):
   python -m cli.main --serial-port COM3 --dry-run run
   python -m cli.main run --no-display --pid-config my.json
 
+PID tuner web UI (read/write pid_config.json from any browser):
+  python -m cli.main serve
+  python -m cli.main serve --web-port 8080 --pid-config /tmp/cfg.json
+
 Low-level hardware debug commands (talk directly to Arduino):
   python -m cli.main --serial-port /dev/ttyACM0 encoders
   python -m cli.main --serial-port /dev/ttyACM0 serial
@@ -612,6 +616,21 @@ def cmd_claw(ctrl: LocalMotorController, args: argparse.Namespace) -> None:
     print(f"  Claw → {args.angle}°")
 
 
+def cmd_serve(args: argparse.Namespace) -> None:
+    """Start the PID tuner web UI (pid_tuner/app.py)."""
+    import pid_tuner.app as _tuner
+
+    cfg_path = Path(args.pid_config)
+    if not cfg_path.exists():
+        _tuner.save_config(dict(_tuner.DEFAULTS))
+        print(f"[serve] Created default config at {cfg_path}", flush=True)
+
+    _tuner.CONFIG_PATH = cfg_path
+    print(f"[serve] PID tuner → http://{args.host}:{args.web_port}", flush=True)
+    print(f"[serve] Config file: {cfg_path}", flush=True)
+    _tuner.app.run(host=args.host, port=args.web_port, debug=False)
+
+
 HARDWARE_COMMANDS = {
     "encoders": cmd_encoders,
     "serial":   cmd_serial,
@@ -692,6 +711,14 @@ def build_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--red-error-ema-alpha", type=float, default=cfg["red_error_ema_alpha"],
                    help="Low-pass alpha on red_error (0=off, ~0.2–0.5 typical)")
 
+    # ── Web server (PID tuner) ────────────────────────────────────────────────
+    p = sub.add_parser("serve", help="Start the PID tuner web UI (http://<host>:5050)")
+    p.add_argument("--pid-config", default=str(_DEFAULT_CONFIG),
+                   help="Path to pid_config.json (read/written by the UI)")
+    p.add_argument("--host",     default="0.0.0.0")
+    p.add_argument("--web-port", type=int, default=5050, metavar="PORT",
+                   help="HTTP port (default: 5050)")
+
     # ── Hardware debug commands ───────────────────────────────────────────────
     sub.add_parser("encoders", help="Stream encoder ticks + RPM live (Enter to stop)")
     sub.add_parser("serial",   help="Print raw serial bytes hex (Enter to stop)")
@@ -725,6 +752,10 @@ def main() -> None:
         level=logging.DEBUG if args.debug else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+
+    if args.command == "serve":
+        cmd_serve(args)
+        return
 
     if args.command is None or args.command == "run":
         # When invoked without a subcommand, fill in run-subparser defaults

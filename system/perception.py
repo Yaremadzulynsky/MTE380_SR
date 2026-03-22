@@ -152,6 +152,7 @@ class Perception:
         self._red_error_ema = 0.0
         self._red_ema_seeded = False
         self._last_t_junction = False
+        self._last_red_mask: np.ndarray | None = None  # cached for web stream
 
         self._fx = _focal_px(width, _CAMERA_HORIZONTAL_FOV_DEG)
         self._fy = self._fx  # square pixels
@@ -213,6 +214,13 @@ class Perception:
             blue_found=blue_found,
             t_junction=t_junction,
         )
+
+    def get_red_mask_frame(self) -> np.ndarray | None:
+        """Return the most recent red HSV mask as a BGR image for web streaming."""
+        mask = self._last_red_mask
+        if mask is None:
+            return None
+        return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
     def release(self) -> None:
         self._cam.stop()
@@ -297,6 +305,7 @@ class Perception:
         kernel = np.ones((5, 5), np.uint8)
         mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
         mask   = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        self._last_red_mask = mask
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:

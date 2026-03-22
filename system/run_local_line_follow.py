@@ -28,6 +28,7 @@ import cv2
 from control import LocalMotorController, MotorCommand, MotorPIDConfig
 from perception import Perception
 from state_machine import Config, MissionStateMachine, State
+from web_server import WebServer
 
 # ── Config file ───────────────────────────────────────────────────────────────
 
@@ -117,6 +118,8 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
                    default=not bool(os.environ.get("DISPLAY", "")))
     p.add_argument("--pid-config",    default=str(_DEFAULT_CONFIG),
                    help="Path to pid_config.json")
+    p.add_argument("--web-port",      type=int, default=5050,
+                   help="Port for the web dashboard (0 = disable).")
     p.add_argument(
         "--no-telemetry",
         action="store_true",
@@ -291,6 +294,12 @@ def main() -> None:
     sm      = _make_sm()
     running = False   # waiting for 'g' to start
 
+    # ── Web server ────────────────────────────────────────────────────────────
+    ws: WebServer | None = None
+    if args.web_port > 0:
+        ws = WebServer(config_path=cfg_path, port=args.web_port)
+        ws.start()
+
     control.send_claw(args.claw_open)
 
     def go_reload_and_start() -> None:
@@ -346,14 +355,16 @@ def main() -> None:
             t0 = time.time()
             frame_n += 1
 
-            # ── Keyboard ──────────────────────────────────────────────────────
+            # ── Keyboard + web commands ───────────────────────────────────────
             key = kb.get()
-            if key == "g" and not running:
+            web_cmd = ws.pop_command() if ws else None
+            if (key == "g" or web_cmd == "go") and not running:
                 go_reload_and_start()
-            elif key == "s" and running:
+            elif (key == "s" or web_cmd == "stop") and running:
                 running = False
                 control.idle()
-                print("[KEY] stop (motors idle, serial still open)", flush=True)
+                src = "[WEB]" if web_cmd == "stop" else "[KEY]"
+                print(f"{src} stop (motors idle, serial still open)", flush=True)
             elif key in ("q", "\x03"):   # q or Ctrl-C
                 break
 
@@ -394,16 +405,19 @@ def main() -> None:
                 status_line = "IDLE — press 'g' to start"
 
             # ── Display ───────────────────────────────────────────────────────
-            if args.no_display and not telemetry:
-                print(status_line, flush=True)
-            elif not args.no_display:
-                overlay = perception.draw_debug(frame, det)
-                label   = (
-                    f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
-                    if output else "IDLE — press 'g'"
-                )
-                cv2.putText(overlay, label, (10, overlay.shape[0] - 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA)
+            # Always build overlay (used by local window and web stream).
+            overlay = perception.draw_debug(frame, det)
+            label   = (
+                f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
+                if output else "IDLE — press 'g'"
+            )
+            cv2.putText(overlay, label, (10, overlay.shape[0] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA)
+
+            if args.no_display:
+                if not telemetry:
+                    print(status_line, flush=True)
+            else:
                 cv2.imshow("mission", overlay)
                 k = cv2.waitKey(1) & 0xFF
                 if k == ord("q"):
@@ -443,6 +457,30 @@ def main() -> None:
                         f"iter_ms={iter_ms:5.1f}",
                         flush=True,
                     )
+            # ── Web server push ───────────────────────────────────────────────
+            if ws is not None:
+                enc_l, enc_r = control.encoder_ticks
+                ws.push(
+                    frame=overlay,
+                    mask=perception.get_red_mask_frame(),
+                    telemetry={
+                        "ts":         round(time.time(), 3),
+                        "running":    running,
+                        "state":      output.state.value if output else "IDLE",
+                        "red_found":  det.red_found,
+                        "red_error":  round(det.red_error, 4),
+                        "blue_found": det.blue_found,
+                        "t_junction": det.t_junction,
+                        "enc_left":   enc_l,
+                        "enc_right":  enc_r,
+                        "rpm_left":   round(rpm_l, 1),
+                        "rpm_right":  round(rpm_r, 1),
+                        "cmd_left":   round(output.left,  3) if output else 0.0,
+                        "cmd_right":  round(output.right, 3) if output else 0.0,
+                        "iter_ms":    round(iter_ms, 1),
+                    },
+                )
+
             if elapsed < period:
                 time.sleep(period - elapsed)
 
