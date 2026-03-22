@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -i 's/from control_communication.robot_control_system.bridge import SerialBridge/from bridge import SerialBridge/' \"C:/Users/Lucas/Projects/school/3B/MTE 380 - code/MTE380_SR/system/control.py\")",
+      "Bash(sed -i 's/from local\\\\.perception import FrameDetection/from perception import FrameDetection/' \"C:/Users/Lucas/Projects/school/3B/MTE 380 - code/MTE380_SR/system/state_machine.py\")",
+      "Bash(sed -i 's/from local\\\\.control import/from control import/' \"C:/Users/Lucas/Projects/school/3B/MTE 380 - code/MTE380_SR/system/run_local_line_follow.py\")",
+      "Bash(sed -i 's/from local\\\\.perception import/from perception import/' \"C:/Users/Lucas/Projects/school/3B/MTE 380 - code/MTE380_SR/system/run_local_line_follow.py\")",
+      "Bash(sed -i 's/from local\\\\.state_machine import/from state_machine import/' \"C:/Users/Lucas/Projects/school/3B/MTE 380 - code/MTE380_SR/system/run_local_line_follow.py\")"
+    ]
+  }
+}

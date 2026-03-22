@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 from simple_pid import PID
 
-from control_communication.robot_control_system.bridge import SerialBridge
+from bridge import SerialBridge
 
 
 # ── Hardware constants ────────────────────────────────────────────────────────

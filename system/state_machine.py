@@ -39,7 +39,7 @@ from enum import Enum
 
 from simple_pid import PID
 
-from local.perception import FrameDetection
+from perception import FrameDetection
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:

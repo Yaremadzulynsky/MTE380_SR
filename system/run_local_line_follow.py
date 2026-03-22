@@ -25,9 +25,9 @@ from pathlib import Path
 
 import cv2
 
-from local.control import LocalMotorController, MotorCommand, MotorPIDConfig
-from local.perception import Perception
-from local.state_machine import Config, MissionStateMachine, State
+from control import LocalMotorController, MotorCommand, MotorPIDConfig
+from perception import Perception
+from state_machine import Config, MissionStateMachine, State
 
 # ── Config file ───────────────────────────────────────────────────────────────
 
