@@ -191,6 +191,15 @@
       border-color: #f59e0b;
     }
 
+    /* ── Sliders ─────────────────────────────────────────────── */
+    input[type="range"] {
+      width: 100%;
+      margin-top: 0.3rem;
+      accent-color: #3b82f6;
+      cursor: pointer;
+      height: 4px;
+    }
+
     /* ── Footer bar ──────────────────────────────────────────── */
     .footer {
       display: flex;
@@ -248,6 +257,60 @@
         <img id="cam-mask" src="/stream/mask" alt="mask"
              style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
       </div>
+    </div>
+  </div>
+
+  <!-- Line detection HSV (near camera for quick colour tuning) -->
+  <div class="card">
+    <h2>Line Detection — HSV ranges &amp; areas</h2>
+    <p class="hint">H in [0–179], S and V in [0–255]. Red wraps at hue=0/179 so two bands are needed. Changes take effect immediately after Save.</p>
+
+    <div style="margin-bottom:0.6rem;">
+      <div class="card" style="margin-bottom:0; background:#161616;">
+        <h2>Red band 1 (H ~0–12, low hue)</h2>
+        <div class="fields">
+          <div class="field"><label for="red_h_lo1">H low</label><input type="number" id="red_h_lo1" step="1" min="0" max="30" /></div>
+          <div class="field"><label for="red_h_hi1">H high</label><input type="number" id="red_h_hi1" step="1" min="0" max="30" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:0.6rem;">
+      <div class="card" style="margin-bottom:0; background:#161616;">
+        <h2>Red band 2 (H ~168–179, high hue)</h2>
+        <div class="fields">
+          <div class="field"><label for="red_h_lo2">H low</label><input type="number" id="red_h_lo2" step="1" min="150" max="179" /></div>
+          <div class="field"><label for="red_h_hi2">H high</label><input type="number" id="red_h_hi2" step="1" min="150" max="179" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:0.6rem;">
+      <div class="card" style="margin-bottom:0; background:#161616;">
+        <h2>Red S / V floor (shared by both bands)</h2>
+        <div class="fields">
+          <div class="field"><label for="red_s_min">S min</label><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
+          <div class="field"><label for="red_v_min">V min</label><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:0.6rem;">
+      <div class="card" style="margin-bottom:0; background:#161616;">
+        <h2>Blue</h2>
+        <div class="fields">
+          <div class="field"><label for="blue_h_lo">H low</label><input type="number" id="blue_h_lo" step="1" min="80" max="140" /></div>
+          <div class="field"><label for="blue_h_hi">H high</label><input type="number" id="blue_h_hi" step="1" min="80" max="140" /></div>
+          <div class="field"><label for="blue_s_min">S min</label><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
+          <div class="field"><label for="blue_v_min">V min</label><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fields" style="margin-top:0.4rem;">
+      <div class="field"><label for="red_min_area">red min area (px²)</label><input type="number" id="red_min_area" step="10" min="0" /></div>
+      <div class="field"><label for="blue_min_area">blue min area (px²)</label><input type="number" id="blue_min_area" step="50" min="0" /></div>
+      <div class="field"><label for="t_junction_ratio">T-junction width ratio</label><input type="number" id="t_junction_ratio" step="0.05" min="0" max="1" /></div>
     </div>
   </div>
 
@@ -393,60 +456,6 @@
     </div>
   </div>
 
-  <!-- Line detection HSV -->
-  <div class="card">
-    <h2>Line Detection — HSV ranges &amp; areas</h2>
-    <p class="hint">H in [0–179], S and V in [0–255]. Red wraps at hue=0/179 so two bands are needed. Changes take effect immediately after Save.</p>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Red band 1 (H ~0–12, low hue)</h2>
-        <div class="fields">
-          <div class="field"><label for="red_h_lo1">H low</label><input type="number" id="red_h_lo1" step="1" min="0" max="179" /></div>
-          <div class="field"><label for="red_h_hi1">H high</label><input type="number" id="red_h_hi1" step="1" min="0" max="179" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Red band 2 (H ~168–179, high hue)</h2>
-        <div class="fields">
-          <div class="field"><label for="red_h_lo2">H low</label><input type="number" id="red_h_lo2" step="1" min="0" max="179" /></div>
-          <div class="field"><label for="red_h_hi2">H high</label><input type="number" id="red_h_hi2" step="1" min="0" max="179" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Red S / V floor (shared by both bands)</h2>
-        <div class="fields">
-          <div class="field"><label for="red_s_min">S min</label><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
-          <div class="field"><label for="red_v_min">V min</label><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Blue</h2>
-        <div class="fields">
-          <div class="field"><label for="blue_h_lo">H low</label><input type="number" id="blue_h_lo" step="1" min="0" max="179" /></div>
-          <div class="field"><label for="blue_h_hi">H high</label><input type="number" id="blue_h_hi" step="1" min="0" max="179" /></div>
-          <div class="field"><label for="blue_s_min">S min</label><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
-          <div class="field"><label for="blue_v_min">V min</label><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="fields" style="margin-top:0.4rem;">
-      <div class="field"><label for="red_min_area">red min area (px²)</label><input type="number" id="red_min_area" step="10" min="0" /></div>
-      <div class="field"><label for="blue_min_area">blue min area (px²)</label><input type="number" id="blue_min_area" step="50" min="0" /></div>
-      <div class="field"><label for="t_junction_ratio">T-junction width ratio</label><input type="number" id="t_junction_ratio" step="0.05" min="0" max="1" /></div>
-    </div>
-  </div>
-
   <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
     <div class="help-dialog-inner">
       <button type="button" class="help-close" aria-label="Close help">&times;</button>
@@ -484,6 +493,45 @@
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
     ]);
     const BOOL_KEYS = new Set(["geom_enable"]);
+
+    // [min, max, step] for each slider — drives both the range input and clamps the number input
+    const SLIDER_RANGES = {
+      steer_kp:                [0,    5,      0.01  ],
+      steer_ki:                [0,    1,      0.001 ],
+      steer_kd:                [0,    2,      0.01  ],
+      steer_out_limit:         [0,    1,      0.01  ],
+      motor_kp:                [0,    0.02,   0.0001],
+      motor_ki:                [0,    0.005,  0.0001],
+      motor_kd:                [0,    0.005,  0.0001],
+      base_speed:              [0,    1,      0.01  ],
+      min_speed:               [0,    1,      0.01  ],
+      max_speed:               [0,    1,      0.01  ],
+      search_turn:             [0,    1,      0.01  ],
+      search_turn_max:         [0,    1,      0.01  ],
+      geom_lateral_norm_m:     [0.01, 1,      0.01  ],
+      red_loss_debounce_frames:[1,    30,     1     ],
+      red_error_ema_alpha:     [0,    1,      0.05  ],
+      forward_ticks:           [0,    3000,   10    ],
+      forward_speed:           [0,    1,      0.01  ],
+      turn_speed:              [0,    1,      0.01  ],
+      turn_duration_s:         [0,    6,      0.05  ],
+      claw_open:               [0,    180,    1     ],
+      claw_closed:             [0,    180,    1     ],
+      pickup_hold_s:           [0,    5,      0.1   ],
+      red_h_lo1:               [0,    30,     1     ],
+      red_h_hi1:               [0,    30,     1     ],
+      red_h_lo2:               [150,  179,    1     ],
+      red_h_hi2:               [150,  179,    1     ],
+      red_s_min:               [0,    255,    1     ],
+      red_v_min:               [0,    255,    1     ],
+      blue_h_lo:               [80,   140,    1     ],
+      blue_h_hi:               [80,   140,    1     ],
+      blue_s_min:              [0,    255,    1     ],
+      blue_v_min:              [0,    255,    1     ],
+      red_min_area:            [0,    500,    10    ],
+      blue_min_area:           [0,    5000,   50    ],
+      t_junction_ratio:        [0,    1,      0.05  ],
+    };
 
     /** Rich help for each config key — shown in the (i) dialog */
     const HELP = {
@@ -728,6 +776,8 @@
           if (el.type === "checkbox") el.checked = !!cfg[key];
           else el.value = cfg[key];
           el.classList.remove("changed");
+          const slider = document.getElementById(key + "_r");
+          if (slider) slider.value = cfg[key];
         }
       }
     }
@@ -803,6 +853,31 @@
       } catch (e) {
         setStatus("Save failed: " + e.message, "error");
       }
+    }
+
+    // ── Slider injection ─────────────────────────────────────────────────────
+    // For every key that has a range defined, append a linked <input type="range">
+    // into the same .field div as the number input.
+    for (const [key, [min, max, step]] of Object.entries(SLIDER_RANGES)) {
+      const numEl = document.getElementById(key);
+      if (!numEl || BOOL_KEYS.has(key)) continue;
+
+      const slider = document.createElement("input");
+      slider.type  = "range";
+      slider.id    = key + "_r";
+      slider.min   = min;
+      slider.max   = max;
+      slider.step  = step;
+
+      numEl.parentElement.appendChild(slider);
+
+      slider.addEventListener("input", () => {
+        numEl.value = slider.value;
+        markChanges();
+      });
+      numEl.addEventListener("input", () => {
+        slider.value = numEl.value;
+      });
     }
 
     load();
