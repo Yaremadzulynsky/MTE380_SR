@@ -262,55 +262,23 @@
 
   <!-- Line detection HSV (near camera for quick colour tuning) -->
   <div class="card">
-    <h2>Line Detection — HSV ranges &amp; areas</h2>
-    <p class="hint">H in [0–179], S and V in [0–255]. Red wraps at hue=0/179 so two bands are needed. Changes take effect immediately after Save.</p>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Red band 1 (H ~0–12, low hue)</h2>
-        <div class="fields">
-          <div class="field"><label for="red_h_lo1">H low</label><input type="number" id="red_h_lo1" step="1" min="0" max="30" /></div>
-          <div class="field"><label for="red_h_hi1">H high</label><input type="number" id="red_h_hi1" step="1" min="0" max="30" /></div>
-        </div>
-      </div>
+    <h2>Line Detection — HSV</h2>
+    <p class="hint">H in [0–179], S and V in [0–255]. Red wraps at hue=0/179, so two hue bands are used.</p>
+    <p class="hint" style="margin-top:0.25rem;">Red</p>
+    <div class="fields">
+      <div class="field"><label for="red_h_lo1">H lo1</label><input type="number" id="red_h_lo1" step="1" min="0" max="30" /></div>
+      <div class="field"><label for="red_h_hi1">H hi1</label><input type="number" id="red_h_hi1" step="1" min="0" max="30" /></div>
+      <div class="field"><label for="red_h_lo2">H lo2</label><input type="number" id="red_h_lo2" step="1" min="150" max="179" /></div>
+      <div class="field"><label for="red_h_hi2">H hi2</label><input type="number" id="red_h_hi2" step="1" min="150" max="179" /></div>
+      <div class="field"><label for="red_s_min">S min</label><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
+      <div class="field"><label for="red_v_min">V min</label><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
     </div>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Red band 2 (H ~168–179, high hue)</h2>
-        <div class="fields">
-          <div class="field"><label for="red_h_lo2">H low</label><input type="number" id="red_h_lo2" step="1" min="150" max="179" /></div>
-          <div class="field"><label for="red_h_hi2">H high</label><input type="number" id="red_h_hi2" step="1" min="150" max="179" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Red S / V floor (shared by both bands)</h2>
-        <div class="fields">
-          <div class="field"><label for="red_s_min">S min</label><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
-          <div class="field"><label for="red_v_min">V min</label><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div style="margin-bottom:0.6rem;">
-      <div class="card" style="margin-bottom:0; background:#161616;">
-        <h2>Blue</h2>
-        <div class="fields">
-          <div class="field"><label for="blue_h_lo">H low</label><input type="number" id="blue_h_lo" step="1" min="80" max="140" /></div>
-          <div class="field"><label for="blue_h_hi">H high</label><input type="number" id="blue_h_hi" step="1" min="80" max="140" /></div>
-          <div class="field"><label for="blue_s_min">S min</label><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
-          <div class="field"><label for="blue_v_min">V min</label><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="fields" style="margin-top:0.4rem;">
-      <div class="field"><label for="red_min_area">red min area (px²)</label><input type="number" id="red_min_area" step="10" min="0" /></div>
-      <div class="field"><label for="blue_min_area">blue min area (px²)</label><input type="number" id="blue_min_area" step="50" min="0" /></div>
-      <div class="field"><label for="t_junction_ratio">T-junction width ratio</label><input type="number" id="t_junction_ratio" step="0.05" min="0" max="1" /></div>
+    <p class="hint" style="margin-top:0.6rem;">Blue</p>
+    <div class="fields">
+      <div class="field"><label for="blue_h_lo">H low</label><input type="number" id="blue_h_lo" step="1" min="80" max="140" /></div>
+      <div class="field"><label for="blue_h_hi">H high</label><input type="number" id="blue_h_hi" step="1" min="80" max="140" /></div>
+      <div class="field"><label for="blue_s_min">S min</label><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
+      <div class="field"><label for="blue_v_min">V min</label><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
     </div>
   </div>
 
@@ -383,30 +351,6 @@
     </div>
   </div>
 
-  <!-- Line error: ground model -->
-  <div class="card">
-    <h2>Line error — ground model</h2>
-    <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Here: on/off and how many metres ≈ full steering error. Red debounce / EMA reduce one-frame glitches.</p>
-    <div class="fields">
-      <div class="field">
-        <div class="field-label-row"><label for="geom_enable">use ground model</label><button type="button" class="info-btn" data-help="geom_enable" aria-label="Help: geom_enable">i</button></div>
-        <input type="checkbox" id="geom_enable" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="geom_lateral_norm_m">scale (m → ±1)</label><button type="button" class="info-btn" data-help="geom_lateral_norm_m" aria-label="Help: geom_lateral_norm_m">i</button></div>
-        <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="red_loss_debounce_frames">red miss frames</label><button type="button" class="info-btn" data-help="red_loss_debounce_frames" aria-label="Help: red_loss_debounce_frames">i</button></div>
-        <input type="number" id="red_loss_debounce_frames" step="1" min="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="red_error_ema_alpha">red error EMA α</label><button type="button" class="info-btn" data-help="red_error_ema_alpha" aria-label="Help: red_error_ema_alpha">i</button></div>
-        <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
-      </div>
-    </div>
-  </div>
-
   <!-- Drive forward -->
   <div class="card">
     <h2>Drive Forward — to pickup point</h2>
@@ -475,24 +419,20 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
-      "geom_enable", "geom_lateral_norm_m",
-      "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
-      "red_min_area", "blue_min_area", "t_junction_ratio",
     ];
     const INT_KEYS = new Set([
       "forward_ticks",
-      "red_loss_debounce_frames",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
     ]);
-    const BOOL_KEYS = new Set(["geom_enable"]);
+    const BOOL_KEYS = new Set([]);
 
     // [min, max, step] for each slider — drives both the range input and clamps the number input
     const SLIDER_RANGES = {
@@ -508,9 +448,6 @@
       max_speed:               [0,    1,      0.01  ],
       search_turn:             [0,    1,      0.01  ],
       search_turn_max:         [0,    1,      0.01  ],
-      geom_lateral_norm_m:     [0.01, 1,      0.01  ],
-      red_loss_debounce_frames:[1,    30,     1     ],
-      red_error_ema_alpha:     [0,    1,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       turn_speed:              [0,    1,      0.01  ],
@@ -528,9 +465,6 @@
       blue_h_hi:               [80,   140,    1     ],
       blue_s_min:              [0,    255,    1     ],
       blue_v_min:              [0,    255,    1     ],
-      red_min_area:            [0,    500,    10    ],
-      blue_min_area:           [0,    5000,   50    ],
-      t_junction_ratio:        [0,    1,      0.05  ],
     };
 
     /** Rich help for each config key — shown in the (i) dialog */
@@ -630,39 +564,6 @@
         dec: "Limits how hard search can turn even if search_turn is high — safer, gentler recovery.",
         whenInc: "Search needs more bite but you don’t want to raise max_speed for normal follow.",
         whenDec: "Search is still too aggressive after tuning search_turn; add a safety ceiling.",
-      },
-      geom_enable: {
-        title: "use ground model (geom_enable)",
-        boolean: true,
-        what: "When on, lateral line error is converted using a fixed camera geometry in code (height, pitch, FOV) so “error” is closer to metres on the ground. When off, perception typically uses image-plane error only.",
-        on: "More consistent error units across distance; better if tuning steering against physical offset.",
-        off: "Simpler path if geometry in code doesn’t match your robot; tune steering against raw image error.",
-        whenOn: "You’ve verified camera pose in perception matches the robot; you want error to scale like real lateral offset.",
-        whenOff: "Ground model disagrees with reality, or you prefer to tune purely in image space.",
-      },
-      geom_lateral_norm_m: {
-        title: "geom_lateral_norm_m",
-        what: "Roughly how many metres of lateral line offset correspond to a steering error of about ±1 after the ground model (gain from physical offset to normalized error).",
-        inc: "Same physical offset produces a larger steering error → stronger correction per centimetre.",
-        dec: "Softer response per metre; robot under-corrects for the same physical offset.",
-        whenInc: "Robot consistently undershoots corrections (error stays same sign) with ground model on.",
-        whenDec: "Oscillation or over-correction; steering too twitchy for small real-world offsets.",
-      },
-      red_loss_debounce_frames: {
-        title: "red_loss_debounce_frames",
-        what: "How many consecutive camera frames the raw detector must miss the line before perception reports “line lost.” Until then it can hold the previous smoothed error.",
-        inc: "More tolerant of brief dropouts; slower to declare lost line (may stay in follow through flicker).",
-        dec: "Faster transition to lost-line when the line disappears; less latency for search, more false loss on noise.",
-        whenInc: "Brief flashes to “no line” cause unwanted search mode; camera glitches or tape gaps.",
-        whenDec: "Robot stays in line follow too long after the line is really gone; slow to start recovery.",
-      },
-      red_error_ema_alpha: {
-        title: "red_error_ema_alpha",
-        what: "Low-pass filter on line error when the line is visible (0 = off, raw error; higher = more smoothing). Reduces single-frame noise.",
-        inc: "Smoother error, less jitter; more lag behind real moves (sluggish response to real curves).",
-        dec: "Snappier error tracking; more noise passes through to steering.",
-        whenInc: "Erratic err values frame-to-frame while red=Y; steering jitters though the line is stable.",
-        whenDec: "Steering feels laggy in real corners; error trails behind when the line bends.",
       },
       forward_ticks: {
         title: "forward_ticks",

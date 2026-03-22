@@ -169,10 +169,19 @@ def lateral_error_normalized(x_m: float, lateral_norm_m: float) -> float:
     return _clamp(x_m / lateral_norm_m, -1.0, 1.0)
 
 
-# Measured on robot — change in code if you remount the camera (not in pid_config).
+# Measured on robot — change in code if you remount the camera.
 _CAMERA_HEIGHT_M = 0.095
 _CAMERA_PITCH_DEG = 39.0
 _CAMERA_HORIZONTAL_FOV_DEG = 62.2
+
+# Fixed perception constants (not exposed in config).
+_GEOM_ENABLE = True
+_GEOM_LATERAL_NORM_M = 0.10
+_RED_LOSS_DEBOUNCE_FRAMES = 4
+_RED_ERROR_EMA_ALPHA = 0.35
+_RED_MIN_AREA = 80.0
+_BLUE_MIN_AREA = 1500.0
+_T_JUNCTION_WIDTH_RATIO = 0.5
 
 
 @dataclass
@@ -213,10 +222,10 @@ class Perception:
 
         self._update_hsv_ranges(c)
 
-        self.geom_enable = c.geom_enable
-        self.geom_lateral_norm_m = float(c.geom_lateral_norm_m)
-        self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
-        self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
+        self.geom_enable = _GEOM_ENABLE
+        self.geom_lateral_norm_m = _GEOM_LATERAL_NORM_M
+        self.red_loss_debounce_frames = _RED_LOSS_DEBOUNCE_FRAMES
+        self.red_error_ema_alpha = _RED_ERROR_EMA_ALPHA
 
         # Raw-red debounce + EMA (see _stabilize_red)
         self._red_miss_streak = 0
@@ -240,24 +249,20 @@ class Perception:
 
     def reconfigure(self, cfg: Config) -> None:
         """Apply updated config values without reopening the camera."""
-        self.geom_enable              = bool(cfg.geom_enable)
-        self.geom_lateral_norm_m      = float(cfg.geom_lateral_norm_m)
-        self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
-        self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
-        self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
+        self.roi_top_ratio = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
         self._update_hsv_ranges(cfg)
 
     def _update_hsv_ranges(self, cfg: Config) -> None:
-        """Rebuild HSV mask arrays and area thresholds from config."""
+        """Rebuild HSV mask arrays from config."""
         self._RED_LO1 = np.array([cfg.red_h_lo1, cfg.red_s_min, cfg.red_v_min], np.uint8)
         self._RED_HI1 = np.array([cfg.red_h_hi1, 255,           255          ], np.uint8)
         self._RED_LO2 = np.array([cfg.red_h_lo2, cfg.red_s_min, cfg.red_v_min], np.uint8)
         self._RED_HI2 = np.array([cfg.red_h_hi2, 255,           255          ], np.uint8)
         self._BLUE_LO = np.array([cfg.blue_h_lo, cfg.blue_s_min, cfg.blue_v_min], np.uint8)
         self._BLUE_HI = np.array([cfg.blue_h_hi, 255,            255          ], np.uint8)
-        self.red_min_area           = float(cfg.red_min_area)
-        self.blue_min_area          = float(cfg.blue_min_area)
-        self.t_junction_width_ratio = float(cfg.t_junction_ratio)
+        self.red_min_area           = _RED_MIN_AREA
+        self.blue_min_area          = _BLUE_MIN_AREA
+        self.t_junction_width_ratio = _T_JUNCTION_WIDTH_RATIO
 
     # ── Public ────────────────────────────────────────────────────────────────
 
