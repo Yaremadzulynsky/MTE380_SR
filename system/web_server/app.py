@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-PID tuner web UI — runs on the Pi.
+Web UI — runs on the Pi.
 
 Access from any device on the same network:
     http://<pi-ip>:5050
 
-GET  /         → serves the tuner page
-GET  /api/pid  → returns config.yaml values as JSON
-POST /api/pid  → validates and saves updated values to config.yaml, returns saved values
+GET  /                    → serves the control page
+GET  /api/pid             → returns config.yaml values as JSON
+POST /api/pid             → validates and saves updated values to config.yaml
+GET  /api/status          → live telemetry snapshot (requires runner)
+POST /api/mission/start   → start line following (requires runner)
+POST /api/mission/stop    → stop line following (requires runner)
+GET  /stream/camera       → MJPEG stream of annotated camera frames
+GET  /stream/mask         → MJPEG stream of red-mask frames
 
 The config file path defaults to system/config.yaml and can be overridden by the
 CLI (python -m cli.main serve --config /path/to/config.yaml).
@@ -16,9 +21,11 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+import time
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory
+import cv2
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
@@ -28,9 +35,42 @@ from config import Config
 
 app = Flask(__name__)
 
+# ── Mission runner (injected by cmd_serve) ────────────────────────────────────
+
+_runner = None  # type: ignore[var-annotated]
+
+
+def set_runner(runner) -> None:
+    """Called by cli.main.cmd_serve to wire in the MissionRunner."""
+    global _runner
+    _runner = runner
+
 
 def _config_path() -> Path:
     return _config_module._CONFIG_PATH
+
+
+# ── Camera streaming helpers ──────────────────────────────────────────────────
+
+def _jpeg_stream(get_frame_fn, fps: float = 15.0):
+    """Generator yielding MJPEG frames from a callable that returns a BGR ndarray."""
+    period = 1.0 / fps
+    while True:
+        t0 = time.time()
+        frame = get_frame_fn()
+        if frame is not None:
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            if ok:
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n"
+                    + buf.tobytes()
+                    + b"\r\n"
+                )
+        elapsed = time.time() - t0
+        remaining = period - elapsed
+        if remaining > 0:
+            time.sleep(remaining)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -61,6 +101,62 @@ def set_pid():
     # Refresh the singleton so the next get() reflects the new values
     _config_module.reload()
     return jsonify({"ok": True, "saved": dataclasses.asdict(cfg)})
+
+
+@app.get("/api/status")
+def get_status():
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    snap = _runner.snapshot()
+    det = snap.get("det")
+    return jsonify({
+        "sm_state":   snap["sm_state"],
+        "running":    snap["running"],
+        "enc_l":      snap["enc_l"],
+        "enc_r":      snap["enc_r"],
+        "rpm_l":      snap["rpm_l"],
+        "rpm_r":      snap["rpm_r"],
+        "red_found":  det.red_found  if det else False,
+        "red_error":  det.red_error  if det else 0.0,
+        "blue_found": det.blue_found if det else False,
+        "t_junction": det.t_junction if det else False,
+    })
+
+
+@app.post("/api/mission/start")
+def mission_start():
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    _runner.go()
+    return jsonify({"ok": True, "state": _runner.state})
+
+
+@app.post("/api/mission/stop")
+def mission_stop():
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    _runner.stop()
+    return jsonify({"ok": True, "state": _runner.state})
+
+
+@app.get("/stream/camera")
+def stream_camera():
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    return Response(
+        _jpeg_stream(_runner.get_annotated_frame),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@app.get("/stream/mask")
+def stream_mask():
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    return Response(
+        _jpeg_stream(_runner.get_mask_frame),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
 # ── Validation ────────────────────────────────────────────────────────────────

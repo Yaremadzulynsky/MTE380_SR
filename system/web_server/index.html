@@ -221,7 +221,35 @@
 </head>
 <body>
 
-  <h1>PID Tuner</h1>
+  <h1>MTE 380 Control</h1>
+
+  <!-- Mission control + camera -->
+  <div class="card">
+    <h2>Mission</h2>
+    <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:0.9rem;">
+      <button id="btn-start" onclick="missionStart()">Start</button>
+      <button id="btn-stop"  onclick="missionStop()"  style="background:#dc2626;">Stop</button>
+      <span id="mission-status" style="font-size:0.85rem; color:#94a3b8;"></span>
+    </div>
+    <div id="telemetry" style="font-size:0.78rem; color:#94a3b8; line-height:1.8; min-height:1.8em;"></div>
+  </div>
+
+  <!-- Camera streams -->
+  <div class="card">
+    <h2>Camera</h2>
+    <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Annotated</div>
+        <img id="cam-annotated" src="/stream/camera" alt="camera"
+             style="max-width:320px; width:100%; border-radius:5px; border:1px solid #2a2a2a; background:#000;" />
+      </div>
+      <div>
+        <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Red mask</div>
+        <img id="cam-mask" src="/stream/mask" alt="mask"
+             style="max-width:320px; width:100%; border-radius:5px; border:1px solid #2a2a2a; background:#000;" />
+      </div>
+    </div>
+  </div>
 
   <!-- Steering PID -->
   <div class="card">
@@ -712,6 +740,55 @@
     }
 
     load();
+
+    // ── Mission control ──────────────────────────────────────────────────────
+
+    async function missionStart() {
+      try {
+        const res  = await fetch("/api/mission/start", { method: "POST" });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        document.getElementById("mission-status").textContent = "Started — " + body.state;
+      } catch (e) {
+        document.getElementById("mission-status").textContent = "Error: " + e.message;
+      }
+    }
+
+    async function missionStop() {
+      try {
+        const res  = await fetch("/api/mission/stop", { method: "POST" });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        document.getElementById("mission-status").textContent = "Stopped — " + body.state;
+      } catch (e) {
+        document.getElementById("mission-status").textContent = "Error: " + e.message;
+      }
+    }
+
+    // ── Status polling ───────────────────────────────────────────────────────
+
+    async function pollStatus() {
+      try {
+        const res = await fetch("/api/status");
+        if (!res.ok) return;
+        const s = await res.json();
+        const telem = document.getElementById("telemetry");
+        const btnStart = document.getElementById("btn-start");
+        const btnStop  = document.getElementById("btn-stop");
+        telem.textContent =
+          `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
+          `enc L=${s.enc_l}  R=${s.enc_r}  |  rpm L=${s.rpm_l?.toFixed(1)}  R=${s.rpm_r?.toFixed(1)}  |  ` +
+          `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
+          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}`;
+        btnStart.disabled = s.running;
+        btnStop.disabled  = !s.running;
+        btnStart.style.opacity = s.running ? "0.45" : "1";
+        btnStop.style.opacity  = s.running ? "1"    : "0.45";
+      } catch (_) {}
+    }
+
+    setInterval(pollStatus, 500);
+    pollStatus();
   </script>
 </body>
 </html>

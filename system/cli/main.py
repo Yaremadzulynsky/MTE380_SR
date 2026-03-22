@@ -127,6 +127,21 @@ class MissionRunner:
         with self._lock:
             return self._running
 
+    def get_annotated_frame(self):
+        """Return the latest frame with detection overlay (BGR ndarray), or None."""
+        frame = self._perception.get_frame()
+        if frame is None:
+            return None
+        with self._lock:
+            det = self._last_det
+        if det is not None:
+            return self._perception.draw_debug(frame, det)
+        return frame
+
+    def get_mask_frame(self):
+        """Return the latest red-mask frame (BGR ndarray), or None."""
+        return self._perception.get_red_mask_frame()
+
     def snapshot(self) -> dict:
         with self._lock:
             det      = self._last_det
@@ -413,16 +428,41 @@ def cmd_run(args: argparse.Namespace) -> None:
 # ── Serve command (PID tuner web UI) ──────────────────────────────────────────
 
 def cmd_serve(args: argparse.Namespace) -> None:
-    import pid_tuner.app as _tuner
+    import web_server.app as _server
+    from control import LocalMotorController
 
     cfg_path = _config_module._CONFIG_PATH
     if not cfg_path.exists():
         _config_module.save(Config(), cfg_path)
         print(f"[serve] Created default config at {cfg_path}", flush=True)
 
-    print(f"[serve] PID tuner → http://{args.host}:{args.web_port}", flush=True)
+    cfg = _config_module.get()
+    control = LocalMotorController(
+        serial_port=args.serial_port,
+        baud=args.baud,
+        dry_run=args.dry_run,
+        cfg=cfg,
+    )
+
+    # Inject defaults that MissionRunner expects from argparse
+    args.no_display       = True
+    args.no_telemetry     = True
+    args.telemetry_every  = 1
+    args.telemetry_idle_s = 0.5
+
+    runner = MissionRunner(control, args)
+    runner.start_loop()
+    control.send_claw(cfg.claw_open)
+
+    _server.set_runner(runner)
+
+    print(f"[serve] Web UI → http://{args.host}:{args.web_port}", flush=True)
     print(f"[serve] Config file: {cfg_path}", flush=True)
-    _tuner.app.run(host=args.host, port=args.web_port, debug=False)
+
+    try:
+        _server.app.run(host=args.host, port=args.web_port, debug=False, threaded=True)
+    finally:
+        runner.shutdown()
 
 
 # ── Hardware debug commands ────────────────────────────────────────────────────
