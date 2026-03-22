@@ -80,6 +80,10 @@ class MissionRunner:
             flush=True,
         )
 
+    def reconfigure(self, cfg) -> None:
+        """Apply updated config to perception (HSV, ROI, etc.) without restarting."""
+        self._perception.reconfigure(cfg)
+
     def stop(self) -> None:
         with self._lock:
             self._running = False

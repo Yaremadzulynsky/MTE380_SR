@@ -137,6 +137,8 @@ def set_pid():
         setattr(cfg, k, v)
     _config_module.save(cfg)
     _config_module.reload()         # refresh singleton
+    if _runner is not None:
+        _runner.reconfigure(cfg)
     return jsonify({"ok": True, "saved": dataclasses.asdict(cfg)})
 
 
