@@ -1,0 +1,77 @@
+robot:
+  rate_hz: 20.0
+  max_speed: 0.3
+  max_rot_speed: 1.0
+  heartbeat_timeout: 3.0
+
+wheel:
+  ticks_per_rev: 680
+  diameter_m: 0.08
+  base_m: 0.188
+
+heading_pid:
+  kp: 0.45
+  ki: 0.0
+  kd: 0.0
+  motor_deadband: 0.015
+  heading_deadband: 0.005  # radians (~0.3°)
+
+speed_pid:
+  kp: 1.0
+  ki: 0.0
+  kd: 0.0
+  motor_deadband: 0.015
+  speed_deadband: 0.02     # m/s
+
+vision:
+  frame_width: 640
+  frame_height: 480
+  min_mask_pixels: 200
+  line_segments: 4          # number of horizontal strips for curvature detection
+  pixels_per_meter: 2500   # calibrate: measure a known distance on the ground in pixels
+  camera_forward_m: 0.10   # camera is this far ahead of the wheel base centre
+  min_mask_pixels: 200
+  red_hsv:
+    lower1:
+    - 0
+    - 165
+    - 40
+    upper1:
+    - 12
+    - 255
+    - 255
+    lower2:
+    - 168
+    - 165
+    - 40
+    upper2:
+    - 180
+    - 255
+    - 255
+
+target_heading_filter:
+  kp: 0.01        # fraction of heading error closed per tick (0=frozen, 1=no filter)
+
+line_follow:
+  follow_speed: 0.35
+  lateral_deadzone_m: 0.01
+
+line_follow_turn:
+  turn_speed: 0.20              # forward speed while navigating a curve
+  curvature_threshold_deg: 15.0 # abs curvature above this triggers turn state
+
+find_line:
+  follow_speed: 0.30   # forward speed while sweeping
+  turn_x: 0.5          # lateral steering strength while sweeping [0=straight, 1=hard turn]
+  timeout_s: 3.0
+
+line_follow_p:
+  follow_speed: 0.35
+  kp: 0.005            # lateral correction per pixel: higher = more aggressive
+
+line_follow_angle:
+  follow_speed: 0.2   # forward speed while following
+
+web_server:
+  jpeg_quality: 70
+  stream_fps: 20

@@ -1,0 +1,9 @@
+- make sure web_server o
+
+
+- detect line edges and find centroid
+- robot odometry model for debugging
+- speed pid?
+
+- clean up camera code so that the drawing happens only clientside on web ui not on the pi
+- pid on the line following not just kp --> make a path graph of the target vec vs actual vec of the robot
