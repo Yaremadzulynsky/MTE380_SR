@@ -302,6 +302,14 @@
         <label for="red_error_ema_alpha">red error EMA α</label>
         <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
       </div>
+      <div class="field">
+        <label for="curve_threshold">curve threshold</label>
+        <input type="number" id="curve_threshold" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <label for="curve_coast_s">curve coast (s)</label>
+        <input type="number" id="curve_coast_s" step="0.05" min="0" />
+      </div>
     </div>
   </div>
 
@@ -444,6 +452,7 @@
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
       "geom_enable", "geom_lateral_norm_m",
       "red_loss_debounce_frames", "red_error_ema_alpha",
+      "curve_threshold", "curve_coast_s",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
@@ -477,6 +486,8 @@
       geom_lateral_norm_m:     [0.01, 1,      0.01  ],
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
+      curve_threshold:         [0,    1,      0.01  ],
+      curve_coast_s:           [0,    2,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       turn_speed:              [0,    1,      0.01  ],
