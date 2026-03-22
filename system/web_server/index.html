@@ -282,6 +282,29 @@
     </div>
   </div>
 
+  <!-- Line error: ground model -->
+  <div class="card">
+    <h2>Line error — ground model</h2>
+    <div class="fields">
+      <div class="field">
+        <label for="geom_enable">use ground model</label>
+        <input type="checkbox" id="geom_enable" />
+      </div>
+      <div class="field">
+        <label for="geom_lateral_norm_m">scale (m → ±1)</label>
+        <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" />
+      </div>
+      <div class="field">
+        <label for="red_loss_debounce_frames">red miss frames</label>
+        <input type="number" id="red_loss_debounce_frames" step="1" min="1" />
+      </div>
+      <div class="field">
+        <label for="red_error_ema_alpha">red error EMA α</label>
+        <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
+      </div>
+    </div>
+  </div>
+
   <!-- Steering PID -->
   <div class="card">
     <h2>Steering PID — line error → turn correction</h2>
@@ -419,6 +442,8 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
+      "geom_enable", "geom_lateral_norm_m",
+      "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
@@ -428,11 +453,12 @@
     ];
     const INT_KEYS = new Set([
       "forward_ticks",
+      "red_loss_debounce_frames",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
     ]);
-    const BOOL_KEYS = new Set([]);
+    const BOOL_KEYS = new Set(["geom_enable"]);
 
     // [min, max, step] for each slider — drives both the range input and clamps the number input
     const SLIDER_RANGES = {
@@ -448,6 +474,9 @@
       max_speed:               [0,    1,      0.01  ],
       search_turn:             [0,    1,      0.01  ],
       search_turn_max:         [0,    1,      0.01  ],
+      geom_lateral_norm_m:     [0.01, 1,      0.01  ],
+      red_loss_debounce_frames:[1,    30,     1     ],
+      red_error_ema_alpha:     [0,    1,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       turn_speed:              [0,    1,      0.01  ],

@@ -59,6 +59,12 @@ class Config:
     claw_closed:   float = 90.0
     pickup_hold_s: float = 0.8
 
+    # ── Vision / perception ───────────────────────────────────────────────────
+    geom_enable:              bool  = True
+    geom_lateral_norm_m:      float = 0.10
+    red_loss_debounce_frames: int   = 4
+    red_error_ema_alpha:      float = 0.35
+
     # ── Line detection HSV ────────────────────────────────────────────────────
     red_h_lo1:  int = 0
     red_h_hi1:  int = 12
@@ -99,6 +105,10 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Claw / servo", [
         "claw_open", "claw_closed", "pickup_hold_s",
+    ]),
+    ("Vision / perception", [
+        "geom_enable", "geom_lateral_norm_m",
+        "red_loss_debounce_frames", "red_error_ema_alpha",
     ]),
     ("Line detection HSV", [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
