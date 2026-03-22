@@ -310,6 +310,10 @@
         <label for="curve_coast_s">curve coast (s)</label>
         <input type="number" id="curve_coast_s" step="0.05" min="0" />
       </div>
+      <div class="field">
+        <label for="curve_debounce_s">curve debounce (s)</label>
+        <input type="number" id="curve_debounce_s" step="0.1" min="0" />
+      </div>
     </div>
   </div>
 
@@ -452,7 +456,7 @@
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
       "geom_enable", "geom_lateral_norm_m",
       "red_loss_debounce_frames", "red_error_ema_alpha",
-      "curve_threshold", "curve_coast_s",
+      "curve_threshold", "curve_coast_s", "curve_debounce_s",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",

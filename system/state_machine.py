@@ -86,6 +86,7 @@ class MissionStateMachine:
         # (same sign convention as perception: + = line right of image centre).
         self._last_red_error = 0.0
         self._consecutive_lost = 0  # frames without red (reset when line reacquired)
+        self._last_curve_coast_t = 0.0  # timestamp of last CURVE_COAST exit
 
         # Steering PID: drives line_error → 0
         #   Measurement is red_error ∈ [-1,1], already (cx − frame_w/2) / (frame_w/2) in
@@ -152,15 +153,17 @@ class MissionStateMachine:
         self._last_red_error = det.red_error
 
         if det.curve_detected:
-            self._enter(State.CURVE_COAST)
-            spd = min(self.cfg.base_speed, self.cfg.max_speed)
-            return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
+            if time.time() - self._last_curve_coast_t >= self.cfg.curve_debounce_s:
+                self._enter(State.CURVE_COAST)
+                spd = min(self.cfg.base_speed, self.cfg.max_speed)
+                return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
 
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
     def _curve_coast(self) -> ControlOutput:
         if time.time() - self._t0 >= self.cfg.curve_coast_s:
+            self._last_curve_coast_t = time.time()
             self._enter(State.LINE_FOLLOW)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
         spd = min(self.cfg.base_speed, self.cfg.max_speed)
