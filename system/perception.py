@@ -363,10 +363,14 @@ class Perception:
         cv2.circle(out, (err_x, bar_y), 7, dot_color, -1)
         cv2.circle(out, (err_x, bar_y), 7, (255, 255, 255), 1)
 
+        # ── Curve detected border ─────────────────────────────────────────────
+        if det.curve_detected:
+            cv2.rectangle(out, (0, 0), (w - 1, h - 1), (0, 200, 255), 4)
+
         # ── Text HUD ──────────────────────────────────────────────────────────
         tags = [
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
-            f"blue={'Y' if det.blue_found else 'N'}  T={'Y' if det.t_junction else 'N'}",
+            f"blue={'Y' if det.blue_found else 'N'}  T={'Y' if det.t_junction else 'N'}  curve={'Y' if det.curve_detected else 'N'}",
         ]
         for i, tag in enumerate(tags):
             cv2.putText(out, tag, (10, 28 + i * 24),

@@ -98,7 +98,17 @@ class MissionStateMachine:
             Kd=self.cfg.steer_kd,
             setpoint=0,
             output_limits=(-self.cfg.steer_out_limit, self.cfg.steer_out_limit),
-            sample_time=None,   # always compute when called; loop rate is controlled externally
+            sample_time=None,
+        )
+
+        # Position PID — used by CURVE_COAST; setpoint is set when entering the state
+        self._pos_pid = PID(
+            Kp=self.cfg.pos_kp,
+            Ki=self.cfg.pos_ki,
+            Kd=self.cfg.pos_kd,
+            setpoint=0,
+            output_limits=(-self.cfg.pos_max_speed, self.cfg.pos_max_speed),
+            sample_time=None,
         )
 
     # ── Main entry point ──────────────────────────────────────────────────────
@@ -112,7 +122,7 @@ class MissionStateMachine:
         if self.state == State.LINE_FOLLOW:
             return self._line_follow(det, left_ticks, right_ticks)
         if self.state == State.CURVE_COAST:
-            return self._curve_coast()
+            return self._curve_coast(left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return self._drive_forward(left_ticks, right_ticks)
         if self.state == State.PICKUP:
@@ -154,19 +164,23 @@ class MissionStateMachine:
 
         if det.curve_detected:
             if time.time() - self._last_curve_coast_t >= self.cfg.curve_debounce_s:
-                self._enter(State.CURVE_COAST)
-                spd = min(self.cfg.base_speed, self.cfg.max_speed)
+                self._enter(State.CURVE_COAST, left_ticks, right_ticks)
+                target = (left_ticks + right_ticks) / 2.0 + self.cfg.curve_coast_ticks
+                self._pos_pid.setpoint = target
+                self._pos_pid.reset()
+                spd = _clamp(self._pos_pid((left_ticks + right_ticks) / 2.0), -self.cfg.pos_max_speed, self.cfg.pos_max_speed)
                 return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
 
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
-    def _curve_coast(self) -> ControlOutput:
-        if time.time() - self._t0 >= self.cfg.curve_coast_s:
+    def _curve_coast(self, left_ticks: int, right_ticks: int) -> ControlOutput:
+        pos = (left_ticks + right_ticks) / 2.0
+        if abs(self._pos_pid.setpoint - pos) <= self.cfg.pos_tolerance:
             self._last_curve_coast_t = time.time()
             self._enter(State.LINE_FOLLOW)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
-        spd = min(self.cfg.base_speed, self.cfg.max_speed)
+        spd = self._pos_pid(pos)
         return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
 
     def _drive_forward(self, left_ticks: int, right_ticks: int) -> ControlOutput:

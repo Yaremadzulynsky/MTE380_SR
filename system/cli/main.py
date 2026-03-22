@@ -89,6 +89,26 @@ class MissionRunner:
                 self._sm.cfg = cfg
                 self._sm._steer_pid.tunings = (cfg.steer_kp, cfg.steer_ki, cfg.steer_kd)
                 self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
+                self._sm._pos_pid.tunings = (cfg.pos_kp, cfg.pos_ki, cfg.pos_kd)
+                self._sm._pos_pid.output_limits = (-cfg.pos_max_speed, cfg.pos_max_speed)
+
+    def run_position_move(self, delta_ticks: int) -> None:
+        """Run a position PID move in a background thread (stops the mission first)."""
+        from control import PositionMover, MotorCommand
+        with self._lock:
+            self._running = False
+        self._control.idle()
+
+        def _move():
+            mover = PositionMover(self._control, delta_ticks)
+            while not mover.done:
+                cmd = mover.step()
+                self._control.send_drive(cmd)
+                import time as _time
+                _time.sleep(0.02)
+            self._control.idle()
+
+        threading.Thread(target=_move, daemon=True, name="pos-move").start()
 
     def stop(self) -> None:
         with self._lock:

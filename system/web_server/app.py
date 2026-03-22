@@ -178,6 +178,22 @@ def mission_stop():
     return jsonify({"ok": True, "state": _runner.state})
 
 
+@app.post("/api/test/move")
+def test_move():
+    """Run the position PID for delta_ticks in a background thread."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    data = request.get_json(silent=True) or {}
+    try:
+        delta = int(data.get("delta_ticks", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "delta_ticks must be an integer"}), 400
+    if delta == 0:
+        return jsonify({"error": "delta_ticks cannot be zero"}), 400
+    _runner.run_position_move(delta)
+    return jsonify({"ok": True, "delta_ticks": delta})
+
+
 @app.get("/stream/camera")
 def stream_camera():
     get_fn = _runner.get_annotated_frame if _runner is not None else lambda: None

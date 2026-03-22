@@ -307,8 +307,8 @@
         <input type="number" id="curve_threshold" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
-        <label for="curve_coast_s">curve coast (s)</label>
-        <input type="number" id="curve_coast_s" step="0.05" min="0" />
+        <label for="curve_coast_ticks">curve coast (ticks)</label>
+        <input type="number" id="curve_coast_ticks" step="10" min="0" />
       </div>
       <div class="field">
         <label for="curve_debounce_s">curve debounce (s)</label>
@@ -386,6 +386,49 @@
     </div>
   </div>
 
+  <!-- Position PID -->
+  <div class="card">
+    <h2>Position PID — curve coast &amp; tick-based moves</h2>
+    <div class="fields">
+      <div class="field">
+        <label for="pos_kp">kp</label>
+        <input type="number" id="pos_kp" step="0.0001" />
+      </div>
+      <div class="field">
+        <label for="pos_ki">ki</label>
+        <input type="number" id="pos_ki" step="0.0001" />
+      </div>
+      <div class="field">
+        <label for="pos_kd">kd</label>
+        <input type="number" id="pos_kd" step="0.0001" />
+      </div>
+      <div class="field">
+        <label for="pos_tolerance">tolerance (ticks)</label>
+        <input type="number" id="pos_tolerance" step="1" min="1" />
+      </div>
+      <div class="field">
+        <label for="pos_max_speed">max speed</label>
+        <input type="number" id="pos_max_speed" step="0.01" min="0" max="1" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Position PID test -->
+  <div class="card">
+    <h2>Position PID — test move</h2>
+    <p class="hint">Stops the mission and drives the robot a fixed number of ticks to tune pos PID gains. Positive = forward, negative = backward.</p>
+    <div class="fields" style="align-items:flex-end;">
+      <div class="field">
+        <label for="test-delta-ticks">ticks</label>
+        <input type="number" id="test-delta-ticks" value="200" step="50" />
+      </div>
+      <div class="field">
+        <button onclick="testMove()" style="margin-top:1.2rem;">Run</button>
+      </div>
+    </div>
+    <p id="test-move-status" class="hint" style="margin-top:0.5rem;"></p>
+  </div>
+
   <!-- Drive forward -->
   <div class="card">
     <h2>Drive Forward — to pickup point</h2>
@@ -456,7 +499,8 @@
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
       "geom_enable", "geom_lateral_norm_m",
       "red_loss_debounce_frames", "red_error_ema_alpha",
-      "curve_threshold", "curve_coast_s", "curve_debounce_s",
+      "curve_threshold", "curve_coast_ticks", "curve_debounce_s",
+      "pos_kp", "pos_ki", "pos_kd", "pos_tolerance", "pos_max_speed",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
@@ -467,6 +511,7 @@
     const INT_KEYS = new Set([
       "forward_ticks",
       "red_loss_debounce_frames",
+      "curve_coast_ticks", "pos_tolerance",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
@@ -491,7 +536,13 @@
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
       curve_threshold:         [0,    1,      0.01  ],
-      curve_coast_s:           [0,    2,      0.05  ],
+      curve_coast_ticks:       [0,    500,    10    ],
+      curve_debounce_s:        [0,    10,     0.1   ],
+      pos_kp:                  [0,    0.02,   0.0001],
+      pos_ki:                  [0,    0.005,  0.0001],
+      pos_kd:                  [0,    0.005,  0.0001],
+      pos_tolerance:           [1,    100,    1     ],
+      pos_max_speed:           [0,    1,      0.01  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       turn_speed:              [0,    1,      0.01  ],
@@ -871,6 +922,25 @@
         document.getElementById("mission-status").textContent = "Stopped — " + body.state;
       } catch (e) {
         document.getElementById("mission-status").textContent = "Error: " + e.message;
+      }
+    }
+
+    async function testMove() {
+      const delta = parseInt(document.getElementById("test-delta-ticks").value, 10);
+      const el = document.getElementById("test-move-status");
+      if (!delta) { el.textContent = "Enter a non-zero tick count."; return; }
+      el.textContent = "Running…";
+      try {
+        const res  = await fetch("/api/test/move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ delta_ticks: delta }),
+        });
+        const body = await safeJson(res);
+        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        el.textContent = `Sent: ${delta} ticks`;
+      } catch (e) {
+        el.textContent = "Error: " + e.message;
       }
     }
 

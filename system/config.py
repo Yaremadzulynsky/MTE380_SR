@@ -46,6 +46,13 @@ class Config:
     search_turn_max:           float = 0.32
     lost_frames_before_search: int   = 5
 
+    # ── Position move ─────────────────────────────────────────────────────────
+    pos_kp:        float = 0.002
+    pos_ki:        float = 0.0
+    pos_kd:        float = 0.0
+    pos_tolerance: int   = 20
+    pos_max_speed: float = 0.40
+
     # ── Drive-forward ─────────────────────────────────────────────────────────
     forward_ticks: int   = 800
     forward_speed: float = 0.25
@@ -65,7 +72,7 @@ class Config:
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
     curve_threshold:          float = 0.15
-    curve_coast_s:            float = 0.1
+    curve_coast_ticks:        int   = 100
     curve_debounce_s:         float = 1.0
 
     # ── Line detection HSV ────────────────────────────────────────────────────
@@ -100,6 +107,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "base_speed", "min_speed", "max_speed",
         "search_turn", "search_turn_max", "lost_frames_before_search",
     ]),
+    ("Position move", [
+        "pos_kp", "pos_ki", "pos_kd", "pos_tolerance", "pos_max_speed",
+    ]),
     ("Drive-forward", [
         "forward_ticks", "forward_speed",
     ]),
@@ -112,7 +122,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Vision / perception", [
         "geom_enable", "geom_lateral_norm_m",
         "red_loss_debounce_frames", "red_error_ema_alpha",
-        "curve_threshold", "curve_coast_s", "curve_debounce_s",
+        "curve_threshold", "curve_coast_ticks", "curve_debounce_s",
     ]),
     ("Line detection HSV", [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
