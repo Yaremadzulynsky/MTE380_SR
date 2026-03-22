@@ -34,6 +34,7 @@ while the output is saturated.
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from enum import Enum
 
 from simple_pid import PID
