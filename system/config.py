@@ -64,6 +64,8 @@ class Config:
     geom_lateral_norm_m:      float = 0.10
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
+    curve_threshold:          float = 0.15
+    curve_coast_s:            float = 0.1
 
     # ── Line detection HSV ────────────────────────────────────────────────────
     red_h_lo1:  int = 0
@@ -109,6 +111,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Vision / perception", [
         "geom_enable", "geom_lateral_norm_m",
         "red_loss_debounce_frames", "red_error_ema_alpha",
+        "curve_threshold", "curve_coast_s",
     ]),
     ("Line detection HSV", [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",

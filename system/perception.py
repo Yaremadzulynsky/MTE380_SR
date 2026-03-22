@@ -182,10 +182,11 @@ _T_JUNCTION_WIDTH_RATIO = 0.5
 
 @dataclass
 class FrameDetection:
-    red_found:  bool        # red line detected in ROI
-    red_error:  float       # [-1, 1], positive = line is right of centre
-    blue_found: bool        # blue target marker visible
-    t_junction: bool        # wide red stripe = end T-junction
+    red_found:      bool        # red line detected in ROI
+    red_error:      float       # [-1, 1], positive = line is right of centre
+    blue_found:     bool        # blue target marker visible
+    t_junction:     bool        # wide red stripe = end T-junction
+    curve_detected: bool = False  # line curves significantly (top/bottom centroid offset)
     # Pixel-space debug info (full-frame coords); None when line not detected
     red_cx:   int | None = None   # centroid x
     red_cy:   int | None = None   # centroid y
@@ -263,6 +264,7 @@ class Perception:
         self.red_min_area           = _RED_MIN_AREA
         self.blue_min_area          = _BLUE_MIN_AREA
         self.t_junction_width_ratio = _T_JUNCTION_WIDTH_RATIO
+        self.curve_threshold        = float(cfg.curve_threshold)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -281,7 +283,7 @@ class Perception:
         roi   = frame[roi_y:, :]
         hsv   = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        raw_found, raw_err, raw_tj = self._detect_red(hsv, w, roi_y)
+        raw_found, raw_err, raw_tj, raw_curve = self._detect_red(hsv, w, roi_y)
         red_found, red_error, t_junction = self._stabilize_red(raw_found, raw_err, raw_tj)
         blue_found = self._detect_blue(hsv)
 
@@ -290,6 +292,7 @@ class Perception:
             red_error=red_error,
             blue_found=blue_found,
             t_junction=t_junction,
+            curve_detected=raw_curve if red_found else False,
             red_cx=self._last_red_cx   if red_found else None,
             red_cy=self._last_red_cy   if red_found else None,
             red_bbox=self._last_red_bbox if red_found else None,
@@ -418,8 +421,8 @@ class Perception:
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
-    ) -> tuple[bool, float, bool]:
-        """Returns (found, error, t_junction)."""
+    ) -> tuple[bool, float, bool, bool]:
+        """Returns (found, error, t_junction, curve_detected)."""
         mask = cv2.bitwise_or(
             cv2.inRange(hsv, self._RED_LO1, self._RED_HI1),
             cv2.inRange(hsv, self._RED_LO2, self._RED_HI2),
@@ -432,12 +435,12 @@ class Perception:
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             self._last_red_cx = self._last_red_cy = self._last_red_bbox = None
-            return False, 0.0, False
+            return False, 0.0, False, False
 
         largest = max(contours, key=cv2.contourArea)
         if cv2.contourArea(largest) < self.red_min_area:
             self._last_red_cx = self._last_red_cy = self._last_red_bbox = None
-            return False, 0.0, False
+            return False, 0.0, False, False
 
         bx, by, bw, bh = cv2.boundingRect(largest)
         self._last_red_bbox = (bx, roi_y + by, bw, bh)
@@ -447,7 +450,7 @@ class Perception:
         if moments["m00"] <= 1e-6:
             self._last_red_cx = bx + bw // 2
             self._last_red_cy = roi_y + by + bh // 2
-            return True, 0.0, t_junction
+            return True, 0.0, t_junction, False
 
         cx_roi = moments["m10"] / moments["m00"]
         cy_roi = moments["m01"] / moments["m00"]
@@ -465,8 +468,21 @@ class Perception:
             (cx_roi - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0
         )
 
+        # Curve detection: compare top-half vs bottom-half centroid X.
+        # A straight line has roughly the same centroid X in both halves;
+        # a curve shifts the top centroid left or right relative to the bottom.
+        roi_h = hsv.shape[0]
+        mid_y = roi_h / 2.0
+        top_pts = pts[pts[:, 1] < mid_y]
+        bot_pts = pts[pts[:, 1] >= mid_y]
+        curve_detected = False
+        if len(top_pts) >= 5 and len(bot_pts) >= 5:
+            top_cx = float(np.mean(top_pts[:, 0]))
+            bot_cx = float(np.mean(bot_pts[:, 0]))
+            curve_detected = abs(top_cx - bot_cx) / frame_w > self.curve_threshold
+
         if not self.geom_enable:
-            return True, image_err, t_junction
+            return True, image_err, t_junction, curve_detected
 
         g = ground_xz_from_pixel(
             u_pix,
@@ -479,11 +495,11 @@ class Perception:
             cy=self._cy,
         )
         if g is None:
-            return True, image_err, t_junction
+            return True, image_err, t_junction, curve_detected
 
         x_m, _ = g
         err = lateral_error_normalized(x_m, self.geom_lateral_norm_m)
-        return True, err, t_junction
+        return True, err, t_junction, curve_detected
 
     def _detect_blue(self, hsv: np.ndarray) -> bool:
         """Returns True when a blue marker of sufficient area is visible."""

@@ -52,6 +52,7 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 
 class State(Enum):
     LINE_FOLLOW   = "LINE_FOLLOW"
+    CURVE_COAST   = "CURVE_COAST"
     DRIVE_FORWARD = "DRIVE_FORWARD"
     PICKUP        = "PICKUP"
     TURN_180      = "TURN_180"
@@ -109,6 +110,8 @@ class MissionStateMachine:
     ) -> ControlOutput:
         if self.state == State.LINE_FOLLOW:
             return self._line_follow(det, left_ticks, right_ticks)
+        if self.state == State.CURVE_COAST:
+            return self._curve_coast()
         if self.state == State.DRIVE_FORWARD:
             return self._drive_forward(left_ticks, right_ticks)
         if self.state == State.PICKUP:
@@ -147,8 +150,21 @@ class MissionStateMachine:
 
         self._consecutive_lost = 0
         self._last_red_error = det.red_error
+
+        if det.curve_detected:
+            self._enter(State.CURVE_COAST)
+            spd = min(self.cfg.base_speed, self.cfg.max_speed)
+            return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
+
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
+
+    def _curve_coast(self) -> ControlOutput:
+        if time.time() - self._t0 >= self.cfg.curve_coast_s:
+            self._enter(State.LINE_FOLLOW)
+            return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
+        spd = min(self.cfg.base_speed, self.cfg.max_speed)
+        return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
 
     def _drive_forward(self, left_ticks: int, right_ticks: int) -> ControlOutput:
         avg_delta = ((left_ticks - self._enc0_left) + (right_ticks - self._enc0_right)) // 2
