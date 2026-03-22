@@ -62,8 +62,8 @@ class PositionMover:
 
         mover = PositionMover(control, delta_ticks=500)
         while not mover.done:
-            cmd = mover.step()
-            control.send_drive(cmd)
+            l, r = mover.step()
+            control.send_voltage(l, r)   # bypasses motor speed PID
         control.idle()
     """
 
@@ -86,15 +86,19 @@ class PositionMover:
         )
         self.done = False
 
-    def step(self) -> MotorCommand:
-        """Compute one PID step. Sets self.done=True and returns zero when on target."""
+    def step(self) -> tuple[float, float]:
+        """
+        Compute one PID step. Returns (left_voltage, right_voltage) to pass to
+        send_voltage() — bypasses the motor speed PID entirely.
+        Sets self.done=True and returns (0, 0) when on target.
+        """
         l, r = self._control.encoder_ticks
         pos  = (l + r) / 2.0
         if abs(self._target - pos) <= self._tolerance:
             self.done = True
-            return MotorCommand(left=0.0, right=0.0)
-        spd = self._pid(pos)
-        return MotorCommand(left=spd, right=spd)
+            return 0.0, 0.0
+        v = self._pid(pos)
+        return v, v
 
 
 # ── Controller ────────────────────────────────────────────────────────────────
@@ -201,6 +205,16 @@ class LocalMotorController:
 
         assert self.bridge is not None
         self.bridge.send_drive(voltage_left, voltage_right)
+
+    def send_voltage(self, left: float, right: float) -> None:
+        """Send motor voltages directly, bypassing the RPM PID. Range [-1, 1]."""
+        left  = _clamp(left,  -1.0, 1.0)
+        right = _clamp(right, -1.0, 1.0)
+        if self.dry_run:
+            print(f"[dry-run]  send_voltage  L={left:+.3f}  R={right:+.3f}", flush=True)
+            return
+        assert self.bridge is not None
+        self.bridge.send_drive(left, right)
 
     def idle(self) -> None:
         """Zero motors and reset wheel PIDs; keep the serial port open (e.g. after pause / mission leg)."""

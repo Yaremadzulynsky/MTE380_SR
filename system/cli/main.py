@@ -102,8 +102,8 @@ class MissionRunner:
         def _move():
             mover = PositionMover(self._control, delta_ticks)
             while not mover.done:
-                cmd = mover.step()
-                self._control.send_drive(cmd)
+                l, r = mover.step()
+                self._control.send_voltage(l, r)
                 import time as _time
                 _time.sleep(0.02)
             self._control.idle()
