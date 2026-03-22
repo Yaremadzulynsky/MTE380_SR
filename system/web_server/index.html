@@ -874,6 +874,7 @@
       slider.addEventListener("input", () => {
         numEl.value = slider.value;
         markChanges();
+        scheduleAutoSave();
       });
       numEl.addEventListener("input", () => {
         slider.value = numEl.value;
