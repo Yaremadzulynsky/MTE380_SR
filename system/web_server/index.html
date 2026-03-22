@@ -721,15 +721,19 @@
       }
     }
 
+    async function safeJson(res) {
+      try { return await res.json(); } catch { return {}; }
+    }
+
     async function save() {
       setStatus("Saving…", "saving");
       try {
-        const res = await fetch("/api/pid", {
+        const res  = await fetch("/api/pid", {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify(collect()),
         });
-        const body = await res.json();
+        const body = await safeJson(res);
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         populate(body.saved);
         setStatus("Saved ✓");
@@ -746,7 +750,7 @@
     async function missionStart() {
       try {
         const res  = await fetch("/api/mission/start", { method: "POST" });
-        const body = await res.json();
+        const body = await safeJson(res);
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         document.getElementById("mission-status").textContent = "Started — " + body.state;
       } catch (e) {
@@ -757,7 +761,7 @@
     async function missionStop() {
       try {
         const res  = await fetch("/api/mission/stop", { method: "POST" });
-        const body = await res.json();
+        const body = await safeJson(res);
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         document.getElementById("mission-status").textContent = "Stopped — " + body.state;
       } catch (e) {

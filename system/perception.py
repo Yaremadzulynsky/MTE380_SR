@@ -2,15 +2,106 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import math
-from typing import Literal
+import subprocess
+import threading
+import time
+from typing import Optional
 
 import cv2
 import numpy as np
-from picamera2 import Picamera2
 
 import config as _config_module
 from config import Config
+
+log = logging.getLogger(__name__)
+
+_JPEG_SOI = bytes([0xFF, 0xD8])
+_JPEG_EOI = bytes([0xFF, 0xD9])
+
+
+class _RpicamVidCamera:
+    """Pi Camera via rpicam-vid subprocess (MJPEG to stdout). No Picamera2/libcamera lock."""
+
+    def __init__(self, width: int = 640, height: int = 480, fps: float = 30.0) -> None:
+        self._lock   = threading.Lock()
+        self._latest: Optional[np.ndarray] = None
+        self._stop   = False
+        self._eof    = False
+        self._buffer = bytearray()
+
+        cmd = [
+            "rpicam-vid", "-t", "0", "-o", "-",
+            "--codec", "mjpeg", "-n",
+            "--width", str(width), "--height", str(height),
+            "--framerate", str(int(fps)),
+        ]
+        try:
+            self._proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE, bufsize=0)
+        except FileNotFoundError as e:
+            raise RuntimeError("rpicam-vid not found — install rpicam-apps") from e
+
+        threading.Thread(target=self._log_stderr, daemon=True).start()
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
+
+    def _log_stderr(self) -> None:
+        assert self._proc.stderr
+        for line in self._proc.stderr:
+            log.warning("rpicam-vid: %s", line.decode(errors="replace").rstrip())
+
+    def _reader(self) -> None:
+        assert self._proc.stdout
+        while not self._stop:
+            chunk = self._proc.stdout.read(65536)
+            if not chunk:
+                self._eof = True
+                break
+            with self._lock:
+                self._buffer.extend(chunk)
+            self._drain()
+
+    def _drain(self) -> None:
+        while True:
+            with self._lock:
+                data = bytes(self._buffer)
+            start = data.find(_JPEG_SOI)
+            if start < 0:
+                with self._lock:
+                    self._buffer.clear()
+                break
+            end = data.find(_JPEG_EOI, start)
+            if end < 0:
+                if start > 0:
+                    with self._lock:
+                        del self._buffer[:start]
+                break
+            end += 2
+            jpeg = data[start:end]
+            with self._lock:
+                del self._buffer[:end]
+            frame = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+            if frame is not None:
+                with self._lock:
+                    self._latest = frame
+
+    def read(self) -> Optional[np.ndarray]:
+        deadline = time.perf_counter() + 2.0
+        while self._latest is None and not self._eof and time.perf_counter() < deadline:
+            time.sleep(0.005)
+        with self._lock:
+            return self._latest
+
+    def release(self) -> None:
+        self._stop = True
+        self._thread.join(timeout=1.0)
+        self._proc.terminate()
+        try:
+            self._proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -129,9 +220,6 @@ class Perception:
         self.red_min_area  = 80.0
         self.blue_min_area = 1500.0
         self.t_junction_width_ratio = 0.5
-        # Picamera2 main stream is often labeled "RGB888" but the buffer is frequently BGR order
-        # on Raspberry Pi; using COLOR_RGB2BGR then BGR2HSV swaps R/B and breaks hue detection.
-        self._camera_channel_order: Literal["rgb", "bgr"] = "bgr"
 
         self.geom_enable = c.geom_enable
         self.geom_lateral_norm_m = float(c.geom_lateral_norm_m)
@@ -152,13 +240,8 @@ class Perception:
         self._cx = self.width / 2.0
         self._cy = self.height / 2.0
 
-        self._cam = Picamera2()
-        cam_cfg = self._cam.create_preview_configuration(
-            main={"size": (self.width, self.height), "format": "RGB888"},
-            buffer_count=2,
-        )
-        self._cam.configure(cam_cfg)
-        self._cam.start()
+        self._cam = _RpicamVidCamera(self.width, self.height, c.fps)
+        log.info("rpicam-vid camera opened (%dx%d @ %gfps)", self.width, self.height, c.fps)
 
     def reconfigure(self, cfg: Config) -> None:
         """Apply updated config values without reopening the camera."""
@@ -171,11 +254,7 @@ class Perception:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
-        raw = self._cam.capture_array("main")
-        if self._camera_channel_order == "rgb":
-            frame = cv2.cvtColor(raw, cv2.COLOR_RGB2BGR)
-        else:
-            frame = np.ascontiguousarray(raw)
+        frame = self._cam.read()
         self._last_frame = frame
         return frame
 
@@ -208,8 +287,7 @@ class Perception:
         return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
     def release(self) -> None:
-        self._cam.stop()
-        self._cam.close()
+        self._cam.release()
 
     def draw_debug(self, frame: np.ndarray, det: FrameDetection) -> np.ndarray:
         out = frame.copy()

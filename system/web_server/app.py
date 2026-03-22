@@ -51,6 +51,16 @@ def _config_path() -> Path:
     return _config_module._CONFIG_PATH
 
 
+# ── Global error handler — always return JSON for /api/* ─────────────────────
+
+@app.errorhandler(Exception)
+def _json_error(e):
+    import traceback
+    code = getattr(e, "code", 500)
+    app.logger.error("Unhandled exception: %s", traceback.format_exc())
+    return jsonify({"error": str(e)}), code
+
+
 # ── Camera streaming helpers ──────────────────────────────────────────────────
 
 _NO_SIGNAL_JPEG: bytes | None = None
@@ -99,8 +109,7 @@ def index():
 
 @app.get("/api/pid")
 def get_pid():
-    cfg = _config_module.load(_config_path())
-    return jsonify(dataclasses.asdict(cfg))
+    return jsonify(dataclasses.asdict(_config_module.get()))
 
 
 @app.post("/api/pid")
@@ -109,14 +118,25 @@ def set_pid():
     if not isinstance(data, dict):
         return jsonify({"error": "Expected a JSON object."}), 400
 
-    clean, errors = _validate(data)
-    if errors:
-        return jsonify({"error": "Validation failed.", "fields": errors}), 400
+    # Build a Config using the same type-coercion logic as config.load():
+    # unknown or un-coercible values silently fall back to dataclass defaults.
+    defaults = Config()
+    kwargs: dict = {}
+    for fld in dataclasses.fields(Config):
+        raw = data.get(fld.name)
+        if raw is None:
+            continue
+        expected = type(getattr(defaults, fld.name))
+        try:
+            kwargs[fld.name] = bool(raw) if expected is bool else expected(raw)
+        except (TypeError, ValueError):
+            pass  # keep dataclass default
 
-    cfg = Config(**clean)
-    _config_module.save(cfg, _config_path())
-    # Refresh the singleton so the next get() reflects the new values
-    _config_module.reload()
+    cfg = _config_module.reload()   # start from what's on disk
+    for k, v in kwargs.items():
+        setattr(cfg, k, v)
+    _config_module.save(cfg)
+    _config_module.reload()         # refresh singleton
     return jsonify({"ok": True, "saved": dataclasses.asdict(cfg)})
 
 
@@ -172,49 +192,6 @@ def stream_mask():
         _mjpeg_stream(get_fn),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
-
-
-# ── Validation ────────────────────────────────────────────────────────────────
-
-def _validate(data: dict) -> tuple[dict, dict]:
-    """Return (clean_values, errors). Uses Config field types for coercion."""
-    defaults = Config()
-    out: dict = {}
-    errors: dict = {}
-
-    for fld in dataclasses.fields(Config):
-        raw = data.get(fld.name)
-        if raw is None:
-            out[fld.name] = getattr(defaults, fld.name)
-            continue
-
-        expected = type(getattr(defaults, fld.name))
-        try:
-            if expected is bool:
-                if isinstance(raw, bool):
-                    val = raw
-                else:
-                    s = str(raw).lower()
-                    if s in ("false", "no", "0", "off"):
-                        val = False
-                    elif s in ("true", "yes", "on", "1"):
-                        val = True
-                    else:
-                        errors[fld.name] = "Must be a boolean."
-                        continue
-            elif expected is int:
-                val = int(raw)
-            else:
-                val = float(raw)
-                if val != val:   # NaN check
-                    raise ValueError("NaN")
-        except (TypeError, ValueError):
-            errors[fld.name] = f"Must be a {'boolean' if expected is bool else 'number'}."
-            continue
-
-        out[fld.name] = val
-
-    return out, errors
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
