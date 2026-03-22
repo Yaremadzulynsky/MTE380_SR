@@ -249,7 +249,7 @@ class MissionStateMachine:
         Passing ``-error`` as the measurement fixes the sign for ``left=fwd+turn``.
         """
         error = _clamp(error, -1.0, 1.0)
-        turn  = self._steer_pid(-error)
+        turn  = self._steer_pid(error)
 
         speed_scale = 1.0 - abs(error)
         fwd = self.cfg.min_speed + (self.cfg.base_speed - self.cfg.min_speed) * speed_scale
