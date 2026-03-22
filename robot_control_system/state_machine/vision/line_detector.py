@@ -314,6 +314,17 @@ class LineDetector:
             self._hsv_upper1 = np.array([hi, 255, 255], dtype=np.uint8)
             self._hsv_lower2 = np.array([lo, s, v],   dtype=np.uint8)
             self._hsv_upper2 = np.array([hi, 255, 255], dtype=np.uint8)
+        _config.update({
+            'vision': {
+                'min_mask_pixels': self._min_mask_pixels,
+                'red_hsv': {
+                    'lower1': self._hsv_lower1.tolist(),
+                    'upper1': self._hsv_upper1.tolist(),
+                    'lower2': self._hsv_lower2.tolist(),
+                    'upper2': self._hsv_upper2.tolist(),
+                },
+            },
+        })
 
     def set_smoothed_heading(self, theta: Optional[float]) -> None:
         """Set the smoothed robot-frame turn angle for camera overlay annotation.

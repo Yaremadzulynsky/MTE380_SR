@@ -133,6 +133,15 @@ class StateMachine:
             lf = self._states.get('line_follow')
             if lf is not None:
                 lf._follow_speed = max(0.0, min(1.0, float(follow_speed)))
+        _config.update({
+            'target_heading_filter': {'kp': self._heading_filter_kp},
+            'line_follow': {
+                'lateral_deadzone_m': self._lateral_deadzone_m,
+                'follow_speed': self._states['line_follow']._follow_speed
+                    if 'line_follow' in self._states else
+                    _config.get()['line_follow'].get('follow_speed'),
+            },
+        })
         return self.get_line_params()
 
     # ── Registration ──────────────────────────────────────────────────────────

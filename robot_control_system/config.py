@@ -28,3 +28,14 @@ def save(cfg: dict, path: str | Path = _PATH) -> None:
     """Write cfg back to config.yaml, preserving key order."""
     with open(path, 'w') as f:
         yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+def update(partial: dict) -> None:
+    """Deep-merge partial into the in-memory singleton (does not write to disk)."""
+    _deep_merge(get(), partial)
+
+def _deep_merge(base: dict, overlay: dict) -> None:
+    for k, v in overlay.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v

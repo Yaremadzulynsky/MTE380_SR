@@ -212,8 +212,10 @@ class WebServer:
                 return jsonify({'error': 'expected pid, kp, ki, kd'}), 400
             if pid == 'heading':
                 robot.set_gains(float(kp), float(ki), float(kd))
+                _config.update({'heading_pid': {'kp': float(kp), 'ki': float(ki), 'kd': float(kd)}})
             else:
                 robot.set_speed_gains(float(kp), float(ki), float(kd))
+                _config.update({'speed_pid': {'kp': float(kp), 'ki': float(ki), 'kd': float(kd)}})
             return jsonify(robot.get_gains())
 
         @app.route('/api/vision', methods=['GET'])
@@ -317,7 +319,13 @@ class WebServer:
                 _hw.MAX_SPEED = max(0.0, min(1.0, float(body['max_speed'])))
             if 'max_rot_speed' in body:
                 _hw.MAX_ROT_SPEED = max(0.0, min(1.0, float(body['max_rot_speed'])))
+            _config.update({'robot': {'max_speed': _hw.MAX_SPEED, 'max_rot_speed': _hw.MAX_ROT_SPEED}})
             return jsonify({'max_speed': _hw.MAX_SPEED, 'max_rot_speed': _hw.MAX_ROT_SPEED})
+
+        @app.route('/api/config/save', methods=['POST'])
+        def save_config():
+            _config.save(_config.get())
+            return jsonify({'saved': True})
 
     # ── MJPEG stream ───────────────────────────────────────────────────────────
 

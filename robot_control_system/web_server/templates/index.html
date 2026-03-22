@@ -543,6 +543,15 @@
       </div>
     </div>
 
+    <!-- Save config -->
+    <div class="panel">
+      <div class="panel-title">CONFIG</div>
+      <div style="padding:10px 14px; display:flex; align-items:center; gap:10px;">
+        <button class="ctrl-btn" onclick="saveConfig()" style="color:var(--ok);">&#9112; SAVE TO config.yaml</button>
+        <span id="cfg-save-status" style="font-size:11px; color:var(--dim);"></span>
+      </div>
+    </div>
+
   </div><!-- /panels-col -->
 </main>
 
@@ -882,6 +891,13 @@
       .then(r => r.json())
       .then(() => setStatus('vis-status', 'saved to temp.yaml', true))
       .catch(() => setStatus('vis-status', 'save error', false));
+  }
+
+  function saveConfig() {
+    fetch('/api/config/save', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => setStatus('cfg-save-status', 'saved', true))
+      .catch(() => setStatus('cfg-save-status', 'error', false));
   }
 
   const _applyVisionDebounced = debounce(applyVision, 250);
