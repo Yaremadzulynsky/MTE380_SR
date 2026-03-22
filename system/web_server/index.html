@@ -738,6 +738,23 @@
       try { return await res.json(); } catch { return {}; }
     }
 
+    let _throttleTimer = null;
+    let _throttlePending = false;
+    function scheduleAutoSave() {
+      if (_throttleTimer) {
+        _throttlePending = true;
+        return;
+      }
+      save();
+      _throttleTimer = setTimeout(() => {
+        _throttleTimer = null;
+        if (_throttlePending) {
+          _throttlePending = false;
+          scheduleAutoSave();
+        }
+      }, 150);
+    }
+
     async function save() {
       setStatus("Saving…", "saving");
       try {
