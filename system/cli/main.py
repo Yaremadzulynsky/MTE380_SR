@@ -81,8 +81,14 @@ class MissionRunner:
         )
 
     def reconfigure(self, cfg) -> None:
-        """Apply updated config to perception (HSV, ROI, etc.) without restarting."""
+        """Apply updated config to perception and live state machine without restarting."""
         self._perception.reconfigure(cfg)
+        self._control.set_motor_pid(cfg)
+        with self._lock:
+            if self._sm is not None:
+                self._sm.cfg = cfg
+                self._sm._steer_pid.tunings = (cfg.steer_kp, cfg.steer_ki, cfg.steer_kd)
+                self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
 
     def stop(self) -> None:
         with self._lock:

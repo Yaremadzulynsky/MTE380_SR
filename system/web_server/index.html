@@ -738,7 +738,7 @@
     }
 
     document.querySelectorAll("input").forEach(el => {
-      el.addEventListener("input", markChanges);
+      el.addEventListener("input", () => { markChanges(); scheduleAutoSave(); });
     });
 
     document.querySelectorAll(".info-btn").forEach(btn => {
