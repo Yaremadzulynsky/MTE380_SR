@@ -237,16 +237,16 @@
   <!-- Camera streams -->
   <div class="card">
     <h2>Camera</h2>
-    <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+    <div style="display:flex; gap:1.25rem; flex-wrap:wrap; align-items:flex-start;">
       <div>
         <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Annotated</div>
-        <img id="cam-annotated" alt="camera"
-             style="max-width:320px; width:100%; border-radius:5px; border:1px solid #2a2a2a; background:#000; min-height:80px;" />
+        <img id="cam-annotated" src="/stream/camera" alt="camera"
+             style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
       </div>
       <div>
         <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Red mask</div>
-        <img id="cam-mask" alt="mask"
-             style="max-width:320px; width:100%; border-radius:5px; border:1px solid #2a2a2a; background:#000; min-height:80px;" />
+        <img id="cam-mask" src="/stream/mask" alt="mask"
+             style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
       </div>
     </div>
   </div>
@@ -738,17 +738,6 @@
         setStatus("Save failed: " + e.message, "error");
       }
     }
-
-    // ── Camera polling ───────────────────────────────────────────────────────
-
-    function refreshFrame(imgId, url) {
-      const img = new Image();
-      img.onload = () => { document.getElementById(imgId).src = img.src; };
-      img.src = url + "?t=" + Date.now();
-    }
-
-    setInterval(() => refreshFrame("cam-annotated", "/api/frame/camera"), 100);
-    setInterval(() => refreshFrame("cam-mask",       "/api/frame/mask"),   100);
 
     load();
 

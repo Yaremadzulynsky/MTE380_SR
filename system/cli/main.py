@@ -458,9 +458,22 @@ def cmd_serve(args: argparse.Namespace) -> None:
 
     print(f"[serve] Web UI → http://{args.host}:{args.web_port}", flush=True)
     print(f"[serve] Config file: {cfg_path}", flush=True)
+    print("[serve] Press Ctrl-C to stop.", flush=True)
+
+    flask_thread = threading.Thread(
+        target=_server.app.run,
+        kwargs=dict(host=args.host, port=args.web_port,
+                    debug=False, threaded=True, use_reloader=False),
+        daemon=True,
+        name="flask",
+    )
+    flask_thread.start()
 
     try:
-        _server.app.run(host=args.host, port=args.web_port, debug=False, threaded=True)
+        while flask_thread.is_alive():
+            flask_thread.join(timeout=1.0)
+    except KeyboardInterrupt:
+        print()
     finally:
         runner.shutdown()
 

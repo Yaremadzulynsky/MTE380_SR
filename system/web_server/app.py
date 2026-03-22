@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import dataclasses
 import sys
+import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 HERE = Path(__file__).parent
@@ -49,14 +51,43 @@ def _config_path() -> Path:
     return _config_module._CONFIG_PATH
 
 
-# ── Camera frame helper ───────────────────────────────────────────────────────
+# ── Camera streaming helpers ──────────────────────────────────────────────────
 
-def _encode_jpeg(frame) -> bytes | None:
-    """Encode a BGR ndarray to JPEG bytes, or return None on failure."""
-    if frame is None:
-        return None
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-    return buf.tobytes() if ok else None
+_NO_SIGNAL_JPEG: bytes | None = None
+
+
+def _no_signal_jpeg() -> bytes:
+    global _NO_SIGNAL_JPEG
+    if _NO_SIGNAL_JPEG is None:
+        img = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(img, "NO SIGNAL", (160, 250),
+                    cv2.FONT_HERSHEY_SIMPLEX, 2.2, (45, 45, 45), 3)
+        _, buf = cv2.imencode(".jpg", img)
+        _NO_SIGNAL_JPEG = buf.tobytes()
+    return _NO_SIGNAL_JPEG
+
+
+def _get_jpeg(get_frame_fn) -> bytes:
+    frame = get_frame_fn()
+    if frame is not None:
+        ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        if ok:
+            return buf.tobytes()
+    return _no_signal_jpeg()
+
+
+def _mjpeg_stream(get_frame_fn, fps: float = 15.0):
+    interval = 1.0 / fps
+    while True:
+        t0   = time.monotonic()
+        jpeg = _get_jpeg(get_frame_fn)
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n"
+            + jpeg + b"\r\n"
+        )
+        elapsed = time.monotonic() - t0
+        time.sleep(max(0.0, interval - elapsed))
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -125,26 +156,22 @@ def mission_stop():
     return jsonify({"ok": True, "state": _runner.state})
 
 
-@app.get("/api/frame/camera")
-def frame_camera():
-    if _runner is None:
-        return "", 503
-    data = _encode_jpeg(_runner.get_annotated_frame())
-    if data is None:
-        return "", 204
-    return Response(data, mimetype="image/jpeg",
-                    headers={"Cache-Control": "no-store"})
+@app.get("/stream/camera")
+def stream_camera():
+    get_fn = _runner.get_annotated_frame if _runner is not None else lambda: None
+    return Response(
+        _mjpeg_stream(get_fn),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
-@app.get("/api/frame/mask")
-def frame_mask():
-    if _runner is None:
-        return "", 503
-    data = _encode_jpeg(_runner.get_mask_frame())
-    if data is None:
-        return "", 204
-    return Response(data, mimetype="image/jpeg",
-                    headers={"Cache-Control": "no-store"})
+@app.get("/stream/mask")
+def stream_mask():
+    get_fn = _runner.get_mask_frame if _runner is not None else lambda: None
+    return Response(
+        _mjpeg_stream(get_fn),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
