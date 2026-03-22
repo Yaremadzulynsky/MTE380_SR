@@ -181,6 +181,10 @@ class FrameDetection:
     red_error:  float       # [-1, 1], positive = line is right of centre
     blue_found: bool        # blue target marker visible
     t_junction: bool        # wide red stripe = end T-junction
+    # Pixel-space debug info (full-frame coords); None when line not detected
+    red_cx:   int | None = None   # centroid x
+    red_cy:   int | None = None   # centroid y
+    red_bbox: tuple | None = None # (x, y, w, h) bounding rect
 
 
 class Perception:
@@ -222,6 +226,9 @@ class Perception:
         self._last_t_junction = False
         self._last_frame: np.ndarray | None = None
         self._last_red_mask: np.ndarray | None = None
+        self._last_red_cx:   int | None = None
+        self._last_red_cy:   int | None = None
+        self._last_red_bbox: tuple | None = None
 
         self._fx = _focal_px(self.width, _CAMERA_HORIZONTAL_FOV_DEG)
         self._fy = self._fx  # square pixels
@@ -278,6 +285,9 @@ class Perception:
             red_error=red_error,
             blue_found=blue_found,
             t_junction=t_junction,
+            red_cx=self._last_red_cx   if red_found else None,
+            red_cy=self._last_red_cy   if red_found else None,
+            red_bbox=self._last_red_bbox if red_found else None,
         )
 
     def get_red_mask_frame(self) -> np.ndarray | None:
@@ -294,22 +304,65 @@ class Perception:
         out = frame.copy()
         h, w = out.shape[:2]
         roi_y = int(h * self.roi_top_ratio)
+        cx_frame = w // 2
 
-        # Full frame: one vertical centre line. With ROI: grey bar + centre line in ROI only.
-        if roi_y <= 0:
-            cv2.line(out, (w // 2, 0), (w // 2, h - 1), (255, 255, 255), 2)
-        else:
+        # ── Semi-transparent red mask overlay ─────────────────────────────────
+        mask = self._last_red_mask
+        if mask is not None:
+            overlay = out.copy()
+            # Expand ROI mask to full frame height for indexing
+            full_mask = np.zeros((h, w), np.uint8)
+            full_mask[roi_y:, :] = mask
+            overlay[full_mask > 0] = (0, 0, 180)
+            cv2.addWeighted(overlay, 0.35, out, 0.65, 0, out)
+
+        # ── ROI boundary + vertical centre line ───────────────────────────────
+        if roi_y > 0:
             cv2.line(out, (0, roi_y), (w - 1, roi_y), (200, 200, 200), 1)
-            cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
+        cv2.line(out, (cx_frame, roi_y), (cx_frame, h - 1), (255, 255, 255), 2)
 
+        # ── Line detection overlays ────────────────────────────────────────────
+        if det.red_found:
+            # Bounding box
+            if det.red_bbox is not None:
+                bx, by, bw, bh = det.red_bbox
+                color = (0, 100, 255) if det.t_junction else (0, 255, 0)
+                cv2.rectangle(out, (bx, by), (bx + bw, by + bh), color, 2)
+
+            # Centroid + error arrow
+            if det.red_cx is not None and det.red_cy is not None:
+                cx, cy = det.red_cx, det.red_cy
+                # Horizontal error arrow from frame centre to centroid
+                cv2.arrowedLine(out, (cx_frame, cy), (cx, cy),
+                                (0, 140, 255), 2, tipLength=0.2)
+                # Centroid dot
+                cv2.circle(out, (cx, cy), 7, (0, 0, 255), -1)
+                cv2.circle(out, (cx, cy), 7, (255, 255, 255), 1)
+
+        # ── Lateral error bar (bottom of frame) ───────────────────────────────
+        bar_y  = h - 18
+        bar_x0 = w // 4
+        bar_x1 = 3 * w // 4
+        bar_w  = bar_x1 - bar_x0
+        # Track
+        cv2.line(out, (bar_x0, bar_y), (bar_x1, bar_y), (70, 70, 70), 3)
+        # Centre tick
+        cv2.line(out, (cx_frame, bar_y - 5), (cx_frame, bar_y + 5), (180, 180, 180), 2)
+        # Error indicator
+        err_x = int(cx_frame + det.red_error * (bar_w // 2))
+        err_x = max(bar_x0, min(bar_x1, err_x))
+        dot_color = (0, 220, 0) if det.red_found else (80, 80, 80)
+        cv2.circle(out, (err_x, bar_y), 7, dot_color, -1)
+        cv2.circle(out, (err_x, bar_y), 7, (255, 255, 255), 1)
+
+        # ── Text HUD ──────────────────────────────────────────────────────────
         tags = [
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
-            f"blue={'Y' if det.blue_found else 'N'}",
-            f"T={'Y' if det.t_junction else 'N'}",
+            f"blue={'Y' if det.blue_found else 'N'}  T={'Y' if det.t_junction else 'N'}",
         ]
         for i, tag in enumerate(tags):
-            cv2.putText(out, tag, (10, 30 + i * 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2, cv2.LINE_AA)
+            cv2.putText(out, tag, (10, 28 + i * 24),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 255, 255), 2, cv2.LINE_AA)
         return out
 
     # ── Internals ─────────────────────────────────────────────────────────────
@@ -373,21 +426,28 @@ class Perception:
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
+            self._last_red_cx = self._last_red_cy = self._last_red_bbox = None
             return False, 0.0, False
 
         largest = max(contours, key=cv2.contourArea)
         if cv2.contourArea(largest) < self.red_min_area:
+            self._last_red_cx = self._last_red_cy = self._last_red_bbox = None
             return False, 0.0, False
 
-        _, _, bw, _ = cv2.boundingRect(largest)
-        t_junction  = (bw / frame_w) > self.t_junction_width_ratio
+        bx, by, bw, bh = cv2.boundingRect(largest)
+        self._last_red_bbox = (bx, roi_y + by, bw, bh)
+        t_junction = (bw / frame_w) > self.t_junction_width_ratio
 
         moments = cv2.moments(largest)
         if moments["m00"] <= 1e-6:
+            self._last_red_cx = bx + bw // 2
+            self._last_red_cy = roi_y + by + bh // 2
             return True, 0.0, t_junction
 
         cx_roi = moments["m10"] / moments["m00"]
         cy_roi = moments["m01"] / moments["m00"]
+        self._last_red_cx = int(cx_roi)
+        self._last_red_cy = int(roi_y + cy_roi)
 
         # Bottom of blob → ground point nearer the wheels than the centroid
         pts = largest.reshape(-1, 2)
