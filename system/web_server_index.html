@@ -105,7 +105,8 @@
     .camera-card .cam-wrap {
       position: relative;
       width: 100%;
-      background: #000;
+      aspect-ratio: 4 / 3;     /* always reserve 480p space before stream loads */
+      background: #1a1a1a;
       border-radius: 4px;
       overflow: hidden;
       line-height: 0;
@@ -113,8 +114,23 @@
 
     .camera-card img {
       width: 100%;
+      height: 100%;
       display: block;
+      object-fit: contain;
       border-radius: 4px;
+    }
+
+    .cam-error {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #555;
+      font-size: 0.8rem;
+      gap: 0.4rem;
+      pointer-events: none;
     }
 
     .cam-footer {
@@ -294,7 +310,13 @@
     <div class="card camera-card">
       <h2>Camera</h2>
       <div class="cam-wrap">
-        <img id="cam-img" src="/video_feed" alt="camera stream" />
+        <img id="cam-img" src="/video_feed" alt="camera stream"
+             onerror="camError()" onload="camOk()" />
+        <div id="cam-error" class="cam-error" style="display:none">
+          <span style="font-size:1.8rem;opacity:.3">&#9654;</span>
+          <span>stream unavailable</span>
+          <span style="font-size:0.7rem;opacity:.5">retrying…</span>
+        </div>
       </div>
       <div class="cam-footer">
         <label>
@@ -554,12 +576,31 @@ const helpDlg = document.getElementById("help-dialog");
 document.querySelector(".help-close")?.addEventListener("click", () => helpDlg?.close());
 helpDlg?.addEventListener("click", e => { if (e.target === helpDlg) helpDlg.close(); });
 
-// ── Camera toggle ─────────────────────────────────────────────────────────────
+// ── Camera stream ─────────────────────────────────────────────────────────────
+let _camRetryTimer = null;
+
+function camError() {
+  document.getElementById("cam-error").style.display = "flex";
+  // Retry every 3 s — clears itself when the stream loads
+  if (!_camRetryTimer) {
+    _camRetryTimer = setInterval(() => {
+      const img = document.getElementById("cam-img");
+      const src = img.src.split("?")[0];
+      img.src = src + "?t=" + Date.now();   // bust cache to force retry
+    }, 3000);
+  }
+}
+
+function camOk() {
+  document.getElementById("cam-error").style.display = "none";
+  if (_camRetryTimer) { clearInterval(_camRetryTimer); _camRetryTimer = null; }
+}
+
 function toggleMask() {
-  const img = document.getElementById("cam-img");
-  img.src = document.getElementById("mask-toggle").checked
-    ? "/video_feed_mask"
-    : "/video_feed";
+  const img  = document.getElementById("cam-img");
+  const base = document.getElementById("mask-toggle").checked
+    ? "/video_feed_mask" : "/video_feed";
+  img.src = base;
 }
 
 // ── Robot control ─────────────────────────────────────────────────────────────

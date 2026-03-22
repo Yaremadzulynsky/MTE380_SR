@@ -66,9 +66,11 @@ _STREAM_FPS   = 15
 
 
 def _make_no_signal_jpeg() -> bytes:
-    img = np.zeros((480, 640, 3), dtype=np.uint8)
-    cv2.putText(img, "NO SIGNAL", (170, 250),
-                cv2.FONT_HERSHEY_SIMPLEX, 2.2, (45, 45, 45), 3)
+    img = np.full((480, 640, 3), 30, dtype=np.uint8)   # dark grey background
+    cv2.putText(img, "NO SIGNAL", (140, 230),
+                cv2.FONT_HERSHEY_SIMPLEX, 2.2, (160, 160, 160), 3, cv2.LINE_AA)
+    cv2.putText(img, "camera not started", (175, 285),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (90, 90, 90), 1, cv2.LINE_AA)
     _, buf = cv2.imencode(".jpg", img)
     return buf.tobytes()
 
@@ -111,13 +113,17 @@ class WebServer:
     """
     Flask-based debug + control web interface for the local mission runner.
 
+    Pass perception so the MJPEG stream reads frames directly (like the old
+    system's detector reference) — the camera works as soon as the server
+    starts, independent of the main loop's push rate.
+
     Usage
     -----
-        ws = WebServer(config_path=cfg_path, port=5050)
+        ws = WebServer(config_path=cfg_path, perception=perception, port=5050)
         ws.start()
 
-        # Inside main loop each iteration:
-        ws.push(frame=annotated_frame, mask=mask_frame, telemetry={...})
+        # Inside main loop each iteration — pushes the annotated overlay and telemetry:
+        ws.push(frame=overlay, telemetry={...})
         cmd = ws.pop_command()   # returns 'go', 'stop', or None
     """
 
@@ -125,18 +131,19 @@ class WebServer:
         self,
         *,
         config_path: str | Path,
+        perception=None,
         host: str = "0.0.0.0",
         port: int = 5050,
     ) -> None:
         self._config_path = Path(config_path)
+        self._perception  = perception          # Perception instance for live frames
         self._host        = host
         self._port        = port
 
         self._lock           = threading.Lock()
-        self._jpeg: Optional[bytes]      = None
-        self._mask_jpeg: Optional[bytes] = None
-        self._telemetry: dict            = {}
-        self._cmd_queue: list[str]       = []
+        self._jpeg: Optional[bytes] = None      # annotated overlay pushed by main loop
+        self._telemetry: dict       = {}
+        self._cmd_queue: list[str]  = []
 
         self._no_signal = _make_no_signal_jpeg()
 
@@ -163,25 +170,18 @@ class WebServer:
         self,
         *,
         frame: Optional[np.ndarray] = None,
-        mask:  Optional[np.ndarray] = None,
         telemetry: Optional[dict]   = None,
     ) -> None:
-        """Push the latest frame and telemetry from the main loop."""
-        jpeg = mask_jpeg = None
+        """Push the annotated overlay frame and telemetry from the main loop."""
+        jpeg = None
         if frame is not None:
             ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY])
             if ok:
                 jpeg = buf.tobytes()
-        if mask is not None:
-            ok, buf = cv2.imencode(".jpg", mask, [cv2.IMWRITE_JPEG_QUALITY, 65])
-            if ok:
-                mask_jpeg = buf.tobytes()
 
         with self._lock:
             if jpeg is not None:
                 self._jpeg = jpeg
-            if mask_jpeg is not None:
-                self._mask_jpeg = mask_jpeg
             if telemetry is not None:
                 self._telemetry = dict(telemetry)
 
@@ -261,12 +261,45 @@ class WebServer:
     def _mjpeg(self, mask: bool = False):
         interval = 1.0 / _STREAM_FPS
         while True:
-            t0 = time.monotonic()
-            with self._lock:
-                jpeg = (self._mask_jpeg if mask else self._jpeg) or self._no_signal
+            t0   = time.monotonic()
+            jpeg = self._get_jpeg(mask=mask)
             yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
             elapsed = time.monotonic() - t0
             time.sleep(max(0.0, interval - elapsed))
+
+    def _get_jpeg(self, mask: bool = False) -> bytes:
+        """
+        Return a JPEG for the MJPEG stream.
+
+        Normal view  : annotated overlay pushed by main loop, falling back to the
+                       raw frame from perception if no overlay has been pushed yet.
+        Mask view    : red HSV mask pulled directly from perception.
+        """
+        if mask:
+            if self._perception is not None:
+                frame = self._perception.get_red_mask_frame()
+                if frame is not None:
+                    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 65])
+                    if ok:
+                        return buf.tobytes()
+            return self._no_signal
+
+        # Normal view — prefer the annotated overlay from push()
+        with self._lock:
+            pushed = self._jpeg
+
+        if pushed is not None:
+            return pushed
+
+        # Fall back to raw frame from perception (available as soon as camera starts)
+        if self._perception is not None:
+            frame = self._perception.get_frame()
+            if frame is not None:
+                ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY])
+                if ok:
+                    return buf.tobytes()
+
+        return self._no_signal
 
     # ── SSE telemetry ─────────────────────────────────────────────────────────
 

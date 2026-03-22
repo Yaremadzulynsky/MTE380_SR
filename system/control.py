@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 from simple_pid import PID
 
+import config as _config_module
 from bridge import SerialBridge
 
 
@@ -34,19 +35,6 @@ from bridge import SerialBridge
 
 TICKS_PER_REV = 680   # encoder ticks per wheel revolution
 MAX_RPM       = 320   # maximum commanded RPM
-
-
-# ── Motor PID defaults ────────────────────────────────────────────────────────
-# Error  : RPM  (target_rpm − measured_rpm)
-# Output : motor voltage [-1, 1]
-#
-# Starting point:
-#   kp = 1/MAX_RPM ≈ 0.003  →  full-speed RPM error ≈ 1.0 V output
-#   ki, kd = 0 initially; add once kp is stable
-
-MOTOR_KP = 1.0 / MAX_RPM   # ≈ 0.003125
-MOTOR_KI = 0.0005
-MOTOR_KD = 0.0
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -59,13 +47,6 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 class MotorCommand:
     left:  float   # desired speed fraction [-1, 1], where ±1 = ±MAX_RPM
     right: float
-
-
-@dataclass
-class MotorPIDConfig:
-    kp: float = MOTOR_KP
-    ki: float = MOTOR_KI
-    kd: float = MOTOR_KD
 
 
 # ── Controller ────────────────────────────────────────────────────────────────
@@ -85,21 +66,21 @@ class LocalMotorController:
 
     def __init__(
         self,
-        serial_port:   str,
-        baud:          int,
-        dry_run:       bool            = False,
-        motor_pid_cfg: MotorPIDConfig | None = None,
+        serial_port: str,
+        baud:        int,
+        dry_run:     bool = False,
+        cfg:         _config_module.Config | None = None,
     ) -> None:
         self.serial_port = serial_port
         self.baud        = baud
         self.dry_run     = dry_run
 
-        cfg = motor_pid_cfg or MotorPIDConfig()
+        c = cfg if cfg is not None else _config_module.get()
 
         # One PID per wheel; setpoint is updated each call to send_drive()
-        self._pid_left  = PID(cfg.kp, cfg.ki, cfg.kd,
+        self._pid_left  = PID(c.motor_kp, c.motor_ki, c.motor_kd,
                               setpoint=0, output_limits=(-1.0, 1.0), sample_time=None)
-        self._pid_right = PID(cfg.kp, cfg.ki, cfg.kd,
+        self._pid_right = PID(c.motor_kp, c.motor_ki, c.motor_kd,
                               setpoint=0, output_limits=(-1.0, 1.0), sample_time=None)
 
         self._lock = threading.Lock()
@@ -127,9 +108,9 @@ class LocalMotorController:
             self.bridge.on_encoders = self._on_encoders
             self.bridge.start()
 
-    def set_motor_pid(self, cfg: MotorPIDConfig) -> None:
-        """Update wheel PID gains (e.g. after reloading pid_config.json); resets integrators."""
-        t = (cfg.kp, cfg.ki, cfg.kd)
+    def set_motor_pid(self, cfg: _config_module.Config) -> None:
+        """Update wheel PID gains from a Config object; resets integrators."""
+        t = (cfg.motor_kp, cfg.motor_ki, cfg.motor_kd)
         self._pid_left.tunings = t
         self._pid_right.tunings = t
         self._pid_left.reset()

@@ -34,11 +34,12 @@ while the output is saturated.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from enum import Enum
 
 from simple_pid import PID
 
+import config as _config_module
+from config import Config
 from perception import FrameDetection
 
 
@@ -49,48 +50,12 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 # ── States ────────────────────────────────────────────────────────────────────
 
 class State(Enum):
-    LINE_FOLLOW   = "LINE_FOLLOW"
-    DRIVE_FORWARD = "DRIVE_FORWARD"
-    PICKUP        = "PICKUP"
-    TURN_180      = "TURN_180"
-    RETURN        = "RETURN"
-    DONE          = "DONE"
-
-
-# ── Configuration ─────────────────────────────────────────────────────────────
-
-@dataclass
-class Config:
-    # ── Steering PID ─────────────────────────────────────────────────────────
-    steer_kp:        float = 0.65
-    steer_ki:        float = 0.04
-    steer_kd:        float = 0.10
-    steer_out_limit: float = 0.80   # output clamped to ±this value
-
-    # ── Forward speed (fraction of MAX_RPM) ──────────────────────────────────
-    base_speed:      float = 0.28   # speed at zero line error
-    min_speed:       float = 0.16   # speed at maximum line error
-    max_speed:       float = 0.45   # hard ceiling (line follow + steer mix)
-    search_turn:     float = 0.18   # desired differential magnitude when line is lost
-    # Caps search spin only — independent of max_speed so a low line-follow cap does not
-    # force a tiny in-place search (~0.08 → wheels barely move).
-    search_turn_max: float = 0.32
-    # Require this many consecutive frames with no red before starting search spin.
-    # Stops brief contour flicker from looking like “rotating on the line”.
-    lost_frames_before_search: int = 5
-
-    # ── Drive-forward (encoder-based) ────────────────────────────────────────
-    forward_ticks:   int   = 800    # average encoder ticks — tune on hardware
-    forward_speed:   float = 0.25
-
-    # ── 180° turn (timed) ────────────────────────────────────────────────────
-    turn_speed:      float = 0.30
-    turn_duration_s: float = 2.2    # tune so the robot rotates ~180°
-
-    # ── Servo / claw ─────────────────────────────────────────────────────────
-    claw_open:       float = 0.0    # degrees, servo resting position
-    claw_closed:     float = 90.0   # degrees, gripping position
-    pickup_hold_s:   float = 0.8    # seconds to hold claw before turning
+    LINE_FOLLOW   = “LINE_FOLLOW”
+    DRIVE_FORWARD = “DRIVE_FORWARD”
+    PICKUP        = “PICKUP”
+    TURN_180      = “TURN_180”
+    RETURN        = “RETURN”
+    DONE          = “DONE”
 
 
 # ── Output ────────────────────────────────────────────────────────────────────
@@ -108,8 +73,8 @@ class ControlOutput:
 class MissionStateMachine:
     """One step() call per control-loop tick."""
 
-    def __init__(self, config: Config | None = None) -> None:
-        self.cfg   = config or Config()
+    def __init__(self, cfg: Config | None = None) -> None:
+        self.cfg   = cfg if cfg is not None else _config_module.get()
         self.state = State.LINE_FOLLOW
 
         self._t0         = time.time()

@@ -9,6 +9,9 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 
+import config as _config_module
+from config import Config
+
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
@@ -117,34 +120,23 @@ class Perception:
     _BLUE_LO = np.array([ 95, 120,  70], np.uint8)
     _BLUE_HI = np.array([135, 255, 255], np.uint8)
 
-    def __init__(
-        self,
-        width:  int   = 640,
-        height: int   = 480,
-        roi_top_ratio: float = 0.0,   # 0 = full frame; else ignore top fraction (e.g. 0.5 = bottom half)
-        red_min_area:  float = 80.0,
-        blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
-        t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
-        camera_channel_order: Literal["rgb", "bgr"] = "bgr",
-        geom_enable: bool = True,
-        geom_lateral_norm_m: float = 0.10,
-        red_loss_debounce_frames: int = 4,
-        red_error_ema_alpha: float = 0.35,
-    ) -> None:
-        self.width  = width
-        self.height = height
-        self.roi_top_ratio = _clamp(roi_top_ratio, 0.0, 0.95)
-        self.red_min_area  = red_min_area
-        self.blue_min_area = blue_min_area
-        self.t_junction_width_ratio = t_junction_width_ratio
+    def __init__(self, cfg: Config | None = None) -> None:
+        c = cfg if cfg is not None else _config_module.get()
+
+        self.width  = c.camera_width
+        self.height = c.camera_height
+        self.roi_top_ratio = _clamp(c.roi_top_ratio, 0.0, 0.95)
+        self.red_min_area  = 80.0
+        self.blue_min_area = 1500.0
+        self.t_junction_width_ratio = 0.5
         # Picamera2 main stream is often labeled "RGB888" but the buffer is frequently BGR order
         # on Raspberry Pi; using COLOR_RGB2BGR then BGR2HSV swaps R/B and breaks hue detection.
-        self._camera_channel_order = camera_channel_order
+        self._camera_channel_order: Literal["rgb", "bgr"] = "bgr"
 
-        self.geom_enable = geom_enable
-        self.geom_lateral_norm_m = float(geom_lateral_norm_m)
-        self.red_loss_debounce_frames = max(1, int(red_loss_debounce_frames))
-        self.red_error_ema_alpha = _clamp(float(red_error_ema_alpha), 0.0, 1.0)
+        self.geom_enable = c.geom_enable
+        self.geom_lateral_norm_m = float(c.geom_lateral_norm_m)
+        self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
+        self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
 
         # Raw-red debounce + EMA (see _stabilize_red)
         self._red_miss_streak = 0
@@ -152,51 +144,44 @@ class Perception:
         self._red_error_ema = 0.0
         self._red_ema_seeded = False
         self._last_t_junction = False
-        self._last_red_mask: np.ndarray | None = None  # cached for web stream
+        self._last_frame: np.ndarray | None = None
+        self._last_red_mask: np.ndarray | None = None
 
-        self._fx = _focal_px(width, _CAMERA_HORIZONTAL_FOV_DEG)
+        self._fx = _focal_px(self.width, _CAMERA_HORIZONTAL_FOV_DEG)
         self._fy = self._fx  # square pixels
-        self._cx = width / 2.0
-        self._cy = height / 2.0
+        self._cx = self.width / 2.0
+        self._cy = self.height / 2.0
 
         self._cam = Picamera2()
-        cfg = self._cam.create_preview_configuration(
-            main={"size": (width, height), "format": "RGB888"},
+        cam_cfg = self._cam.create_preview_configuration(
+            main={"size": (self.width, self.height), "format": "RGB888"},
             buffer_count=2,
         )
-        self._cam.configure(cfg)
+        self._cam.configure(cam_cfg)
         self._cam.start()
 
-    def configure_geometry(
-        self,
-        *,
-        geom_enable: bool | None = None,
-        geom_lateral_norm_m: float | None = None,
-    ) -> None:
-        """Update geometry toggles from pid_config without reopening the camera."""
-        if geom_enable is not None:
-            self.geom_enable = bool(geom_enable)
-        if geom_lateral_norm_m is not None:
-            self.geom_lateral_norm_m = float(geom_lateral_norm_m)
-
-    def configure_red_stability(
-        self,
-        *,
-        red_loss_debounce_frames: int | None = None,
-        red_error_ema_alpha: float | None = None,
-    ) -> None:
-        if red_loss_debounce_frames is not None:
-            self.red_loss_debounce_frames = max(1, int(red_loss_debounce_frames))
-        if red_error_ema_alpha is not None:
-            self.red_error_ema_alpha = _clamp(float(red_error_ema_alpha), 0.0, 1.0)
+    def reconfigure(self, cfg: Config) -> None:
+        """Apply updated config values without reopening the camera."""
+        self.geom_enable              = bool(cfg.geom_enable)
+        self.geom_lateral_norm_m      = float(cfg.geom_lateral_norm_m)
+        self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
+        self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
+        self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
         raw = self._cam.capture_array("main")
         if self._camera_channel_order == "rgb":
-            return cv2.cvtColor(raw, cv2.COLOR_RGB2BGR)
-        return np.ascontiguousarray(raw)
+            frame = cv2.cvtColor(raw, cv2.COLOR_RGB2BGR)
+        else:
+            frame = np.ascontiguousarray(raw)
+        self._last_frame = frame
+        return frame
+
+    def get_frame(self) -> np.ndarray | None:
+        """Return the most recently captured raw frame (BGR). Thread-safe read."""
+        return self._last_frame
 
     def detect(self, frame: np.ndarray) -> FrameDetection:
         h, w = frame.shape[:2]
