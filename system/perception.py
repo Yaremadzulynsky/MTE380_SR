@@ -200,26 +200,14 @@ class Perception:
     ``red_error_ema_alpha``: low-pass on ``red_error`` when raw red is visible (0 = off).
     """
 
-    # ── HSV colour ranges ─────────────────────────────────────────────────────
-    # Red often wraps around 0/179 in HSV, so keep two bands.
-    _RED_LO1 = np.array([  0, 100,  70], np.uint8)
-    _RED_HI1 = np.array([ 12, 255, 255], np.uint8)
-    _RED_LO2 = np.array([168, 100,  70], np.uint8)
-    _RED_HI2 = np.array([179, 255, 255], np.uint8)
-
-    # Blue tuned to be a bit more forgiving but still reject washed-out noise.
-    _BLUE_LO = np.array([ 95, 120,  70], np.uint8)
-    _BLUE_HI = np.array([135, 255, 255], np.uint8)
-
     def __init__(self, cfg: Config | None = None) -> None:
         c = cfg if cfg is not None else _config_module.get()
 
         self.width  = c.camera_width
         self.height = c.camera_height
         self.roi_top_ratio = _clamp(c.roi_top_ratio, 0.0, 0.95)
-        self.red_min_area  = 80.0
-        self.blue_min_area = 1500.0
-        self.t_junction_width_ratio = 0.5
+
+        self._update_hsv_ranges(c)
 
         self.geom_enable = c.geom_enable
         self.geom_lateral_norm_m = float(c.geom_lateral_norm_m)
@@ -250,6 +238,19 @@ class Perception:
         self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
         self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
+        self._update_hsv_ranges(cfg)
+
+    def _update_hsv_ranges(self, cfg: Config) -> None:
+        """Rebuild HSV mask arrays and area thresholds from config."""
+        self._RED_LO1 = np.array([cfg.red_h_lo1, cfg.red_s_min, cfg.red_v_min], np.uint8)
+        self._RED_HI1 = np.array([cfg.red_h_hi1, 255,           255          ], np.uint8)
+        self._RED_LO2 = np.array([cfg.red_h_lo2, cfg.red_s_min, cfg.red_v_min], np.uint8)
+        self._RED_HI2 = np.array([cfg.red_h_hi2, 255,           255          ], np.uint8)
+        self._BLUE_LO = np.array([cfg.blue_h_lo, cfg.blue_s_min, cfg.blue_v_min], np.uint8)
+        self._BLUE_HI = np.array([cfg.blue_h_hi, 255,            255          ], np.uint8)
+        self.red_min_area           = float(cfg.red_min_area)
+        self.blue_min_area          = float(cfg.blue_min_area)
+        self.t_junction_width_ratio = float(cfg.t_junction_ratio)
 
     # ── Public ────────────────────────────────────────────────────────────────
 

@@ -65,6 +65,21 @@ class Config:
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
 
+    # ── Line detection HSV ────────────────────────────────────────────────────
+    red_h_lo1:        int   = 0
+    red_h_hi1:        int   = 12
+    red_h_lo2:        int   = 168
+    red_h_hi2:        int   = 179
+    red_s_min:        int   = 100
+    red_v_min:        int   = 70
+    blue_h_lo:        int   = 95
+    blue_h_hi:        int   = 135
+    blue_s_min:       int   = 120
+    blue_v_min:       int   = 70
+    red_min_area:     float = 80.0
+    blue_min_area:    float = 1500.0
+    t_junction_ratio: float = 0.5
+
     # ── Camera / runtime ──────────────────────────────────────────────────────
     camera_width:  int   = 640
     camera_height: int   = 480
@@ -97,6 +112,12 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Vision / perception", [
         "geom_enable", "geom_lateral_norm_m",
         "red_loss_debounce_frames", "red_error_ema_alpha",
+    ]),
+    ("Line detection HSV", [
+        "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
+        "red_s_min", "red_v_min",
+        "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
+        "red_min_area", "blue_min_area", "t_junction_ratio",
     ]),
     ("Camera / runtime", [
         "camera_width", "camera_height", "fps", "roi_top_ratio",
