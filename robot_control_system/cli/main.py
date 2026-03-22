@@ -62,7 +62,7 @@ class RobotShell(cmd.Cmd):
     intro  = "MTE 380 — type 'help' for commands, 'exit' to quit."
     prompt = '(robot) '
 
-    _STATES = ['idle', 'line_follow', 'find_line']
+    _STATES = ['idle', 'line_follow']
 
     def __init__(self, sm, robot):
         super().__init__()
@@ -216,7 +216,7 @@ def cmd_serve(args):
     from state_machine.hardware.robot       import Robot, MAX_SPEED, MAX_ROT_SPEED
     from state_machine.vision.line_detector import LineDetector
     from state_machine.machine              import StateMachine
-    from state_machine.states               import Idle, LineFollow, FindLine
+    from state_machine.states               import Idle, LineFollow
     from web_server.server                  import WebServer
 
     log = logging.getLogger('cli')
@@ -254,7 +254,6 @@ def cmd_serve(args):
         StateMachine(robot, detector)
         .register(Idle())
         .register(LineFollow())
-        .register(FindLine())
     )
 
     # ── Web server ────────────────────────────────────────────────────────────
@@ -417,7 +416,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--host', default='0.0.0.0')
     p.add_argument('--web-port', type=int, default=8321)
     p.add_argument('--initial-state', default='idle',
-                   choices=['idle', 'line_follow', 'find_line'])
+                   choices=['idle', 'line_follow'])
     p.add_argument('--max-speed', type=float, default=None)
     p.add_argument('--max-rot-speed', type=float, default=None)
 

@@ -54,8 +54,7 @@ class LineFollow(State):
             return None
 
         if target_heading is None:
-            log.warning('Line lost — switching to find_line')
-            return 'find_line'
+            return None
 
         theta = odometry.heading - target_heading
         dy = math.cos(theta)
