@@ -233,6 +233,8 @@ class WebServer:
                 s_min=body.get('s_min'),
                 v_min=body.get('v_min'),
                 min_mask_pixels=body.get('min_mask_pixels'),
+                hue_center=body.get('hue_center'),
+                hue_tol=body.get('hue_tol'),
             )
             return jsonify(det.get_vision_params())
 

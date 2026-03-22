@@ -223,6 +223,16 @@ class LineDetector:
         self._hsv_upper1 = np.array(rc['upper1'], dtype=np.uint8).copy()
         self._hsv_lower2 = np.array(rc['lower2'], dtype=np.uint8).copy()
         self._hsv_upper2 = np.array(rc['upper2'], dtype=np.uint8).copy()
+        self._s_min: int = int(self._hsv_lower1[1])
+        self._v_min: int = int(self._hsv_lower1[2])
+        # Derive hue center/tolerance from loaded arrays (OpenCV H scale 0-179)
+        if int(self._hsv_lower1[0]) == 0 and int(self._hsv_lower2[0]) > 0:
+            # wrapping case (e.g. red): [0, upper1_h] ∪ [lower2_h, 179]
+            self._hue_tol    = max(int(self._hsv_upper1[0]), 179 - int(self._hsv_lower2[0]))
+            self._hue_center = 0
+        else:
+            self._hue_center = (int(self._hsv_lower1[0]) + int(self._hsv_upper1[0])) // 2
+            self._hue_tol    = (int(self._hsv_upper1[0]) - int(self._hsv_lower1[0])) // 2
         self._min_mask_pixels: int = _vc['min_mask_pixels']
         self._cam_fwd_m: float = float(_vc.get('camera_forward_m', 0.15))
         self._n_segments: int = int(_vc.get('line_segments', 4))
@@ -257,27 +267,53 @@ class LineDetector:
         """Return current tunable detection parameters."""
         with self._lock:
             return {
-                's_min':           int(self._hsv_lower1[1]),
-                'v_min':           int(self._hsv_lower1[2]),
+                's_min':           self._s_min,
+                'v_min':           self._v_min,
                 'min_mask_pixels': self._min_mask_pixels,
+                'hue_center':      self._hue_center,
+                'hue_tol':         self._hue_tol,
             }
 
     def set_vision_params(self, *,
                           s_min: Optional[int] = None,
                           v_min: Optional[int] = None,
-                          min_mask_pixels: Optional[int] = None) -> None:
+                          min_mask_pixels: Optional[int] = None,
+                          hue_center: Optional[int] = None,
+                          hue_tol: Optional[int] = None) -> None:
         """Update detection parameters at runtime (thread-safe)."""
         with self._lock:
             if s_min is not None:
-                s = int(max(0, min(255, s_min)))
-                self._hsv_lower1[1] = s
-                self._hsv_lower2[1] = s
+                self._s_min = int(max(0, min(255, s_min)))
             if v_min is not None:
-                v = int(max(0, min(255, v_min)))
-                self._hsv_lower1[2] = v
-                self._hsv_lower2[2] = v
+                self._v_min = int(max(0, min(255, v_min)))
+            if hue_center is not None:
+                self._hue_center = int(max(0, min(179, hue_center)))
+            if hue_tol is not None:
+                self._hue_tol = int(max(0, min(89, hue_tol)))
             if min_mask_pixels is not None:
                 self._min_mask_pixels = max(0, int(min_mask_pixels))
+            self._apply_hue()
+
+    def _apply_hue(self) -> None:
+        """Recompute HSV range arrays from current hue_center, hue_tol, s_min, v_min."""
+        s, v = self._s_min, self._v_min
+        lo = self._hue_center - self._hue_tol
+        hi = self._hue_center + self._hue_tol
+        if lo < 0:
+            self._hsv_lower1 = np.array([0,        s, v],   dtype=np.uint8)
+            self._hsv_upper1 = np.array([hi,      255, 255], dtype=np.uint8)
+            self._hsv_lower2 = np.array([lo + 180, s, v],   dtype=np.uint8)
+            self._hsv_upper2 = np.array([179,     255, 255], dtype=np.uint8)
+        elif hi > 179:
+            self._hsv_lower1 = np.array([lo,        s, v],   dtype=np.uint8)
+            self._hsv_upper1 = np.array([179,      255, 255], dtype=np.uint8)
+            self._hsv_lower2 = np.array([0,         s, v],   dtype=np.uint8)
+            self._hsv_upper2 = np.array([hi - 180, 255, 255], dtype=np.uint8)
+        else:
+            self._hsv_lower1 = np.array([lo, s, v],   dtype=np.uint8)
+            self._hsv_upper1 = np.array([hi, 255, 255], dtype=np.uint8)
+            self._hsv_lower2 = np.array([lo, s, v],   dtype=np.uint8)
+            self._hsv_upper2 = np.array([hi, 255, 255], dtype=np.uint8)
 
     def set_smoothed_heading(self, theta: Optional[float]) -> None:
         """Set the smoothed robot-frame turn angle for camera overlay annotation.
