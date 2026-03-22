@@ -113,20 +113,17 @@ class StateMachine:
 
     def get_line_params(self) -> dict:
         """Return current line-follow tuning parameters."""
-        lf  = self._states.get('line_follow')
-        lft = self._states.get('line_follow_turn')
+        lf = self._states.get('line_follow')
         return {
             'filter_kp':          self._heading_filter_kp,
             'lateral_deadzone_m': self._lateral_deadzone_m,
-            'follow_speed':       lf._follow_speed  if lf  else None,
-            'turn_speed':         lft._turn_speed   if lft else None,
+            'follow_speed':       lf._follow_speed if lf else None,
         }
 
     def set_line_params(self, *,
                         filter_kp:          Optional[float] = None,
                         lateral_deadzone_m: Optional[float] = None,
-                        follow_speed:       Optional[float] = None,
-                        turn_speed:         Optional[float] = None) -> dict:
+                        follow_speed:       Optional[float] = None) -> dict:
         """Update line-follow tuning parameters at runtime (thread-safe)."""
         if filter_kp is not None:
             self._heading_filter_kp = max(0.0, min(1.0, float(filter_kp)))
@@ -136,10 +133,6 @@ class StateMachine:
             lf = self._states.get('line_follow')
             if lf is not None:
                 lf._follow_speed = max(0.0, min(1.0, float(follow_speed)))
-        if turn_speed is not None:
-            lft = self._states.get('line_follow_turn')
-            if lft is not None:
-                lft._turn_speed = max(0.0, min(1.0, float(turn_speed)))
         return self.get_line_params()
 
     # ── Registration ──────────────────────────────────────────────────────────

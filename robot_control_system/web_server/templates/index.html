@@ -490,12 +490,6 @@
           <input id="lf-speed-range" type="range" min="0" max="1" step="0.01" value="0.35" style="flex:1;">
         </div>
 
-        <div class="tuner-row">
-          <span class="tuner-lbl">Turn speed</span>
-          <input id="lf-turn-speed" class="tuner-input" type="number" step="0.01" min="0" max="1" value="0.20">
-          <input id="lf-turn-speed-range" type="range" min="0" max="1" step="0.01" value="0.20" style="flex:1;">
-        </div>
-
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="ctrl-btn" onclick="loadLineFollow()" style="color:var(--dim);">&#8635; LOAD</button>
           <span id="lf-status" style="font-size:11px; color:var(--dim);"></span>
@@ -870,10 +864,6 @@
           document.getElementById('lf-speed').value       = d.follow_speed;
           document.getElementById('lf-speed-range').value = d.follow_speed;
         }
-        if (d.turn_speed !== null && d.turn_speed !== undefined) {
-          document.getElementById('lf-turn-speed').value       = d.turn_speed;
-          document.getElementById('lf-turn-speed-range').value = d.turn_speed;
-        }
         setStatus('lf-status', 'loaded', true);
       })
       .catch(() => setStatus('lf-status', 'load error', false));
@@ -887,7 +877,6 @@
         filter_kp:          parseFloat(document.getElementById('lf-filter-kp').value),
         lateral_deadzone_m: parseFloat(document.getElementById('lf-deadzone').value),
         follow_speed:       parseFloat(document.getElementById('lf-speed').value),
-        turn_speed:         parseFloat(document.getElementById('lf-turn-speed').value),
       }),
     })
       .then(r => r.json())
@@ -898,7 +887,6 @@
   pairInputs('lf-filter-kp',   'lf-filter-kp-range',   debounce(applyLineFollow, 250));
   pairInputs('lf-deadzone',    'lf-deadzone-range',    debounce(applyLineFollow, 250));
   pairInputs('lf-speed',       'lf-speed-range',       debounce(applyLineFollow, 250));
-  pairInputs('lf-turn-speed',  'lf-turn-speed-range',  debounce(applyLineFollow, 250));
 
   loadLineFollow();
 

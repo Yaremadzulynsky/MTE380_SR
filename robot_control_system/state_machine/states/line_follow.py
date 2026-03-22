@@ -39,8 +39,6 @@ class LineFollow(State):
 
     def __init__(self):
         self._follow_speed = float(_config.get()['line_follow'].get('follow_speed', 0.35))
-        _lft = _config.get().get('line_follow_turn', {})
-        self._curvature_threshold_deg = float(_lft.get('curvature_threshold_deg', 15.0))
 
     def enter(self, robot: 'Robot', detector: Optional['LineDetector'],
               odometry: Optional['Odometry'],
@@ -59,18 +57,10 @@ class LineFollow(State):
             log.warning('Line lost — switching to find_line')
             return 'find_line'
 
-        # Switch to turn state if curvature exceeds threshold.
-        if detector is not None:
-            result = detector.get_result()
-            if result is not None and result.curvature is not None:
-                if abs(math.degrees(result.curvature)) > self._curvature_threshold_deg:
-                    log.info('Curvature %.1f° — switching to line_follow_turn',
-                             math.degrees(result.curvature))
-                    return 'line_follow_turn'
-
         theta = odometry.heading - target_heading
-        robot.add_direction(math.sin(theta), math.cos(theta))
-        robot.set_speed(self._follow_speed)
+        dy = math.cos(theta)
+        robot.add_direction(math.sin(theta), dy)
+        robot.set_speed(self._follow_speed * dy)
         return None
 
     def exit(self, robot: 'Robot', detector: Optional['LineDetector'],
