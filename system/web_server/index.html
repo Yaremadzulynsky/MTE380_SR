@@ -738,7 +738,12 @@
     }
 
     document.querySelectorAll("input").forEach(el => {
-      el.addEventListener("input", () => { markChanges(); scheduleAutoSave(); });
+      if (el.type === "range" || el.type === "checkbox") {
+        el.addEventListener("input", () => { markChanges(); scheduleAutoSave(); });
+      } else {
+        el.addEventListener("input", markChanges);
+        el.addEventListener("change", () => { markChanges(); scheduleAutoSave(); });
+      }
     });
 
     document.querySelectorAll(".info-btn").forEach(btn => {
