@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import dataclasses
 import sys
-import time
 from pathlib import Path
 
 import cv2
@@ -50,27 +49,14 @@ def _config_path() -> Path:
     return _config_module._CONFIG_PATH
 
 
-# ── Camera streaming helpers ──────────────────────────────────────────────────
+# ── Camera frame helper ───────────────────────────────────────────────────────
 
-def _jpeg_stream(get_frame_fn, fps: float = 15.0):
-    """Generator yielding MJPEG frames from a callable that returns a BGR ndarray."""
-    period = 1.0 / fps
-    while True:
-        t0 = time.time()
-        frame = get_frame_fn()
-        if frame is not None:
-            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            if ok:
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n"
-                    + buf.tobytes()
-                    + b"\r\n"
-                )
-        elapsed = time.time() - t0
-        remaining = period - elapsed
-        if remaining > 0:
-            time.sleep(remaining)
+def _encode_jpeg(frame) -> bytes | None:
+    """Encode a BGR ndarray to JPEG bytes, or return None on failure."""
+    if frame is None:
+        return None
+    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    return buf.tobytes() if ok else None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -139,24 +125,26 @@ def mission_stop():
     return jsonify({"ok": True, "state": _runner.state})
 
 
-@app.get("/stream/camera")
-def stream_camera():
+@app.get("/api/frame/camera")
+def frame_camera():
     if _runner is None:
-        return jsonify({"error": "No runner attached."}), 503
-    return Response(
-        _jpeg_stream(_runner.get_annotated_frame),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
-    )
+        return "", 503
+    data = _encode_jpeg(_runner.get_annotated_frame())
+    if data is None:
+        return "", 204
+    return Response(data, mimetype="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
 
 
-@app.get("/stream/mask")
-def stream_mask():
+@app.get("/api/frame/mask")
+def frame_mask():
     if _runner is None:
-        return jsonify({"error": "No runner attached."}), 503
-    return Response(
-        _jpeg_stream(_runner.get_mask_frame),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
-    )
+        return "", 503
+    data = _encode_jpeg(_runner.get_mask_frame())
+    if data is None:
+        return "", 204
+    return Response(data, mimetype="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
 
 
 # ── Validation ────────────────────────────────────────────────────────────────
