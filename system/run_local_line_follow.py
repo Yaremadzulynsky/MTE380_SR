@@ -88,6 +88,17 @@ def load_pid_config(path: Path) -> dict:
         return dict(_FALLBACK)
 
 
+def _is_lost_line_search_spin(det: FrameDetection, output: ControlOutput) -> bool:
+    """Pure in-place spin during LINE_FOLLOW / RETURN when perception says line lost (not soft coast)."""
+    if det.red_found:
+        return False
+    if output.state not in (State.LINE_FOLLOW, State.RETURN):
+        return False
+    L, R = output.left, output.right
+    # Soft loss: left == right (forward coast). Search: left ≈ −right.
+    return abs(L + R) < 1e-4 and L * R < -1e-8
+
+
 def apply_pid_config_to_args(cfg: dict, args: argparse.Namespace) -> None:
     """Copy merged pid_config dict onto argparse Namespace (field names differ for a few keys)."""
     for k, v in cfg.items():
@@ -490,6 +501,7 @@ def main() -> None:
     running = False   # waiting for 'g' to start
     mission_log_fp: TextIO | None = None
     mission_t0: float | None = None
+    prev_lost_line_search_spin = False
 
     control.send_claw(args.claw_open)
 
@@ -501,7 +513,7 @@ def main() -> None:
 
     def go_reload_and_start() -> None:
         """Reload pid_config.json (dashboard), apply motor + state machine, then run."""
-        nonlocal sm, running, mission_log_fp, mission_t0
+        nonlocal sm, running, mission_log_fp, mission_t0, prev_lost_line_search_spin
         fresh = load_pid_config(cfg_path)
         apply_pid_config_to_args(fresh, args)
         control.set_motor_pid(
@@ -513,6 +525,7 @@ def main() -> None:
             red_error_ema_alpha=args.red_error_ema_alpha,
         )
         sm = _make_sm()
+        prev_lost_line_search_spin = False
         running = True
         mission_t0 = time.monotonic()
         _stop_mission_log()
@@ -571,6 +584,7 @@ def main() -> None:
             elif key == "s" and running:
                 running = False
                 mission_t0 = None
+                prev_lost_line_search_spin = False
                 _stop_mission_log()
                 control.idle()
                 print("[KEY] stop (motors idle, serial still open)", flush=True)
@@ -590,6 +604,11 @@ def main() -> None:
                 left, right = control.encoder_ticks
                 output      = sm.step(det, left, right)
 
+                cur_search = _is_lost_line_search_spin(det, output)
+                if cur_search and not prev_lost_line_search_spin:
+                    control.reset_wheel_pids()
+                prev_lost_line_search_spin = cur_search
+
                 control.send_drive(MotorCommand(left=output.left, right=output.right))
                 if output.claw is not None:
                     control.send_claw(output.claw)
@@ -597,6 +616,7 @@ def main() -> None:
                 if output.state == State.DONE:
                     running = False
                     mission_t0 = None
+                    prev_lost_line_search_spin = False
                     _stop_mission_log()
                     control.idle()
                     print("Mission complete. Press 'g' to run again.", flush=True)
@@ -657,6 +677,7 @@ def main() -> None:
                     elif k == ord("s") and running:
                         running = False
                         mission_t0 = None
+                        prev_lost_line_search_spin = False
                         _stop_mission_log()
                         control.idle()
                         print("[KEY] stop (motors idle, serial still open)", flush=True)

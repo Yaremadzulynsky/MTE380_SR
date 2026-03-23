@@ -135,6 +135,11 @@ class LocalMotorController:
         self._pid_left.reset()
         self._pid_right.reset()
 
+    def reset_wheel_pids(self) -> None:
+        """Clear inner-loop integral state (e.g. when entering lost-line search spin)."""
+        self._pid_left.reset()
+        self._pid_right.reset()
+
     # ── Commands ──────────────────────────────────────────────────────────────
 
     def send_drive(self, cmd: MotorCommand) -> None:
