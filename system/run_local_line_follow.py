@@ -138,8 +138,8 @@ def _build_mission_preview_bgr(
                 (255, 128, 0),
                 th,
                 cv2.LINE_AA,
-                tipLength=0.15,
-                tipAngle=35,
+                0,
+                0.15,
             )
     elif det.red_found:
         err = float(det.red_error)
@@ -156,8 +156,8 @@ def _build_mission_preview_bgr(
                 (255, 128, 0),
                 th,
                 cv2.LINE_AA,
-                tipLength=0.15,
-                tipAngle=35,
+                0,
+                0.15,
             )
     else:
         err = float(det.red_error)

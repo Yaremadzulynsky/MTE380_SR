@@ -79,15 +79,21 @@ class SerialBridge:
     def _read_loop(self):
         buf = bytearray()
         while self._running:
+            ser = self._ser
+            if ser is None or not ser.is_open:
+                time.sleep(0.05)
+                continue
             try:
-                chunk = self._ser.read(256)
+                chunk = ser.read(256)
                 if chunk:
                     if self.on_raw:
                         self.on_raw(chunk)
                     buf.extend(chunk)
                     buf = self._process(buf)
-            except serial.SerialException as e:
+            except (serial.SerialException, TypeError, OSError) as e:
                 log.error('Read error: %s', e)
+                if not self._running:
+                    break
                 time.sleep(1)
 
     def _process(self, buf: bytearray) -> bytearray:
