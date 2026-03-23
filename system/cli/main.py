@@ -121,6 +121,9 @@ class MissionRunner:
         from control import RotationController
         with self._lock:
             self._running = False
+        existing = self._active_ctrl
+        if existing is not None:
+            existing.done = True
         self._control.idle()
 
         def _move():
