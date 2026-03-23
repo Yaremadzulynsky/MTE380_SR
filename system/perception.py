@@ -122,8 +122,9 @@ class Perception:
 
     def read_frame(self) -> np.ndarray | None:
         raw = self._cam.capture_array("main")
-        # Picamera2 RGB888 buffer is RGB order — convert to BGR for OpenCV
-        frame = cv2.cvtColor(raw, cv2.COLOR_RGB2BGR)
+        # Picamera2 labels the stream "RGB888" but on Pi the buffer is typically BGR.
+        # Do NOT convert — treat the raw bytes as BGR directly (matches OpenCV convention).
+        frame = np.ascontiguousarray(raw)
         self._last_frame = frame
         return frame
 
