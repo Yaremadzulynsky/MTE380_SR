@@ -27,9 +27,9 @@ import numpy as np
 from picamera2 import Picamera2
 
 # Red: two hue bands (wraps at 0/179). Match local/perception.py. Tune under your lights.
-RED_LO1 = np.array([0, 85, 62], np.uint8)
-RED_HI1 = np.array([14, 255, 255], np.uint8)
-RED_LO2 = np.array([168, 85, 62], np.uint8)
+RED_LO1 = np.array([0, 155, 84], np.uint8)
+RED_HI1 = np.array([10, 255, 255], np.uint8)
+RED_LO2 = np.array([161, 155, 84], np.uint8)
 RED_HI2 = np.array([179, 255, 255], np.uint8)
 
 BLUE_LO = np.array([95, 120, 70], np.uint8)
