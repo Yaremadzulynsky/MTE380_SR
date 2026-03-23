@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
 from typing import Literal
 
 import cv2
@@ -14,96 +13,18 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
-def _focal_px(width: int, horizontal_fov_deg: float) -> float:
-    """Pinhole focal length in pixels from horizontal field of view."""
-    half = math.radians(horizontal_fov_deg) / 2.0
-    return (width / 2.0) / math.tan(half)
-
-
-def ground_xz_from_pixel(
-    u: float,
-    v: float,
-    *,
-    camera_height_m: float,
-    pitch_deg: float,
-    fx: float,
-    fy: float,
-    cx: float,
-    cy: float,
-) -> tuple[float, float] | None:
-    """
-    Ray through pixel (u,v) intersected with ground plane Y=0.
-
-    World: X right, Y up, Z forward (robot forward). Camera at (0, camera_height_m, 0)
-    looking ~forward and down; pitch_deg is depression below horizontal (optical axis).
-
-    Returns (X, Z) in metres on the ground, or None if the ray is degenerate.
-    """
-    pitch = math.radians(pitch_deg)
-    s, c = math.sin(pitch), math.cos(pitch)
-    # Columns = camera basis vectors expressed in world (OpenCV cam: +X right, +Y down, +Z forward).
-    R = np.array(
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, c, -s],
-            [0.0, s, c],
-        ],
-        dtype=np.float64,
-    )
-    xn = (u - cx) / fx
-    yn = (v - cy) / fy
-    d_cam = np.array([xn, yn, 1.0], dtype=np.float64)
-    n = float(np.linalg.norm(d_cam))
-    if n < 1e-12:
-        return None
-    d_cam /= n
-    d_w = R @ d_cam
-    if abs(d_w[1]) < 1e-9:
-        return None
-    # Ray: (0, h, 0) + t * d_w, intersect Y=0  =>  h + t * d_w[1] = 0
-    t = -camera_height_m / d_w[1]
-    if t <= 0.0:
-        return None
-    p = np.array([0.0, camera_height_m, 0.0], dtype=np.float64) + t * d_w
-    return float(p[0]), float(p[2])
-
-
-def lateral_error_normalized(x_m: float, lateral_norm_m: float) -> float:
-    """Map lateral offset (m) to [-1, 1] for steering PID (scale ≈ half track width)."""
-    if lateral_norm_m <= 1e-9:
-        return 0.0
-    return _clamp(x_m / lateral_norm_m, -1.0, 1.0)
-
-
-def lateral_x_at_axle(
-    x_b: float,
-    z_b: float,
-    x_c: float,
-    z_c: float,
-    camera_to_axle_m: float,
+def _u_on_line_at_v(
+    u_c: float,
+    v_c: float,
+    u_b: float,
+    v_b: float,
+    v_target: float,
 ) -> float:
-    """
-    Lateral tape position X on the ground at Z = -camera_to_axle_m.
-
-    World X–Z: X = right, Z = forward from the camera vertical (see ``ground_xz_from_pixel``).
-    The rear axle lies *behind* the camera along -Z; ``camera_to_axle_m`` is that distance (positive).
-
-    Two ground samples (bottom + centroid of the red blob) define a line in the X–Z plane;
-    we linearly extrapolate/interpolate X at the axle Z. If the samples are degenerate, returns ``x_b``.
-    """
-    if camera_to_axle_m <= 0.0:
-        return x_b
-    z_axle = -camera_to_axle_m
-    dz = z_c - z_b
-    if abs(dz) < 1e-6:
-        return x_b
-    return float(x_b + (x_c - x_b) * (z_axle - z_b) / dz)
-
-
-# Measured on robot — change in code if you remount the camera (not in pid_config).
-_CAMERA_HEIGHT_M = 0.095
-_CAMERA_PITCH_DEG = 39.0
-_CAMERA_HORIZONTAL_FOV_DEG = 62.2
+    """Linear u(v) along centroid → blob bottom; returns u at v_target (full-frame v)."""
+    dv = v_b - v_c
+    if abs(dv) < 1e-6:
+        return u_b
+    return float(u_c + (u_b - u_c) * (v_target - v_c) / dv)
 
 
 @dataclass
@@ -112,23 +33,25 @@ class FrameDetection:
     red_error:  float       # [-1, 1], positive = line is right of centre
     blue_found: bool        # blue target marker visible
     t_junction: bool        # wide red stripe = end T-junction
+    # Full-frame pixels for overlays (None when red not found / not yet tracked)
+    tape_cx_px: float | None = None   # horizontal centre of tape (mask centroid)
+    tape_cy_px: float | None = None   # vertical centre of mask centroid
+    track_x_px: float | None = None   # lateral anchor: u used for red_error (extrapolated or blob bottom)
+    track_y_px: float | None = None
 
 
 class Perception:
     """
     Reads one camera frame and returns a FrameDetection.
 
-    Red line : HSV mask → largest contour → lateral error (image or ground-plane model)
+    Red line : HSV mask → largest contour → lateral error in image space
     Blue target : HSV mask → any contour above min area
     T-junction  : red bounding-rect width > half the frame = horizontal end bar
 
-    When ``geom_enable`` is True, ``red_error`` uses ground-plane rays (camera pose is
-    fixed in code; tune ``geom_lateral_norm_m`` to map metres → ±1).
-
-    ``geom_camera_to_axle_m`` (optional): distance along the ground from the camera foot
-    to the wheelbase / control point. If > 0, lateral error is evaluated at Z = −that distance
-    by extrapolating from the blob bottom and centroid on the ground (two-point line in X–Z).
-    If 0, only the blob-bottom ground point is used (legacy behaviour).
+    Lateral error uses the blob **bottom** as the near-wheel anchor. The mask **centroid**
+    and bottom define a line in the image; ``line_axle_extrap`` extends that line downward
+    (larger v) by ``line_axle_extrap * (v_bottom - v_centroid)`` so steering references a
+    point closer to the wheelbase on curves. ``0`` = use the blob bottom only.
 
     ``red_loss_debounce_frames``: require this many consecutive raw misses before reporting
     ``red_found=False`` (holds last smoothed error meanwhile).
@@ -158,9 +81,7 @@ class Perception:
         blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
         camera_channel_order: Literal["rgb", "bgr"] = "bgr",
-        geom_enable: bool = True,
-        geom_lateral_norm_m: float = 0.10,
-        geom_camera_to_axle_m: float = 0.0,
+        line_axle_extrap: float = 0.0,
         red_loss_debounce_frames: int = 4,
         red_error_ema_alpha: float = 0.35,
     ) -> None:
@@ -174,9 +95,7 @@ class Perception:
         # on Raspberry Pi; using COLOR_RGB2BGR then BGR2HSV swaps R/B and breaks hue detection.
         self._camera_channel_order = camera_channel_order
 
-        self.geom_enable = geom_enable
-        self.geom_lateral_norm_m = float(geom_lateral_norm_m)
-        self.geom_camera_to_axle_m = max(0.0, float(geom_camera_to_axle_m))
+        self.line_axle_extrap = max(0.0, float(line_axle_extrap))
         self.red_loss_debounce_frames = max(1, int(red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(red_error_ema_alpha), 0.0, 1.0)
 
@@ -186,11 +105,10 @@ class Perception:
         self._red_error_ema = 0.0
         self._red_ema_seeded = False
         self._last_t_junction = False
-
-        self._fx = _focal_px(width, _CAMERA_HORIZONTAL_FOV_DEG)
-        self._fy = self._fx  # square pixels
-        self._cx = width / 2.0
-        self._cy = height / 2.0
+        self._last_tape_cx: float | None = None
+        self._last_tape_cy: float | None = None
+        self._last_track_x: float | None = None
+        self._last_track_y: float | None = None
 
         self._cam = Picamera2()
         cfg = self._cam.create_preview_configuration(
@@ -200,20 +118,10 @@ class Perception:
         self._cam.configure(cfg)
         self._cam.start()
 
-    def configure_geometry(
-        self,
-        *,
-        geom_enable: bool | None = None,
-        geom_lateral_norm_m: float | None = None,
-        geom_camera_to_axle_m: float | None = None,
-    ) -> None:
-        """Update geometry toggles from pid_config without reopening the camera."""
-        if geom_enable is not None:
-            self.geom_enable = bool(geom_enable)
-        if geom_lateral_norm_m is not None:
-            self.geom_lateral_norm_m = float(geom_lateral_norm_m)
-        if geom_camera_to_axle_m is not None:
-            self.geom_camera_to_axle_m = max(0.0, float(geom_camera_to_axle_m))
+    def configure_line_error(self, *, line_axle_extrap: float | None = None) -> None:
+        """Update line-error extrapolation from pid_config without reopening the camera."""
+        if line_axle_extrap is not None:
+            self.line_axle_extrap = max(0.0, float(line_axle_extrap))
 
     def configure_red_stability(
         self,
@@ -240,8 +148,16 @@ class Perception:
         roi   = frame[roi_y:, :]
         hsv   = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        raw_found, raw_err, raw_tj = self._detect_red(hsv, w, roi_y)
-        red_found, red_error, t_junction = self._stabilize_red(raw_found, raw_err, raw_tj)
+        raw_found, raw_err, raw_tj, tcx, tcy, trx, try_ = self._detect_red(hsv, w, roi_y)
+        (
+            red_found,
+            red_error,
+            t_junction,
+            tape_cx_px,
+            tape_cy_px,
+            track_x_px,
+            track_y_px,
+        ) = self._stabilize_red(raw_found, raw_err, raw_tj, tcx, tcy, trx, try_)
         blue_found = self._detect_blue(hsv)
 
         return FrameDetection(
@@ -249,6 +165,10 @@ class Perception:
             red_error=red_error,
             blue_found=blue_found,
             t_junction=t_junction,
+            tape_cx_px=tape_cx_px,
+            tape_cy_px=tape_cy_px,
+            track_x_px=track_x_px,
+            track_y_px=track_y_px,
         )
 
     def red_mask_full(self, frame: np.ndarray) -> np.ndarray:
@@ -289,23 +209,52 @@ class Perception:
         for i, tag in enumerate(tags):
             cv2.putText(out, tag, (10, 30 + i * 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2, cv2.LINE_AA)
+
+        if det.red_found and det.tape_cx_px is not None:
+            tcx = int(round(det.tape_cx_px))
+            tcx = max(0, min(w - 1, tcx))
+            # Tape centreline (vertical) — match ROI extent when using roi_top_ratio
+            ty0 = roi_y if roi_y > 0 else 0
+            cv2.line(out, (tcx, ty0), (tcx, h - 1), (0, 255, 180), 2, cv2.LINE_AA)
+            if det.track_x_px is not None and det.track_y_px is not None:
+                tx = int(round(det.track_x_px))
+                ty = int(round(det.track_y_px))
+                tx = max(0, min(w - 1, tx))
+                ty = max(0, min(h - 1, ty))
+                # Lateral anchor used for steering (extrapolated or blob bottom)
+                cv2.circle(out, (tx, ty), 7, (255, 180, 0), 2, cv2.LINE_AA)
+                cv2.circle(out, (tx, ty), 2, (255, 220, 100), -1, cv2.LINE_AA)
         return out
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
     def _stabilize_red(
-        self, raw_found: bool, raw_err: float, raw_t_junction: bool
-    ) -> tuple[bool, float, bool]:
+        self,
+        raw_found: bool,
+        raw_err: float,
+        raw_t_junction: bool,
+        tape_cx: float | None,
+        tape_cy: float | None,
+        track_x: float | None,
+        track_y: float | None,
+    ) -> tuple[bool, float, bool, float | None, float | None, float | None, float | None]:
         """
         Debounce loss: brief raw misses keep red_found True and hold last smoothed error.
 
         EMA: when raw red is visible, low-pass red_error to reduce frame-to-frame jitter.
+
+        Tape / track pixels follow the latest raw detection while visible; while debouncing
+        loss, the last known geometry is held for overlays.
         """
         a = self.red_error_ema_alpha
 
         if raw_found:
             self._red_miss_streak = 0
             self._tracking_line = True
+            self._last_tape_cx = tape_cx
+            self._last_tape_cy = tape_cy
+            self._last_track_x = track_x
+            self._last_track_y = track_y
 
             if a <= 1e-12:
                 smooth = raw_err
@@ -317,17 +266,25 @@ class Perception:
 
             self._red_error_ema = smooth
             self._last_t_junction = raw_t_junction
-            return True, smooth, raw_t_junction
+            return True, smooth, raw_t_junction, tape_cx, tape_cy, track_x, track_y
 
         # Raw miss
         if not self._tracking_line:
             self._red_miss_streak = 0
-            return False, 0.0, False
+            return False, 0.0, False, None, None, None, None
 
         self._red_miss_streak += 1
         if self._red_miss_streak < self.red_loss_debounce_frames:
             # Hold line-follow semantics so the state machine does not enter coast/search
-            return True, self._red_error_ema, self._last_t_junction
+            return (
+                True,
+                self._red_error_ema,
+                self._last_t_junction,
+                self._last_tape_cx,
+                self._last_tape_cy,
+                self._last_track_x,
+                self._last_track_y,
+            )
 
         # Confirmed lost
         self._tracking_line = False
@@ -335,7 +292,11 @@ class Perception:
         self._red_ema_seeded = False
         self._red_error_ema = 0.0
         self._last_t_junction = False
-        return False, 0.0, False
+        self._last_tape_cx = None
+        self._last_tape_cy = None
+        self._last_track_x = None
+        self._last_track_y = None
+        return False, 0.0, False, None, None, None, None
 
     def _build_red_mask(self, hsv: np.ndarray) -> np.ndarray:
         """Binary mask after inRange + morphology — shared by _detect_red and red_mask_full."""
@@ -352,27 +313,36 @@ class Perception:
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
-    ) -> tuple[bool, float, bool]:
-        """Returns (found, error, t_junction)."""
+    ) -> tuple[bool, float, bool, float | None, float | None, float | None, float | None]:
+        """
+        Returns (found, error, t_junction, tape_cx, tape_cy, track_x, track_y)
+        with tape/track in full-frame pixel coordinates.
+        """
+        nz = (False, 0.0, False, None, None, None, None)
+
         mask = self._build_red_mask(hsv)
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
-            return False, 0.0, False
+            return nz
 
         largest = max(contours, key=cv2.contourArea)
         if cv2.contourArea(largest) < self.red_min_area:
-            return False, 0.0, False
+            return nz
 
-        _, _, bw, _ = cv2.boundingRect(largest)
-        t_junction  = (bw / frame_w) > self.t_junction_width_ratio
+        bx, by, bw, bh = cv2.boundingRect(largest)
+        t_junction = (bw / frame_w) > self.t_junction_width_ratio
 
         moments = cv2.moments(largest)
         if moments["m00"] <= 1e-6:
-            return True, 0.0, t_junction
+            tape_cx = float(bx + bw * 0.5)
+            tape_cy = float(roi_y + by + bh * 0.5)
+            return True, 0.0, t_junction, tape_cx, tape_cy, tape_cx, tape_cy
 
         cx_roi = moments["m10"] / moments["m00"]
         cy_roi = moments["m01"] / moments["m00"]
+        tape_cx = float(cx_roi)
+        tape_cy = float(roi_y + cy_roi)
 
         # Bottom of blob → ground point nearer the wheels than the centroid
         pts = largest.reshape(-1, 2)
@@ -381,50 +351,14 @@ class Perception:
         u_pix = float(np.mean(row[:, 0])) if len(row) > 0 else cx_roi
         v_pix = float(roi_y + v_max)
 
-        image_err = _clamp(
-            (cx_roi - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0
-        )
-
-        if not self.geom_enable:
-            return True, image_err, t_junction
-
-        g_b = ground_xz_from_pixel(
-            u_pix,
-            v_pix,
-            camera_height_m=_CAMERA_HEIGHT_M,
-            pitch_deg=_CAMERA_PITCH_DEG,
-            fx=self._fx,
-            fy=self._fy,
-            cx=self._cx,
-            cy=self._cy,
-        )
-        if g_b is None:
-            return True, image_err, t_junction
-
-        x_b, z_b = g_b
-        x_m = x_b
-
-        if self.geom_camera_to_axle_m > 1e-9:
-            v_c_full = float(roi_y + cy_roi)
-            u_c = float(cx_roi)
-            g_c = ground_xz_from_pixel(
-                u_c,
-                v_c_full,
-                camera_height_m=_CAMERA_HEIGHT_M,
-                pitch_deg=_CAMERA_PITCH_DEG,
-                fx=self._fx,
-                fy=self._fy,
-                cx=self._cx,
-                cy=self._cy,
-            )
-            if g_c is not None:
-                x_c, z_c = g_c
-                x_m = lateral_x_at_axle(
-                    x_b, z_b, x_c, z_c, self.geom_camera_to_axle_m
-                )
-
-        err = lateral_error_normalized(x_m, self.geom_lateral_norm_m)
-        return True, err, t_junction
+        u_c = float(cx_roi)
+        v_c = float(roi_y + cy_roi)
+        v_span = v_pix - v_c
+        v_target = v_pix + self.line_axle_extrap * v_span
+        v_target = _clamp(v_target, 0.0, float(self.height - 1))
+        u_steer = _u_on_line_at_v(u_c, v_c, u_pix, v_pix, v_target)
+        err = _clamp((u_steer - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
+        return True, err, t_junction, tape_cx, tape_cy, float(u_steer), float(v_target)
 
     def _detect_blue(self, hsv: np.ndarray) -> bool:
         """Returns True when a blue marker of sufficient area is visible."""

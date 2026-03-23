@@ -68,9 +68,7 @@ DEFAULTS: dict[str, float | int] = {
     "claw_closed":         90.0,
     "pickup_hold_s":       0.8,
 
-    "geom_enable":         True,
-    "geom_lateral_norm_m": 0.10,
-    "geom_camera_to_axle_m": 0.0,
+    "line_axle_extrap":    0.0,
 
     "red_loss_debounce_frames": 4,
     "red_error_ema_alpha":      0.35,
@@ -78,9 +76,6 @@ DEFAULTS: dict[str, float | int] = {
 
 # Keys that must be integers (not floats)
 INT_KEYS = {"forward_ticks", "red_loss_debounce_frames"}
-
-# Keys stored as bool in JSON
-BOOL_KEYS = {"geom_enable"}
 
 # ── Flask app ─────────────────────────────────────────────────────────────────
 
@@ -113,19 +108,7 @@ def validate(data: dict) -> tuple[dict, dict]:
             out[key] = default
             continue
         try:
-            if key in BOOL_KEYS:
-                if isinstance(raw, bool):
-                    val = raw
-                else:
-                    s = str(raw).lower()
-                    if s in ("false", "no", "0", "off"):
-                        val = False
-                    elif s in ("true", "yes", "on", "1"):
-                        val = True
-                    else:
-                        errors[key] = "Must be a boolean."
-                        continue
-            elif key in INT_KEYS:
+            if key in INT_KEYS:
                 val = int(raw)
             else:
                 val = float(raw)

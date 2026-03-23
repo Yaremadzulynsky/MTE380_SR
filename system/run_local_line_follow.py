@@ -54,10 +54,8 @@ _FALLBACK: dict = {
     "forward_ticks": 800, "forward_speed": 0.25,
     "turn_speed": 0.30,   "turn_duration_s": 2.2,
     "claw_open": 0.0,     "claw_closed": 90.0, "pickup_hold_s": 0.8,
-    # Ground error: height/pitch/FOV are fixed in local/perception.py — tune scale only
-    "geom_enable": True,
-    "geom_lateral_norm_m": 0.10,
-    "geom_camera_to_axle_m": 0.0,
+    # Image-space line: blob bottom + centroid → extrapolate toward wheels (see local/perception.py)
+    "line_axle_extrap": 0.0,
     "red_loss_debounce_frames": 4,
     "red_error_ema_alpha": 0.35,
 }
@@ -118,29 +116,58 @@ def _build_mission_preview_bgr(
     mh, mw = overlay.shape[:2]
     roi_y = int(mh * perception.roi_top_ratio)
 
-    # Horizontal error bar from image centre: length ∝ |err| (err ∈ [-1,1] → full half-width).
-    # Positive err → bar extends right; negative → left.
+    # Horizontal segment: tape centreline (x) → robot axis (cx). Arrowhead at robot axis.
     cx = mw // 2
     y_bar = min(mh - 35, max(roi_y + 35, int(mh * 0.72)))
-    half_span = (mw * 0.5) * 0.92
-    err = float(det.red_error)
-    x_tip = int(round(cx + err * half_span))
-    x_tip = max(0, min(mw - 1, x_tip))
-    th = max(2, min(8, int(2 + 6 * min(1.0, abs(err)))))
-    # Centre tick (origin of the error bar)
+    # Robot-axis tick on the error bar row
     cv2.line(overlay, (cx, y_bar - 7), (cx, y_bar + 7), (255, 255, 255), 1, cv2.LINE_AA)
-    if det.red_found:
-        if abs(x_tip - cx) <= 1:
+    half_span = (mw * 0.5) * 0.92
+    if det.red_found and det.tape_cx_px is not None:
+        x_tape = int(round(det.tape_cx_px))
+        x_tape = max(0, min(mw - 1, x_tape))
+        span_px = abs(x_tape - cx)
+        th = max(2, min(8, int(2 + 6 * min(1.0, span_px / max(1.0, mw * 0.25)))))
+        if span_px <= 1:
             cv2.circle(overlay, (cx, y_bar), 4, (255, 128, 0), 2, cv2.LINE_AA)
         else:
-            cv2.line(overlay, (cx, y_bar), (x_tip, y_bar), (255, 128, 0), th, cv2.LINE_AA)
-            cv2.circle(overlay, (x_tip, y_bar), max(3, th // 2 + 2), (255, 128, 0), 2, cv2.LINE_AA)
+            # Arrow from tape centreline toward robot axis (image centre)
+            cv2.arrowedLine(
+                overlay,
+                (x_tape, y_bar),
+                (cx, y_bar),
+                (255, 128, 0),
+                th,
+                cv2.LINE_AA,
+                tipLength=0.15,
+                tipAngle=35,
+            )
+    elif det.red_found:
+        err = float(det.red_error)
+        x_tape = int(round(cx + err * half_span))
+        x_tape = max(0, min(mw - 1, x_tape))
+        th = max(2, min(8, int(2 + 6 * min(1.0, abs(err)))))
+        if abs(x_tape - cx) <= 1:
+            cv2.circle(overlay, (cx, y_bar), 4, (255, 128, 0), 2, cv2.LINE_AA)
+        else:
+            cv2.arrowedLine(
+                overlay,
+                (x_tape, y_bar),
+                (cx, y_bar),
+                (255, 128, 0),
+                th,
+                cv2.LINE_AA,
+                tipLength=0.15,
+                tipAngle=35,
+            )
     else:
-        cv2.line(overlay, (cx, y_bar), (x_tip, y_bar), (70, 70, 70), 1, cv2.LINE_AA)
+        err = float(det.red_error)
+        x_tape = int(round(cx + err * half_span))
+        x_tape = max(0, min(mw - 1, x_tape))
+        cv2.line(overlay, (x_tape, y_bar), (cx, y_bar), (70, 70, 70), 1, cv2.LINE_AA)
     cv2.putText(
         overlay,
-        "orange: |err| from centre (length)",
-        (mw - 280, 28),
+        "orange: tape centre → robot axis",
+        (mw - 300, 28),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.45,
         (200, 200, 200),
@@ -323,22 +350,10 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--pickup-hold",           type=float, default=cfg["pickup_hold_s"])
 
     p.add_argument(
-        "--geom-enable",
-        action=argparse.BooleanOptionalAction,
-        default=bool(cfg.get("geom_enable", True)),
-        help="Use ground-plane lateral error (camera pose is fixed in perception.py).",
-    )
-    p.add_argument(
-        "--geom-lateral-norm-m",
+        "--line-axle-extrap",
         type=float,
-        default=cfg["geom_lateral_norm_m"],
-        help="Metres of lateral offset → ~1.0 steering error (track-tune).",
-    )
-    p.add_argument(
-        "--geom-camera-to-axle-m",
-        type=float,
-        default=float(cfg.get("geom_camera_to_axle_m", 0.0)),
-        help="Ground-plane distance camera→axle; >0 extrapolates lateral error to the wheelbase.",
+        default=float(cfg.get("line_axle_extrap", 0.0)),
+        help="Extend centroid→blob-bottom line by this × vertical span (0=blob bottom only).",
     )
     p.add_argument(
         "--red-loss-debounce-frames",
@@ -425,9 +440,7 @@ def main() -> None:
         height=args.height,
         roi_top_ratio=args.roi_top_ratio,
         camera_channel_order="rgb" if args.camera_rgb else "bgr",
-        geom_enable=args.geom_enable,
-        geom_lateral_norm_m=args.geom_lateral_norm_m,
-        geom_camera_to_axle_m=args.geom_camera_to_axle_m,
+        line_axle_extrap=args.line_axle_extrap,
         red_loss_debounce_frames=args.red_loss_debounce_frames,
         red_error_ema_alpha=args.red_error_ema_alpha,
     )
@@ -476,11 +489,7 @@ def main() -> None:
         control.set_motor_pid(
             MotorPIDConfig(kp=args.motor_kp, ki=args.motor_ki, kd=args.motor_kd)
         )
-        perception.configure_geometry(
-            geom_enable=args.geom_enable,
-            geom_lateral_norm_m=args.geom_lateral_norm_m,
-            geom_camera_to_axle_m=args.geom_camera_to_axle_m,
-        )
+        perception.configure_line_error(line_axle_extrap=args.line_axle_extrap)
         perception.configure_red_stability(
             red_loss_debounce_frames=args.red_loss_debounce_frames,
             red_error_ema_alpha=args.red_error_ema_alpha,
@@ -496,7 +505,7 @@ def main() -> None:
         print(
             f"[KEY] go — reloaded {cfg_path}  "
             f"steer_kp={args.steer_kp}  max_speed={args.max_speed}  "
-            f"motor_kp={args.motor_kp:.6f}  geom={args.geom_enable}",
+            f"motor_kp={args.motor_kp:.6f}  line_axle_extrap={args.line_axle_extrap}",
             flush=True,
         )
 

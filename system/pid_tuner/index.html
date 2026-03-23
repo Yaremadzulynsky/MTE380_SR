@@ -386,22 +386,14 @@
     </div>
   </div>
 
-  <!-- Line error: ground model -->
+  <!-- Line error: image extrapolation -->
   <div class="card">
-    <h2>Line error — ground model</h2>
-    <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Scale maps metres → ±1 steering error. Optional <strong>camera→axle</strong> extrapolates lateral error to the wheelbase. Red debounce / EMA reduce one-frame glitches.</p>
+    <h2>Line error — axle extrapolation</h2>
+    <p class="hint">Lateral error uses the red blob <strong>bottom</strong> (near the wheels). Centroid and bottom define a line in the image; <strong>line_axle_extrap</strong> extends that line downward to approximate where the tape crosses the wheelbase on curves. Red debounce / EMA reduce one-frame glitches.</p>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="geom_enable">use ground model</label><button type="button" class="info-btn" data-help="geom_enable" aria-label="Help: geom_enable">i</button></div>
-        <input type="checkbox" id="geom_enable" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="geom_lateral_norm_m">scale (m → ±1)</label><button type="button" class="info-btn" data-help="geom_lateral_norm_m" aria-label="Help: geom_lateral_norm_m">i</button></div>
-        <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="geom_camera_to_axle_m">camera → axle (m)</label><button type="button" class="info-btn" data-help="geom_camera_to_axle_m" aria-label="Help: geom_camera_to_axle_m">i</button></div>
-        <input type="number" id="geom_camera_to_axle_m" step="0.01" min="0" title="0 = off; else lateral error at wheelbase" />
+        <div class="field-label-row"><label for="line_axle_extrap">line_axle_extrap</label><button type="button" class="info-btn" data-help="line_axle_extrap" aria-label="Help: line_axle_extrap">i</button></div>
+        <input type="number" id="line_axle_extrap" step="0.05" min="0" title="0 = blob bottom only; larger = extrapolate toward wheels" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="red_loss_debounce_frames">red miss frames</label><button type="button" class="info-btn" data-help="red_loss_debounce_frames" aria-label="Help: red_loss_debounce_frames">i</button></div>
@@ -483,13 +475,13 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
-      "geom_enable", "geom_lateral_norm_m", "geom_camera_to_axle_m",
+      "line_axle_extrap",
       "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
     ];
-    const BOOL_KEYS = new Set(["geom_enable"]);
+    const BOOL_KEYS = new Set([]);
 
     /** Rich help for each config key — shown in the (i) dialog */
     const HELP = {
@@ -589,30 +581,13 @@
         whenInc: "Search needs more bite but you don’t want to raise max_speed for normal follow.",
         whenDec: "Search is still too aggressive after tuning search_turn; add a safety ceiling.",
       },
-      geom_enable: {
-        title: "use ground model (geom_enable)",
-        boolean: true,
-        what: "When on, lateral line error is converted using a fixed camera geometry in code (height, pitch, FOV) so “error” is closer to metres on the ground. When off, perception typically uses image-plane error only.",
-        on: "More consistent error units across distance; better if tuning steering against physical offset.",
-        off: "Simpler path if geometry in code doesn’t match your robot; tune steering against raw image error.",
-        whenOn: "You’ve verified camera pose in perception matches the robot; you want error to scale like real lateral offset.",
-        whenOff: "Ground model disagrees with reality, or you prefer to tune purely in image space.",
-      },
-      geom_lateral_norm_m: {
-        title: "geom_lateral_norm_m",
-        what: "Roughly how many metres of lateral line offset correspond to a steering error of about ±1 after the ground model (gain from physical offset to normalized error).",
-        inc: "Same physical offset produces a larger steering error → stronger correction per centimetre.",
-        dec: "Softer response per metre; robot under-corrects for the same physical offset.",
-        whenInc: "Robot consistently undershoots corrections (error stays same sign) with ground model on.",
-        whenDec: "Oscillation or over-correction; steering too twitchy for small real-world offsets.",
-      },
-      geom_camera_to_axle_m: {
-        title: "geom_camera_to_axle_m",
-        what: "Distance along the ground from the camera vertical to the wheelbase (or where you want to regulate lateral error). If positive, two ground points (blob bottom + centroid) define a line in X–Z; lateral error is evaluated at Z = −this distance (axle behind the camera in +Z forward frame). Zero = use only the blob-bottom ground point (legacy).",
-        inc: "Stronger geometric correction toward the wheels; can fix systematic offset between “camera centered” and “wheels on tape” if other parameters match reality.",
-        dec: "Closer to single-point error at the tape near the camera; less extrapolation sensitivity.",
-        whenInc: "Line looks centered in the image but wheels sit off the tape on straights; you want steering to reference the axle.",
-        whenDec: "Oscillation or weird steering in curves (bad extrapolation or wrong measured distance); set to 0 to verify baseline.",
+      line_axle_extrap: {
+        title: "line_axle_extrap",
+        what: "Non‑negative scale: extend the centroid→blob‑bottom segment in the image by this multiple of its vertical span (downward in the frame). Steering error uses the horizontal position u on that extended line. 0 = lateral error from the blob bottom only (no extrapolation).",
+        inc: "Steering reacts more like the tape at the wheelbase on curves; can reduce early/late turning if tuned well.",
+        dec: "Closer to raw bottom-of-blob lateral error; less sensitivity to centroid noise and line tilt in the image.",
+        whenInc: "Wheels consistently lag or lead the line in turns relative to what looks centered in the camera.",
+        whenDec: "Weaving or overshoot in curves; try 0 first, then increase in small steps (e.g. 0.25–1.0).",
       },
       red_loss_debounce_frames: {
         title: "red_loss_debounce_frames",
