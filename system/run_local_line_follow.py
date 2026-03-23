@@ -14,7 +14,7 @@ Local OpenCV preview is **off** by default; use ``--show-window`` for a live win
 ``--web-preview`` still writes JPEGs for the PID tuner (``GET /api/camera/preview.jpg``)
 without opening a window.
 
-While running, optional JSONL (lateral_err, avg_rpm) is written for the PID tuner
+While running, optional JSONL (lateral_err, last_red_error, avg_rpm) is written for the PID tuner
 charts; truncated each time you press ``g``. See ``--mission-log`` / ``--no-mission-log``.
 
 Default JPEG path: ``CAMERA_PREVIEW_PATH`` or ``system/.camera_preview.jpg``.
@@ -537,7 +537,7 @@ def main() -> None:
 
     if telemetry:
         print(
-            "# telemetry: t_s | state | vision | enc_L/R | motor cmd/tgt_rpm/rpm/V | claw | iter_ms",
+            "# telemetry: t_s | state | vision (err + last_err) | enc_L/R | motor ... | claw | iter_ms",
             flush=True,
         )
 
@@ -596,6 +596,7 @@ def main() -> None:
                             {
                                 "t_s": round(t_m, 4),
                                 "lateral_err": det.red_error,
+                                "last_red_error": sm.last_red_error,
                                 "avg_rpm": avg_rpm,
                                 "state": output.state.value,
                             },
@@ -605,7 +606,7 @@ def main() -> None:
                     )
                 status_line = (
                     f"state={output.state.value:14s}  "
-                    f"err={det.red_error:+.2f}  "
+                    f"err={det.red_error:+.2f}  last_err={sm.last_red_error:+.2f}  "
                     f"blue={'Y' if det.blue_found else 'N'}  "
                     f"T={'Y' if det.t_junction else 'N'}  "
                     f"L={output.left:+.2f}({rpm_l:+.0f}rpm)  "
@@ -654,7 +655,8 @@ def main() -> None:
                     claw_s = f"{output.claw:.0f}°" if output.claw is not None else "--"
                     print(
                         f"{t_run:8.3f}s  {output.state.value:12s}  "
-                        f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
+                        f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f} "
+                        f"last_err={sm.last_red_error:+.3f}  "
                         f"blue={'Y' if det.blue_found else 'N'} T={'Y' if det.t_junction else 'N'}  "
                         f"claw={claw_s}  "
                         f"enc_L={enc_l:6d} enc_R={enc_r:6d}  {mt}  "
@@ -665,7 +667,8 @@ def main() -> None:
                     last_idle_log = time.monotonic()
                     print(
                         f"{t_run:8.3f}s  IDLE  "
-                        f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
+                        f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f} "
+                        f"last_err={sm.last_red_error:+.3f}  "
                         f"blue={'Y' if det.blue_found else 'N'} T={'Y' if det.t_junction else 'N'}  "
                         f"iter_ms={iter_ms:5.1f}",
                         flush=True,

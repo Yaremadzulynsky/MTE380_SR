@@ -133,6 +133,11 @@ class MissionStateMachine:
             sample_time=None,   # always compute when called; loop rate is controlled externally
         )
 
+    @property
+    def last_red_error(self) -> float:
+        """Last red_error while the line was visible; drives lost-line search direction."""
+        return self._last_red_error
+
     # ── Main entry point ──────────────────────────────────────────────────────
 
     def step(
