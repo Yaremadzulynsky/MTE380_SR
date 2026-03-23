@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TextIO
 
 import cv2
+import numpy as np
 
 from local.control import LocalMotorController, MotorCommand, MotorPIDConfig
 from local.perception import Perception
@@ -457,7 +458,24 @@ def main() -> None:
                 )
                 cv2.putText(overlay, label, (10, overlay.shape[0] - 15),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA)
-                cv2.imshow("mission", overlay)
+                # Red detection mask (same HSV + morphology as _detect_red), side-by-side
+                mh, mw = overlay.shape[:2]
+                mask_gray = perception.red_mask_full(frame)
+                mask_bgr = cv2.cvtColor(mask_gray, cv2.COLOR_GRAY2BGR)
+                roi_y = int(mh * perception.roi_top_ratio)
+                if roi_y > 0:
+                    cv2.line(mask_bgr, (0, roi_y), (mw - 1, roi_y), (128, 128, 128), 1)
+                cv2.putText(
+                    mask_bgr,
+                    "red mask",
+                    (10, 28),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65,
+                    (0, 255, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+                cv2.imshow("mission", np.hstack([overlay, mask_bgr]))
                 k = cv2.waitKey(1) & 0xFF
                 if k == ord("q"):
                     break

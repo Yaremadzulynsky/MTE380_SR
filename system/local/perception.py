@@ -214,6 +214,20 @@ class Perception:
             t_junction=t_junction,
         )
 
+    def red_mask_full(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Full-frame uint8 mask (0/255) using the same red HSV bands and morphology as
+        ``_detect_red`` — for side-by-side debug display with the camera view.
+        """
+        h, w = frame.shape[:2]
+        roi_y = int(h * self.roi_top_ratio)
+        roi = frame[roi_y:, :]
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        m = self._build_red_mask(hsv)
+        full = np.zeros((h, w), dtype=np.uint8)
+        full[roi_y:, :] = m
+        return full
+
     def release(self) -> None:
         self._cam.stop()
         self._cam.close()
@@ -286,17 +300,22 @@ class Perception:
         self._last_t_junction = False
         return False, 0.0, False
 
-    def _detect_red(
-        self, hsv: np.ndarray, frame_w: int, roi_y: int
-    ) -> tuple[bool, float, bool]:
-        """Returns (found, error, t_junction)."""
+    def _build_red_mask(self, hsv: np.ndarray) -> np.ndarray:
+        """Binary mask after inRange + morphology — shared by _detect_red and red_mask_full."""
         mask = cv2.bitwise_or(
             cv2.inRange(hsv, self._RED_LO1, self._RED_HI1),
             cv2.inRange(hsv, self._RED_LO2, self._RED_HI2),
         )
         kernel = np.ones((5, 5), np.uint8)
-        mask   = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel, iterations=1)
-        mask   = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        return mask
+
+    def _detect_red(
+        self, hsv: np.ndarray, frame_w: int, roi_y: int
+    ) -> tuple[bool, float, bool]:
+        """Returns (found, error, t_junction)."""
+        mask = self._build_red_mask(hsv)
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
