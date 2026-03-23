@@ -391,7 +391,22 @@ class Perception:
 
         a, b, c = np.polyfit(ts, xs, 2)
 
-        return float(a), float(b), conf, pts
+        # Curvature as average of local slope changes between consecutive strip segments.
+        # Sort by t (near=0 to far=1) for consistent direction.
+        paired = sorted(zip(ts, xs))
+        t_s    = [p[0] for p in paired]
+        x_s    = [p[1] for p in paired]
+        slopes = [(x_s[i+1] - x_s[i]) / (t_s[i+1] - t_s[i])
+                  for i in range(len(t_s) - 1)
+                  if (t_s[i+1] - t_s[i]) > 1e-9]
+        curv_samples = [(slopes[i+1] - slopes[i]) / ((t_s[i+2] - t_s[i]) / 2)
+                        for i in range(len(slopes) - 1)
+                        if (t_s[i+2] - t_s[i]) > 1e-9]
+        # Divide by 2: each sample equals 2a for a pure quadratic, keeping the same
+        # scale as the polynomial convention (curvature = a, coefficient of t²).
+        curvature = float(np.mean(curv_samples)) / 2.0 if curv_samples else 0.0
+
+        return curvature, float(b), conf, pts
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
