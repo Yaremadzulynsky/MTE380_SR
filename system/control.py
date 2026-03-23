@@ -143,39 +143,42 @@ class RotationController:
         c = cfg if cfg is not None else _config_module.get()
         tol = tolerance if tolerance is not None else c.rot_tolerance
         l, r = control.encoder_ticks
-        self._control      = control
-        self._start_left   = l
-        self._start_right  = r
-        self._target_ticks = _ticks_for_degrees(degrees, c.wheel_diameter_m, c.wheelbase_m)
-        self._sign         = 1.0 if degrees >= 0.0 else -1.0  # CW: +1, CCW: -1
+        self._control     = control
+        self._start_left  = l
+        self._start_right = r
+        # Signed target: positive = CW, negative = CCW.
+        # CW: left wheel forward (+), right backward (-), so angular = (dl - dr) / 2 > 0.
+        mag                = _ticks_for_degrees(degrees, c.wheel_diameter_m, c.wheelbase_m)
+        self._target       = math.copysign(mag, degrees)
         self._tolerance    = max(1, tol)
         self.done          = False
-        # PID: setpoint = target ticks, input = traveled, output = signed voltage [-1, 1]
-        # Negative output reverses the rotation to correct overshoot.
+        # PID: setpoint = signed target, input = signed angular displacement,
+        # output = signed voltage [-1, 1].  Negative output reverses rotation.
         self._pid = PID(c.rot_kp, c.rot_ki, c.rot_kd,
-                        setpoint=self._target_ticks,
+                        setpoint=self._target,
                         output_limits=(-1.0, 1.0),
                         sample_time=None)
 
-    def progress(self) -> tuple[float, float]:
-        """Returns (ticks_traveled, ticks_target)."""
+    def _angular(self) -> float:
+        """Signed angular displacement since start (positive = CW)."""
         l, r = self._control.encoder_ticks
-        traveled = (abs(l - self._start_left) + abs(r - self._start_right)) / 2.0
-        return traveled, self._target_ticks
+        return ((l - self._start_left) - (r - self._start_right)) / 2.0
+
+    def progress(self) -> tuple[float, float]:
+        """Returns (abs_angular_traveled, abs_target_ticks) for display."""
+        return abs(self._angular()), abs(self._target)
 
     def step(self) -> None:
         """Send one drive command. Sets self.done=True when within tolerance."""
         if self.done:
             return
-        l, r = self._control.encoder_ticks
-        traveled = (abs(l - self._start_left) + abs(r - self._start_right)) / 2.0
-        if abs(traveled - self._target_ticks) <= self._tolerance:
+        angular = self._angular()
+        if abs(angular - self._target) <= self._tolerance:
             self.done = True
             return
-        speed = self._pid(traveled)
-        # Positive speed = rotate in commanded direction; negative = reverse to correct overshoot.
-        # CW: left fwd (+), right rev (-).  CCW: opposite.
-        self._control.send_voltage(self._sign * speed, -self._sign * speed)
+        voltage = self._pid(angular)
+        # Positive voltage = CW (left fwd, right rev); negative = CCW.
+        self._control.send_voltage(voltage, -voltage)
 
 
 # ── Controller ────────────────────────────────────────────────────────────────
