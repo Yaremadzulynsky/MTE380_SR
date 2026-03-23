@@ -1128,6 +1128,7 @@
           rotBar.style.width = pct.toFixed(1) + "%";
           rotTelem.textContent =
             `traveled: ${s.traveled}°  |  target: ${s.target}°  |  error: ${s.error}°` +
+            `  |  enc L: ${s.enc_l}  R: ${s.enc_r}` +
             (s.done ? "  ✓ done" : "");
         } else {
           // No active move — hide both unless already done (keep last result visible)

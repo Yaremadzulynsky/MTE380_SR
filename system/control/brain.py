@@ -33,9 +33,7 @@ from bridge import SerialBridge
 TICKS_PER_REV = 680
 MAX_RPM       = 320
 
-_IDLE_HZ     = 50
-_DRIVE_HZ    = 50
-_ROTATION_HZ = 200
+_LOOP_HZ = 200
 
 
 def _clamp(v: float, lo: float, hi: float) -> float:
@@ -227,12 +225,15 @@ class RobotBrain:
             return {"active": None}
         traveled, target = ctrl.progress()
         error = ctrl.error_deg() if hasattr(ctrl, "error_deg") else target - traveled
+        enc_l, enc_r = self.encoder_ticks
         return {
             "active":   typ,
             "done":     ctrl.done,
             "traveled": round(traveled, 1),
             "target":   round(target,   1),
             "error":    round(error,    1),
+            "enc_l":    enc_l,
+            "enc_r":    enc_r,
         }
 
     # ── Direct hardware commands ──────────────────────────────────────────────
@@ -353,13 +354,8 @@ class RobotBrain:
     # ── Main loop ─────────────────────────────────────────────────────────────
 
     def _loop(self) -> None:
-        """Single background loop — dispatches on _mode each tick."""
-        import cv2
-        from state_machine import State
-
-        idle_period     = 1.0 / _IDLE_HZ
-        drive_period    = 1.0 / _DRIVE_HZ
-        rotation_period = 1.0 / _ROTATION_HZ
+        """Single background loop — dispatches on _mode each tick at _LOOP_HZ."""
+        period = 1.0 / _LOOP_HZ
 
         while not self._quit.is_set():
             t0 = time.monotonic()
@@ -369,15 +365,11 @@ class RobotBrain:
 
             if mode == "mission":
                 self._mission_tick()
-                # camera read inside _mission_tick paces this branch naturally
 
             elif mode == "drive":
-                self._idle_camera_tick()
                 self._speed_ctrl.step()
-                time.sleep(max(0.0, drive_period - (time.monotonic() - t0)))
 
             elif mode == "rotation":
-                self._idle_camera_tick()
                 with self._lock:
                     ctrl = self._active_ctrl
                 if ctrl is not None:
@@ -390,11 +382,10 @@ class RobotBrain:
                             self._active_ctrl_type = None
                         self._idle()
                         print(f"[rot-move] done  degrees={deg}", flush=True)
-                time.sleep(max(0.0, rotation_period - (time.monotonic() - t0)))
 
-            else:   # idle
-                self._idle_camera_tick()
-                time.sleep(idle_period)
+            # idle: nothing to do, just sleep
+
+            time.sleep(max(0.0, period - (time.monotonic() - t0)))
 
         if not self._no_display:
             import cv2 as _cv2
