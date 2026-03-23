@@ -108,10 +108,10 @@ class Perception:
 
     # ── HSV colour ranges ─────────────────────────────────────────────────────
     # Red wraps at 0/179 in OpenCV H (0–180). Two bands: orange-red and magenta-red.
-    # Tuned between “too tight” (sparse tape) and “too broad” (wood grain / shadows).
-    _RED_LO1 = np.array([  0,  80,  65], np.uint8)
-    _RED_HI1 = np.array([ 15, 255, 255], np.uint8)
-    _RED_LO2 = np.array([168,  80,  65], np.uint8)
+    # Midpoint between loose (wood noise) and tight (thin mask on pink tape).
+    _RED_LO1 = np.array([  0,  62,  52], np.uint8)
+    _RED_HI1 = np.array([ 18, 255, 255], np.uint8)
+    _RED_LO2 = np.array([163,  62,  52], np.uint8)
     _RED_HI2 = np.array([179, 255, 255], np.uint8)
 
     # Blue tuned to be a bit more forgiving but still reject washed-out noise.
@@ -123,7 +123,7 @@ class Perception:
         width:  int   = 640,
         height: int   = 480,
         roi_top_ratio: float = 0.0,   # 0 = full frame; else ignore top fraction (e.g. 0.5 = bottom half)
-        red_min_area:  float = 80.0,
+        red_min_area:  float = 65.0,
         blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
         camera_channel_order: Literal["rgb", "bgr"] = "bgr",
