@@ -30,7 +30,7 @@ from bridge import SerialBridge
 
 # ── Hardware constants ────────────────────────────────────────────────────────
 
-TICKS_PER_REV = 680
+TICKS_PER_REV = 660
 MAX_RPM       = 320
 
 _LOOP_HZ = 200
