@@ -158,13 +158,13 @@ class MissionRunner:
         if ctrl is None:
             return {"active": None}
         traveled, target = ctrl.progress()
-        remaining = max(0.0, target - traveled)
+        error = ctrl.error_deg() if hasattr(ctrl, "error_deg") else target - traveled
         return {
-            "active":    self._active_ctrl_type,
-            "done":      ctrl.done,
-            "traveled":  round(traveled,  1),
-            "target":    round(target,    1),
-            "remaining": round(remaining, 1),
+            "active":   self._active_ctrl_type,
+            "done":     ctrl.done,
+            "traveled": round(traveled, 1),
+            "target":   round(target,   1),
+            "error":    round(error,    1),
         }
 
     def start_drive(self, left: float, right: float) -> None:

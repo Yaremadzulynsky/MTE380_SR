@@ -1149,7 +1149,7 @@
           const pct = s.target > 0 ? Math.min(100, (s.traveled / s.target) * 100) : 0;
           rotBar.style.width = pct.toFixed(1) + "%";
           rotTelem.textContent =
-            `traveled: ${s.traveled}°  |  target: ${s.target}°  |  remaining: ${s.remaining}°` +
+            `traveled: ${s.traveled}°  |  target: ${s.target}°  |  error: ${s.error}°` +
             (s.done ? "  ✓ done" : "");
         } else {
           // No active move — hide both unless already done (keep last result visible)
