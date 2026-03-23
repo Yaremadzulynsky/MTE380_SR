@@ -546,7 +546,9 @@ class RobotBrain:
             return
         frame = self._perception.read_frame()
         if frame is not None:
-            self._perception.detect(frame)
+            det = self._perception.detect(frame)
+            with self._lock:
+                self._last_det = det
 
     def _idle(self) -> None:
         """Reset speed PID integrators and zero motor voltages."""
