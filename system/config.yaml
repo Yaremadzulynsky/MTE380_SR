@@ -26,6 +26,14 @@ forward_speed: 0.25
 turn_speed: 0.3
 turn_duration_s: 2.2
 
+# Controllers
+wheel_diameter_m: 0.08
+wheelbase_m: 0.184
+pos_speed: 0.25
+pos_tolerance: 20
+rot_speed: 0.2
+rot_tolerance: 15
+
 # Claw / servo
 claw_open: 0.0
 claw_closed: 90.0

@@ -55,6 +55,14 @@ class Config:
     turn_speed:      float = 0.30
     turn_duration_s: float = 2.2
 
+    # ── Controllers (position + rotation) ─────────────────────────────────────
+    wheel_diameter_m: float = 0.065  # wheel outer diameter (metres)
+    wheelbase_m:      float = 0.155  # centre-to-centre track width (metres)
+    pos_speed:        float = 0.25   # default speed fraction for position moves
+    pos_tolerance:    int   = 20     # done when within this many ticks of target
+    rot_speed:        float = 0.20   # default speed fraction for rotation moves
+    rot_tolerance:    int   = 15     # done when within this many ticks of target
+
     # ── Claw / servo ──────────────────────────────────────────────────────────
     claw_open:     float = 0.0
     claw_closed:   float = 90.0
@@ -103,6 +111,11 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("180-degree turn", [
         "turn_speed", "turn_duration_s",
+    ]),
+    ("Controllers", [
+        "wheel_diameter_m", "wheelbase_m",
+        "pos_speed", "pos_tolerance",
+        "rot_speed", "rot_tolerance",
     ]),
     ("Claw / servo", [
         "claw_open", "claw_closed", "pickup_hold_s",

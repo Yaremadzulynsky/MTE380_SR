@@ -185,6 +185,54 @@ def telemetry_history():
     return jsonify(_runner.telemetry_history())
 
 
+@app.get("/api/test/status")
+def test_status():
+    """Live progress of the active position or rotation move."""
+    if _runner is None:
+        return jsonify({"active": None})
+    return jsonify(_runner.move_status())
+
+
+@app.post("/api/test/position")
+def test_position():
+    """Stop the mission and drive delta_ticks (positive = forward)."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    data = request.get_json(silent=True) or {}
+    try:
+        delta = int(data["delta_ticks"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "delta_ticks must be an integer"}), 400
+    speed = data.get("speed")
+    if speed is not None:
+        try:
+            speed = float(speed)
+        except (TypeError, ValueError):
+            return jsonify({"error": "speed must be a float"}), 400
+    _runner.run_position(delta, speed=speed)
+    return jsonify({"ok": True, "delta_ticks": delta})
+
+
+@app.post("/api/test/rotation")
+def test_rotation():
+    """Stop the mission and rotate degrees (positive = CW)."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    data = request.get_json(silent=True) or {}
+    try:
+        degrees = float(data["degrees"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "degrees must be a number"}), 400
+    speed = data.get("speed")
+    if speed is not None:
+        try:
+            speed = float(speed)
+        except (TypeError, ValueError):
+            return jsonify({"error": "speed must be a float"}), 400
+    _runner.run_rotation(degrees, speed=speed)
+    return jsonify({"ok": True, "degrees": degrees})
+
+
 @app.get("/stream/camera")
 def stream_camera():
     get_fn = _runner.get_annotated_frame if _runner is not None else lambda: None

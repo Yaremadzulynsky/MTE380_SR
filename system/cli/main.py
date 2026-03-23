@@ -53,6 +53,8 @@ class MissionRunner:
 
         self._last_det    = None
         self._last_output = None
+        self._active_ctrl      = None   # active PositionController or RotationController
+        self._active_ctrl_type: str | None = None  # "position" or "rotation"
         # Circular telemetry history: each entry is (t_rel, red_error, rpm_l, rpm_r)
         self._telem_history: collections.deque = collections.deque(maxlen=300)
         self._frame_n     = 0
@@ -92,6 +94,63 @@ class MissionRunner:
                 self._sm.cfg = cfg
                 self._sm._steer_pid.tunings = (cfg.steer_kp, cfg.steer_ki, cfg.steer_kd)
                 self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
+
+    def run_position(self, delta_ticks: int, speed: float | None = None) -> None:
+        """Stop the mission and drive delta_ticks in a background thread."""
+        from control import PositionController
+        with self._lock:
+            self._running = False
+        self._control.idle()
+
+        def _move():
+            ctrl = PositionController(self._control, delta_ticks, speed=speed)
+            self._active_ctrl = ctrl
+            self._active_ctrl_type = "position"
+            while not ctrl.done:
+                ctrl.step()
+                time.sleep(0.02)
+            self._active_ctrl = None
+            self._active_ctrl_type = None
+            self._control.idle()
+            print(f"[pos-move] done  delta={delta_ticks} ticks", flush=True)
+
+        threading.Thread(target=_move, daemon=True, name="pos-move").start()
+
+    def run_rotation(self, degrees: float, speed: float | None = None) -> None:
+        """Stop the mission and rotate degrees in a background thread."""
+        from control import RotationController
+        with self._lock:
+            self._running = False
+        self._control.idle()
+
+        def _move():
+            ctrl = RotationController(self._control, degrees, speed=speed)
+            self._active_ctrl = ctrl
+            self._active_ctrl_type = "rotation"
+            while not ctrl.done:
+                ctrl.step()
+                time.sleep(0.02)
+            self._active_ctrl = None
+            self._active_ctrl_type = None
+            self._control.idle()
+            print(f"[rot-move] done  degrees={degrees}", flush=True)
+
+        threading.Thread(target=_move, daemon=True, name="rot-move").start()
+
+    def move_status(self) -> dict:
+        """Return progress of the currently running position/rotation move, if any."""
+        ctrl = self._active_ctrl
+        if ctrl is None:
+            return {"active": None}
+        traveled, target = ctrl.progress()
+        remaining = max(0.0, target - traveled)
+        return {
+            "active":    self._active_ctrl_type,
+            "done":      ctrl.done,
+            "traveled":  round(traveled,  1),
+            "target":    round(target,    1),
+            "remaining": round(remaining, 1),
+        }
 
     def stop(self) -> None:
         with self._lock:

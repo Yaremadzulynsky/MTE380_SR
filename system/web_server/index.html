@@ -403,6 +403,38 @@
     </div>
   </div>
 
+  <!-- Controllers -->
+  <div class="card">
+    <h2>Controllers — geometry &amp; defaults</h2>
+    <p class="hint">Wheel geometry is used to convert degrees → encoder ticks for rotation moves. Speed/tolerance are the defaults used when no override is sent from the test panels below.</p>
+    <div class="fields">
+      <div class="field">
+        <label for="wheel_diameter_m">wheel diameter (m)</label>
+        <input type="number" id="wheel_diameter_m" step="0.001" min="0.01" />
+      </div>
+      <div class="field">
+        <label for="wheelbase_m">wheelbase (m)</label>
+        <input type="number" id="wheelbase_m" step="0.001" min="0.01" />
+      </div>
+      <div class="field">
+        <label for="pos_speed">pos speed (fraction)</label>
+        <input type="number" id="pos_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <label for="pos_tolerance">pos tolerance (ticks)</label>
+        <input type="number" id="pos_tolerance" step="1" min="1" />
+      </div>
+      <div class="field">
+        <label for="rot_speed">rot speed (fraction)</label>
+        <input type="number" id="rot_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <label for="rot_tolerance">rot tolerance (ticks)</label>
+        <input type="number" id="rot_tolerance" step="1" min="1" />
+      </div>
+    </div>
+  </div>
+
   <!-- 180 turn -->
   <div class="card">
     <h2>180° Turn</h2>
@@ -437,6 +469,60 @@
     </div>
   </div>
 
+  <!-- Position test -->
+  <div class="card">
+    <h2>Position test — drive N ticks</h2>
+    <p class="hint">Stops the mission and drives forward (positive) or backward (negative). Leave speed blank to use the configured default.</p>
+    <div class="fields" style="align-items:flex-end;">
+      <div class="field">
+        <label for="test-pos-ticks">ticks</label>
+        <input type="number" id="test-pos-ticks" value="200" step="50" />
+      </div>
+      <div class="field">
+        <label for="test-pos-speed">speed (blank = default)</label>
+        <input type="number" id="test-pos-speed" step="0.01" min="0" max="1" placeholder="default" />
+      </div>
+      <div class="field">
+        <button onclick="testPosition()" style="margin-top:1.2rem;">Run</button>
+      </div>
+    </div>
+    <p id="test-pos-status" class="hint" style="margin-top:0.5rem;"></p>
+    <div id="test-pos-progress" style="display:none; margin-top:0.6rem;">
+      <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Progress</div>
+      <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:5px; height:8px; overflow:hidden;">
+        <div id="test-pos-bar" style="height:100%; background:#3b82f6; width:0%; transition:width 0.15s;"></div>
+      </div>
+      <div id="test-pos-telem" style="font-size:0.78rem; color:#94a3b8; margin-top:0.35rem; line-height:1.6;"></div>
+    </div>
+  </div>
+
+  <!-- Rotation test -->
+  <div class="card">
+    <h2>Rotation test — turn N degrees</h2>
+    <p class="hint">Stops the mission and rotates in place. Positive = clockwise, negative = counter-clockwise. Leave speed blank to use the configured default.</p>
+    <div class="fields" style="align-items:flex-end;">
+      <div class="field">
+        <label for="test-rot-degrees">degrees</label>
+        <input type="number" id="test-rot-degrees" value="90" step="5" />
+      </div>
+      <div class="field">
+        <label for="test-rot-speed">speed (blank = default)</label>
+        <input type="number" id="test-rot-speed" step="0.01" min="0" max="1" placeholder="default" />
+      </div>
+      <div class="field">
+        <button onclick="testRotation()" style="margin-top:1.2rem;">Run</button>
+      </div>
+    </div>
+    <p id="test-rot-status" class="hint" style="margin-top:0.5rem;"></p>
+    <div id="test-rot-progress" style="display:none; margin-top:0.6rem;">
+      <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Progress</div>
+      <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:5px; height:8px; overflow:hidden;">
+        <div id="test-rot-bar" style="height:100%; background:#a78bfa; width:0%; transition:width 0.15s;"></div>
+      </div>
+      <div id="test-rot-telem" style="font-size:0.78rem; color:#94a3b8; margin-top:0.35rem; line-height:1.6;"></div>
+    </div>
+  </div>
+
   <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
     <div class="help-dialog-inner">
       <button type="button" class="help-close" aria-label="Close help">&times;</button>
@@ -460,6 +546,8 @@
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
+      "wheel_diameter_m", "wheelbase_m",
+      "pos_speed", "pos_tolerance", "rot_speed", "rot_tolerance",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
@@ -468,6 +556,7 @@
     const INT_KEYS = new Set([
       "forward_ticks",
       "red_loss_debounce_frames",
+      "pos_tolerance", "rot_tolerance",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
@@ -496,6 +585,12 @@
       forward_speed:           [0,    1,      0.01  ],
       turn_speed:              [0,    1,      0.01  ],
       turn_duration_s:         [0,    6,      0.05  ],
+      wheel_diameter_m:        [0.01, 0.20,   0.001 ],
+      wheelbase_m:             [0.05, 0.50,   0.001 ],
+      pos_speed:               [0,    1,      0.01  ],
+      pos_tolerance:           [1,    200,    1     ],
+      rot_speed:               [0,    1,      0.01  ],
+      rot_tolerance:           [1,    200,    1     ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
       pickup_hold_s:           [0,    5,      0.1   ],
@@ -888,6 +983,44 @@
       } catch (e) {
         document.getElementById("mission-status").textContent = "Error: " + e.message;
       }
+    }
+
+    async function testPosition() {
+      const delta = parseInt(document.getElementById("test-pos-ticks").value, 10);
+      const speedVal = document.getElementById("test-pos-speed").value.trim();
+      const el = document.getElementById("test-pos-status");
+      if (!delta) { el.textContent = "Enter a non-zero tick count."; return; }
+      const body = { delta_ticks: delta };
+      if (speedVal !== "") body.speed = parseFloat(speedVal);
+      el.textContent = "Running…";
+      try {
+        const res = await fetch("/api/test/position", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        el.textContent = `Sent: ${delta} ticks`;
+      } catch (e) { el.textContent = "Error: " + e.message; }
+    }
+
+    async function testRotation() {
+      const degrees = parseFloat(document.getElementById("test-rot-degrees").value);
+      const speedVal = document.getElementById("test-rot-speed").value.trim();
+      const el = document.getElementById("test-rot-status");
+      if (!degrees) { el.textContent = "Enter a non-zero degree value."; return; }
+      const body = { degrees };
+      if (speedVal !== "") body.speed = parseFloat(speedVal);
+      el.textContent = "Running…";
+      try {
+        const res = await fetch("/api/test/rotation", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        el.textContent = `Sent: ${degrees}°`;
+      } catch (e) { el.textContent = "Error: " + e.message; }
     }
 
     // ── Status polling ───────────────────────────────────────────────────────

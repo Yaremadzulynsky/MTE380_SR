@@ -21,6 +21,7 @@ Hardware constants (update for your robot)
 """
 from __future__ import annotations
 
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -41,12 +42,134 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
+def _ticks_for_degrees(degrees: float, wheel_diameter_m: float, wheelbase_m: float) -> float:
+    """Encoder ticks each wheel travels for an in-place rotation of *degrees*."""
+    arc = math.radians(abs(degrees)) * (wheelbase_m / 2.0)
+    return (arc / (math.pi * wheel_diameter_m)) * TICKS_PER_REV
+
+
 # ── Public types ──────────────────────────────────────────────────────────────
 
 @dataclass
 class MotorCommand:
     left:  float   # desired speed fraction [-1, 1], where ±1 = ±MAX_RPM
     right: float
+
+
+# ── Position controller ───────────────────────────────────────────────────────
+
+class PositionController:
+    """
+    Drives the robot forward or backward a fixed number of encoder ticks.
+
+    Uses the motor speed PID (send_drive) so RPM feedback keeps both wheels
+    at the commanded speed.  Call step() each loop tick; check done after.
+
+        ctrl = PositionController(control, delta_ticks=500, speed=0.25)
+        while not ctrl.done:
+            ctrl.step()
+        control.idle()
+
+    Positive delta_ticks = forward, negative = backward.
+    speed is the magnitude of the speed fraction [0, 1].
+    """
+
+    def __init__(
+        self,
+        control:     "LocalMotorController",
+        delta_ticks: int,
+        speed:       float | None = None,
+        tolerance:   int   | None = None,
+        cfg:         _config_module.Config | None = None,
+    ) -> None:
+        c = cfg if cfg is not None else _config_module.get()
+        spd = speed     if speed     is not None else c.pos_speed
+        tol = tolerance if tolerance is not None else c.pos_tolerance
+        l, r = control.encoder_ticks
+        self._control   = control
+        self._start_avg = (l + r) / 2.0
+        self._target    = int(delta_ticks)
+        sign            = 1.0 if delta_ticks >= 0 else -1.0
+        self._speed     = sign * _clamp(abs(spd), 0.0, 1.0)
+        self._tolerance = max(1, tol)
+        self.done       = False
+
+    def progress(self) -> tuple[float, float]:
+        """Returns (ticks_traveled, ticks_target)."""
+        l, r = self._control.encoder_ticks
+        traveled = abs((l + r) / 2.0 - self._start_avg)
+        return traveled, float(abs(self._target))
+
+    def step(self) -> None:
+        """Send one drive command. Sets self.done=True when target ticks reached."""
+        if self.done:
+            return
+        l, r = self._control.encoder_ticks
+        avg_delta = (l + r) / 2.0 - self._start_avg
+        if abs(avg_delta) >= abs(self._target) - self._tolerance:
+            self.done = True
+            return
+        self._control.send_drive(MotorCommand(left=self._speed, right=self._speed))
+
+
+# ── Rotation controller ───────────────────────────────────────────────────────
+
+class RotationController:
+    """
+    Rotates the robot in place by a fixed number of degrees.
+
+    Positive degrees = clockwise (right): left wheel forward, right backward.
+    Negative degrees = counter-clockwise (left): opposite.
+
+    Uses the motor speed PID (send_drive) for consistent wheel speeds.
+    Call step() each loop tick; check done after.
+
+        ctrl = RotationController(control, degrees=90, speed=0.20)
+        while not ctrl.done:
+            ctrl.step()
+        control.idle()
+    """
+
+    def __init__(
+        self,
+        control:   "LocalMotorController",
+        degrees:   float,
+        speed:     float | None = None,
+        tolerance: int   | None = None,
+        cfg:       _config_module.Config | None = None,
+    ) -> None:
+        c = cfg if cfg is not None else _config_module.get()
+        spd = speed     if speed     is not None else c.rot_speed
+        tol = tolerance if tolerance is not None else c.rot_tolerance
+        l, r = control.encoder_ticks
+        self._control       = control
+        self._start_left    = l
+        self._start_right   = r
+        self._target_ticks  = _ticks_for_degrees(degrees, c.wheel_diameter_m, c.wheelbase_m)
+        sign                = 1.0 if degrees >= 0.0 else -1.0
+        spd                 = _clamp(abs(spd), 0.0, 1.0)
+        # CW: left fwd, right rev.  CCW: opposite.
+        self._left_cmd  =  sign * spd
+        self._right_cmd = -sign * spd
+        self._tolerance = max(1, tol)
+        self.done       = False
+
+    def progress(self) -> tuple[float, float]:
+        """Returns (ticks_traveled, ticks_target)."""
+        l, r = self._control.encoder_ticks
+        traveled = (abs(l - self._start_left) + abs(r - self._start_right)) / 2.0
+        return traveled, self._target_ticks
+
+    def step(self) -> None:
+        """Send one drive command. Sets self.done=True when target angle reached."""
+        if self.done:
+            return
+        l, r = self._control.encoder_ticks
+        traveled = (abs(l - self._start_left) + abs(r - self._start_right)) / 2.0
+        if traveled >= self._target_ticks - self._tolerance:
+            self.done = True
+            return
+        self._control.send_drive(MotorCommand(left=self._left_cmd, right=self._right_cmd))
 
 
 # ── Controller ────────────────────────────────────────────────────────────────
