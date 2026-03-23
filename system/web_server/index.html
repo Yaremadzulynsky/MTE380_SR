@@ -403,6 +403,33 @@
     </div>
   </div>
 
+  <!-- Corner Turn -->
+  <div class="card">
+    <h2>Corner Turn — curvature-triggered 90° turn</h2>
+    <div class="fields">
+      <div class="field">
+        <label for="corner_curvature_thresh">curvature thresh</label>
+        <input type="number" id="corner_curvature_thresh" step="0.05" min="0" max="2" />
+      </div>
+      <div class="field">
+        <label for="corner_curve_conf_min">conf min (strips)</label>
+        <input type="number" id="corner_curve_conf_min" step="0.1" min="0" max="1" />
+      </div>
+      <div class="field">
+        <label for="corner_forward_m">forward (m)</label>
+        <input type="number" id="corner_forward_m" step="0.01" min="0" max="2" />
+      </div>
+      <div class="field">
+        <label for="corner_forward_speed">forward speed</label>
+        <input type="number" id="corner_forward_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <label for="curve_n_strips">curve strips</label>
+        <input type="number" id="curve_n_strips" step="1" min="2" max="20" />
+      </div>
+    </div>
+  </div>
+
   <!-- Wheel geometry -->
   <div class="card">
     <h2>Wheel geometry</h2>
@@ -617,6 +644,8 @@
       "lost_line_coast_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
+      "corner_curvature_thresh", "corner_curve_conf_min",
+      "corner_forward_m", "corner_forward_speed", "curve_n_strips",
       "turn_speed", "turn_duration_s",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
@@ -628,6 +657,7 @@
     ];
     const INT_KEYS = new Set([
       "forward_ticks",
+      "curve_n_strips",
       "red_loss_debounce_frames",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
@@ -655,6 +685,11 @@
       red_error_ema_alpha:     [0,    1,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
+      corner_curvature_thresh: [0,    2,      0.05  ],
+      corner_curve_conf_min:   [0,    1,      0.1   ],
+      corner_forward_m:        [0,    2,      0.01  ],
+      corner_forward_speed:    [0,    1,      0.01  ],
+      curve_n_strips:          [2,    20,     1     ],
       turn_speed:              [0,    1,      0.01  ],
       turn_duration_s:         [0,    6,      0.05  ],
       wheel_diameter_m:        [0.01, 0.20,   0.001 ],
