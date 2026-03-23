@@ -193,6 +193,15 @@ def test_status():
     return jsonify(_runner.move_status())
 
 
+@app.post("/api/test/stop")
+def test_stop():
+    """Immediately cancel any active position/rotation move and idle motors."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    _runner.stop_move()
+    return jsonify({"ok": True})
+
+
 @app.post("/api/test/position")
 def test_position():
     """Stop the mission and drive delta_ticks (positive = forward)."""

@@ -152,6 +152,15 @@ class MissionRunner:
             "remaining": round(remaining, 1),
         }
 
+    def stop_move(self) -> None:
+        """Cancel any active position/rotation move and idle motors immediately."""
+        ctrl = self._active_ctrl
+        if ctrl is not None:
+            ctrl.done = True          # signals the move thread to exit its loop
+        self._active_ctrl      = None
+        self._active_ctrl_type = None
+        self._control.idle()
+
     def stop(self) -> None:
         with self._lock:
             self._running = False

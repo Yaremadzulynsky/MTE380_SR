@@ -497,6 +497,9 @@
       <div class="field">
         <button onclick="testPosition()" style="margin-top:1.2rem;">Run</button>
       </div>
+      <div class="field">
+        <button onclick="testStop()" style="margin-top:1.2rem; background:#7f1d1d; color:#fca5a5;">Stop</button>
+      </div>
     </div>
     <p id="test-pos-status" class="hint" style="margin-top:0.5rem;"></p>
     <div id="test-pos-progress" style="display:none; margin-top:0.6rem;">
@@ -519,6 +522,9 @@
       </div>
       <div class="field">
         <button onclick="testRotation()" style="margin-top:1.2rem;">Run</button>
+      </div>
+      <div class="field">
+        <button onclick="testStop()" style="margin-top:1.2rem; background:#7f1d1d; color:#fca5a5;">Stop</button>
       </div>
     </div>
     <p id="test-rot-status" class="hint" style="margin-top:0.5rem;"></p>
@@ -1029,6 +1035,14 @@
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         el.textContent = `Sent: ${degrees}°`;
       } catch (e) { el.textContent = "Error: " + e.message; }
+    }
+
+    async function testStop() {
+      try {
+        await fetch("/api/test/stop", { method: "POST" });
+        document.getElementById("test-pos-status").textContent = "Stopped.";
+        document.getElementById("test-rot-status").textContent = "Stopped.";
+      } catch (e) { /* ignore */ }
     }
 
     // ── Status polling ───────────────────────────────────────────────────────
