@@ -55,13 +55,9 @@ class Config:
     turn_speed:      float = 0.30
     turn_duration_s: float = 2.2
 
-    # ── Controllers (position + rotation) ─────────────────────────────────────
+    # ── Controllers (rotation) ────────────────────────────────────────────────
     wheel_diameter_m: float = 0.065  # wheel outer diameter (metres)
     wheelbase_m:      float = 0.155  # centre-to-centre track width (metres)
-    pos_kp:           float = 0.001  # position PID — proportional gain
-    pos_ki:           float = 0.0    # position PID — integral gain
-    pos_kd:           float = 0.0    # position PID — derivative gain
-    pos_tolerance:    int   = 20     # done when within this many ticks of target
     rot_kp:           float = 0.5    # rotation PID — proportional gain (radian-space)
     rot_ki:           float = 0.0    # rotation PID — integral gain
     rot_kd:           float = 0.0    # rotation PID — derivative gain
@@ -119,7 +115,6 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",
-        "pos_kp", "pos_ki", "pos_kd", "pos_tolerance",
         "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
     ]),
     ("Claw / servo", [

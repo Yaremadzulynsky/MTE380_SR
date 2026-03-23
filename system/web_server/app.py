@@ -226,20 +226,6 @@ def drive_stop():
     return jsonify({"ok": True})
 
 
-@app.post("/api/test/position")
-def test_position():
-    """Stop the mission and drive delta_ticks (positive = forward)."""
-    if _runner is None:
-        return jsonify({"error": "No runner attached."}), 503
-    data = request.get_json(silent=True) or {}
-    try:
-        delta = int(data["delta_ticks"])
-    except (KeyError, TypeError, ValueError):
-        return jsonify({"error": "delta_ticks must be an integer"}), 400
-    _runner.run_position(delta)
-    return jsonify({"ok": True, "delta_ticks": delta})
-
-
 @app.post("/api/test/rotation")
 def test_rotation():
     """Stop the mission and rotate degrees (positive = CW)."""
