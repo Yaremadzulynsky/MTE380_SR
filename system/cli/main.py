@@ -648,10 +648,23 @@ def cmd_claw(ctrl, args) -> None:
     print(f"  Claw → {args.angle}°")
 
 
+def cmd_voltage(ctrl, args) -> None:
+    print(f"  Voltage L={args.left}  R={args.right} — Ctrl-C to stop", flush=True)
+    try:
+        while True:
+            ctrl.send_voltage(args.left, args.right)
+            time.sleep(0.02)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        ctrl.idle()
+
+
 HARDWARE_COMMANDS = {
     "encoders": cmd_encoders,
     "serial":   cmd_serial,
     "motors":   cmd_motors,
+    "voltage":  cmd_voltage,
     "claw":     cmd_claw,
 }
 
@@ -695,6 +708,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("serial",   help="Print raw serial bytes hex (Enter to stop)")
 
     p = sub.add_parser("motors", help="Set left/right motor fractions [-1, 1]")
+    p.add_argument("left",  type=float)
+    p.add_argument("right", type=float)
+
+    p = sub.add_parser("voltage", help="Send direct voltage [-1, 1] to motors, bypassing RPM PID (Ctrl-C to stop)")
     p.add_argument("left",  type=float)
     p.add_argument("right", type=float)
 
