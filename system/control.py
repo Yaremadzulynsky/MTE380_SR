@@ -62,9 +62,9 @@ class PositionController:
     """
     Drives the robot forward or backward a fixed number of encoder ticks.
 
-    A PID controller (pos_kp/ki/kd) maps remaining ticks → speed fraction so
-    the robot ramps down as it approaches the target.  Call step() each loop
-    tick; check done after.
+    PID error = target_ticks - signed_displacement (positive = not there yet,
+    negative = overshot).  Output is a signed voltage [-1, 1] so the robot
+    can reverse to correct overshoot, enabling proper PID behaviour.
 
         ctrl = PositionController(control, delta_ticks=500)
         while not ctrl.done:
@@ -86,33 +86,32 @@ class PositionController:
         l, r = control.encoder_ticks
         self._control   = control
         self._start_avg = (l + r) / 2.0
-        self._target    = int(delta_ticks)
-        self._sign      = 1.0 if delta_ticks >= 0 else -1.0
+        self._target    = int(delta_ticks)   # signed
         self._tolerance = max(1, tol)
         self.done       = False
-        # PID: setpoint = abs(target ticks), input = ticks traveled, output = speed fraction
+        # PID: setpoint = target (signed), input = signed displacement, output = voltage [-1, 1]
         self._pid = PID(c.pos_kp, c.pos_ki, c.pos_kd,
-                        setpoint=float(abs(self._target)),
-                        output_limits=(0.0, 1.0),
+                        setpoint=float(self._target),
+                        output_limits=(-1.0, 1.0),
                         sample_time=None)
 
     def progress(self) -> tuple[float, float]:
-        """Returns (ticks_traveled, ticks_target)."""
+        """Returns (abs_ticks_traveled, abs_ticks_target) for display."""
         l, r = self._control.encoder_ticks
-        traveled = abs((l + r) / 2.0 - self._start_avg)
-        return traveled, float(abs(self._target))
+        displaced = (l + r) / 2.0 - self._start_avg
+        return abs(displaced), float(abs(self._target))
 
     def step(self) -> None:
-        """Send one drive command. Sets self.done=True when target ticks reached."""
+        """Send one drive command. Sets self.done=True when within tolerance."""
         if self.done:
             return
         l, r = self._control.encoder_ticks
-        traveled = abs((l + r) / 2.0 - self._start_avg)
-        if traveled >= abs(self._target) - self._tolerance:
+        displaced = (l + r) / 2.0 - self._start_avg
+        if abs(displaced - self._target) <= self._tolerance:
             self.done = True
             return
-        speed = self._pid(traveled)
-        self._control.send_voltage(self._sign * speed, self._sign * speed)
+        voltage = self._pid(displaced)
+        self._control.send_voltage(voltage, voltage)
 
 
 # ── Rotation controller ───────────────────────────────────────────────────────
@@ -124,9 +123,9 @@ class RotationController:
     Positive degrees = clockwise (right): left wheel forward, right backward.
     Negative degrees = counter-clockwise (left): opposite.
 
-    A PID controller (rot_kp/ki/kd) maps remaining ticks → speed fraction so
-    the robot ramps down as it approaches the target angle.
-    Call step() each loop tick; check done after.
+    PID error = target_ticks - traveled (positive = not there, negative = overshot).
+    Output is a signed voltage magnitude [-1, 1] applied differentially so the
+    robot can reverse to correct overshoot, enabling proper PID behaviour.
 
         ctrl = RotationController(control, degrees=90)
         while not ctrl.done:
@@ -151,10 +150,11 @@ class RotationController:
         self._sign         = 1.0 if degrees >= 0.0 else -1.0  # CW: +1, CCW: -1
         self._tolerance    = max(1, tol)
         self.done          = False
-        # PID: setpoint = target ticks, input = ticks traveled, output = speed fraction magnitude
+        # PID: setpoint = target ticks, input = traveled, output = signed voltage [-1, 1]
+        # Negative output reverses the rotation to correct overshoot.
         self._pid = PID(c.rot_kp, c.rot_ki, c.rot_kd,
                         setpoint=self._target_ticks,
-                        output_limits=(0.0, 1.0),
+                        output_limits=(-1.0, 1.0),
                         sample_time=None)
 
     def progress(self) -> tuple[float, float]:
@@ -164,16 +164,17 @@ class RotationController:
         return traveled, self._target_ticks
 
     def step(self) -> None:
-        """Send one drive command. Sets self.done=True when target angle reached."""
+        """Send one drive command. Sets self.done=True when within tolerance."""
         if self.done:
             return
         l, r = self._control.encoder_ticks
         traveled = (abs(l - self._start_left) + abs(r - self._start_right)) / 2.0
-        if traveled >= self._target_ticks - self._tolerance:
+        if abs(traveled - self._target_ticks) <= self._tolerance:
             self.done = True
             return
         speed = self._pid(traveled)
-        # CW: left fwd, right rev.  CCW: opposite.
+        # Positive speed = rotate in commanded direction; negative = reverse to correct overshoot.
+        # CW: left fwd (+), right rev (-).  CCW: opposite.
         self._control.send_voltage(self._sign * speed, -self._sign * speed)
 
 
