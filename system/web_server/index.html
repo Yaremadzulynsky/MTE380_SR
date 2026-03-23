@@ -516,6 +516,13 @@
       </div>
     </div>
     <p id="test-rot-status" class="hint" style="margin-top:0.5rem;"></p>
+    <div style="margin-top:0.6rem;">
+      <span id="rot-pid-state" style="
+        display:inline-block; padding:0.2rem 0.6rem; border-radius:4px;
+        font-size:0.72rem; font-weight:600; letter-spacing:0.08em;
+        background:#1a1a1a; color:#555; border:1px solid #2a2a2a;
+      ">IDLE</span>
+    </div>
     <div id="test-rot-progress" style="display:none; margin-top:0.6rem;">
       <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Progress</div>
       <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:5px; height:8px; overflow:hidden;">
@@ -1106,12 +1113,33 @@
         if (!res.ok) return;
         const s = await res.json();
 
-        const posProgress = document.getElementById("test-pos-progress");
-        const rotProgress = document.getElementById("test-rot-progress");
-        const posBar      = document.getElementById("test-pos-bar");
-        const rotBar      = document.getElementById("test-rot-bar");
-        const posTelem    = document.getElementById("test-pos-telem");
-        const rotTelem    = document.getElementById("test-rot-telem");
+        const posProgress  = document.getElementById("test-pos-progress");
+        const rotProgress  = document.getElementById("test-rot-progress");
+        const posBar       = document.getElementById("test-pos-bar");
+        const rotBar       = document.getElementById("test-rot-bar");
+        const posTelem     = document.getElementById("test-pos-telem");
+        const rotTelem     = document.getElementById("test-rot-telem");
+        const rotPidState  = document.getElementById("rot-pid-state");
+
+        // Update PID state badge
+        if (s.active === "rotation") {
+          if (s.done) {
+            rotPidState.textContent = "DONE";
+            rotPidState.style.background = "#14532d";
+            rotPidState.style.color      = "#86efac";
+            rotPidState.style.borderColor = "#166534";
+          } else {
+            rotPidState.textContent = "RUNNING";
+            rotPidState.style.background = "#713f12";
+            rotPidState.style.color      = "#fde047";
+            rotPidState.style.borderColor = "#854d0e";
+          }
+        } else {
+          rotPidState.textContent = "IDLE";
+          rotPidState.style.background  = "#1a1a1a";
+          rotPidState.style.color       = "#555";
+          rotPidState.style.borderColor = "#2a2a2a";
+        }
 
         if (s.active === "position") {
           posProgress.style.display = "block";
@@ -1131,7 +1159,7 @@
             `  |  enc L: ${s.enc_l}  R: ${s.enc_r}` +
             (s.done ? "  ✓ done" : "");
         } else {
-          // No active move — hide both unless already done (keep last result visible)
+          // No active move — keep last telem visible
         }
       } catch (_) {}
     }
