@@ -118,20 +118,29 @@ def _build_mission_preview_bgr(
     mh, mw = overlay.shape[:2]
     roi_y = int(mh * perception.roi_top_ratio)
 
-    # Lateral error: err = (cx - w/2) / (w/2)  =>  cx = (w/2) * (1 + err)
-    x_line = int(round(mw * 0.5 * (1.0 + float(det.red_error))))
-    x_line = max(0, min(mw - 1, x_line))
-    y_pt = min(mh - 18, max(roi_y + 20, mh // 2))
+    # Horizontal error bar from image centre: length ∝ |err| (err ∈ [-1,1] → full half-width).
+    # Positive err → bar extends right; negative → left.
+    cx = mw // 2
+    y_bar = min(mh - 35, max(roi_y + 35, int(mh * 0.72)))
+    half_span = (mw * 0.5) * 0.92
+    err = float(det.red_error)
+    x_tip = int(round(cx + err * half_span))
+    x_tip = max(0, min(mw - 1, x_tip))
+    th = max(2, min(8, int(2 + 6 * min(1.0, abs(err)))))
+    # Centre tick (origin of the error bar)
+    cv2.line(overlay, (cx, y_bar - 7), (cx, y_bar + 7), (255, 255, 255), 1, cv2.LINE_AA)
     if det.red_found:
-        cv2.line(overlay, (x_line, 0), (x_line, mh - 1), (255, 128, 0), 2, cv2.LINE_AA)  # orange = line position
-        cv2.circle(overlay, (x_line, y_pt), 7, (255, 128, 0), 2, cv2.LINE_AA)
-        cv2.circle(overlay, (x_line, y_pt), 2, (255, 128, 0), -1, cv2.LINE_AA)
+        if abs(x_tip - cx) <= 1:
+            cv2.circle(overlay, (cx, y_bar), 4, (255, 128, 0), 2, cv2.LINE_AA)
+        else:
+            cv2.line(overlay, (cx, y_bar), (x_tip, y_bar), (255, 128, 0), th, cv2.LINE_AA)
+            cv2.circle(overlay, (x_tip, y_bar), max(3, th // 2 + 2), (255, 128, 0), 2, cv2.LINE_AA)
     else:
-        cv2.line(overlay, (x_line, roi_y), (x_line, mh - 1), (80, 80, 80), 1, cv2.LINE_AA)
+        cv2.line(overlay, (cx, y_bar), (x_tip, y_bar), (70, 70, 70), 1, cv2.LINE_AA)
     cv2.putText(
         overlay,
-        "white=center  orange=err",
-        (mw - 220, 28),
+        "orange: |err| from centre (length)",
+        (mw - 280, 28),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.45,
         (200, 200, 200),
