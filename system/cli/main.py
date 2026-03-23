@@ -43,6 +43,7 @@ class MissionRunner:
     def __init__(self, control, args: argparse.Namespace):
         from perception import Perception
         self._control = control
+        self.control  = control   # public access for web server
         self._args    = args
 
         self._perception = Perception(_config_module.get())

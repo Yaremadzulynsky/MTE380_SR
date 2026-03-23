@@ -541,6 +541,29 @@
     </div>
   </div>
 
+  <!-- Manual drive -->
+  <div class="card">
+    <h2>Manual drive — direct voltage</h2>
+    <p class="hint">Send voltage directly to motors, bypassing the RPM PID. Range [-1, 1]. Stops when you click Stop.</p>
+    <div class="fields" style="align-items:flex-end;">
+      <div class="field">
+        <label for="drive-left">left</label>
+        <input type="number" id="drive-left" value="0.3" step="0.05" min="-1" max="1" />
+      </div>
+      <div class="field">
+        <label for="drive-right">right</label>
+        <input type="number" id="drive-right" value="0.3" step="0.05" min="-1" max="1" />
+      </div>
+      <div class="field">
+        <button onclick="driveStart()" style="margin-top:1.2rem;">Drive</button>
+      </div>
+      <div class="field">
+        <button onclick="driveStop()" style="margin-top:1.2rem; background:#7f1d1d; color:#fca5a5;">Stop</button>
+      </div>
+    </div>
+    <p id="drive-status" class="hint" style="margin-top:0.5rem;"></p>
+  </div>
+
   <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
     <div class="help-dialog-inner">
       <button type="button" class="help-close" aria-label="Close help">&times;</button>
@@ -1040,6 +1063,28 @@
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         el.textContent = `Sent: ${degrees}°`;
       } catch (e) { el.textContent = "Error: " + e.message; }
+    }
+
+    async function driveStart() {
+      const left  = parseFloat(document.getElementById("drive-left").value);
+      const right = parseFloat(document.getElementById("drive-right").value);
+      const el = document.getElementById("drive-status");
+      try {
+        const res = await fetch("/api/drive", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ left, right }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        el.textContent = `Driving L=${left}  R=${right}`;
+      } catch (e) { el.textContent = "Error: " + e.message; }
+    }
+
+    async function driveStop() {
+      try {
+        await fetch("/api/drive/stop", { method: "POST" });
+        document.getElementById("drive-status").textContent = "Stopped.";
+      } catch (_) {}
     }
 
     async function testStop() {
