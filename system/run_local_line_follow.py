@@ -7,15 +7,17 @@ file each time you press `g`** (so saves from the PID tuner apply on the next go
 
 CLI flags override the config file when provided explicitly.
 Run:
-    python run_local_line_follow.py [--dry-run] [--no-display]
+    python run_local_line_follow.py [--dry-run]
     python run_local_line_follow.py --steer-kp 0.8   # override one value
+
+Local OpenCV preview is **off** by default; use ``--show-window`` for a live window.
+``--web-preview`` still writes JPEGs for the PID tuner (``GET /api/camera/preview.jpg``)
+without opening a window.
 
 While running, optional JSONL (lateral_err, avg_rpm) is written for the PID tuner
 charts; truncated each time you press ``g``. See ``--mission-log`` / ``--no-mission-log``.
 
-Use ``--web-preview`` to write camera+mask JPEGs for the PID tuner page
-(``GET /api/camera/preview.jpg``). Default path: ``CAMERA_PREVIEW_PATH`` or
-``system/.camera_preview.jpg``.
+Default JPEG path: ``CAMERA_PREVIEW_PATH`` or ``system/.camera_preview.jpg``.
 """
 from __future__ import annotations
 
@@ -186,7 +188,7 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         "--web-preview",
         action="store_true",
         help="Write camera+mask JPEG for the PID tuner (CAMERA_PREVIEW_PATH or "
-        "--camera-preview-path). Use with headless --no-display if needed.",
+        "--camera-preview-path). No local OpenCV window unless --show-window.",
     )
     p.add_argument(
         "--camera-preview-path",
@@ -198,8 +200,16 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     p.add_argument("--serial-port",   default="/dev/ttyACM0")
     p.add_argument("--baud",          type=int,   default=115200)
     p.add_argument("--dry-run",       action="store_true")
-    p.add_argument("--no-display",    action="store_true",
-                   default=not bool(os.environ.get("DISPLAY", "")))
+    p.add_argument(
+        "--show-window",
+        action="store_true",
+        help="Open a local OpenCV window with mission overlay (off by default).",
+    )
+    p.add_argument(
+        "--no-display",
+        action="store_true",
+        help="Force no OpenCV window (redundant unless combined with --show-window).",
+    )
     p.add_argument("--pid-config",    default=str(_DEFAULT_CONFIG),
                    help="Path to pid_config.json")
     p.add_argument(
@@ -464,7 +474,8 @@ def main() -> None:
     last_idle_log = 0.0
     last_web_preview_t = 0.0
     _WEB_PREVIEW_MIN_INTERVAL_S = 0.12  # ~8 Hz; limits SD card / flash writes
-    need_preview = (not args.no_display) or args.web_preview
+    show_opencv = bool(args.show_window) and not args.no_display
+    need_preview = show_opencv or args.web_preview
 
     if telemetry:
         print(
@@ -548,7 +559,7 @@ def main() -> None:
                 status_line = "IDLE — press 'g' to start"
 
             # ── Display / web preview ─────────────────────────────────────────
-            if args.no_display and not telemetry:
+            if not need_preview and not telemetry:
                 print(status_line, flush=True)
             elif need_preview:
                 preview_bgr = _build_mission_preview_bgr(
@@ -559,7 +570,7 @@ def main() -> None:
                     if now - last_web_preview_t >= _WEB_PREVIEW_MIN_INTERVAL_S:
                         _write_camera_preview_jpeg(camera_preview_path, preview_bgr)
                         last_web_preview_t = now
-                if not args.no_display:
+                if show_opencv:
                     cv2.imshow("mission", preview_bgr)
                     k = cv2.waitKey(1) & 0xFF
                     if k == ord("q"):
