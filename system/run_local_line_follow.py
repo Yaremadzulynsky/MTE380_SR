@@ -9,6 +9,9 @@ CLI flags override the config file when provided explicitly.
 Run:
     python run_local_line_follow.py [--dry-run] [--no-display]
     python run_local_line_follow.py --steer-kp 0.8   # override one value
+
+While running, optional JSONL (lateral_err, avg_rpm) is written for the PID tuner
+charts; truncated each time you press ``g``. See ``--mission-log`` / ``--no-mission-log``.
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ import threading
 import time
 import tty
 from pathlib import Path
+from typing import TextIO
 
 import cv2
 
@@ -32,6 +36,7 @@ from local.state_machine import Config, MissionStateMachine, State
 # ── Config file ───────────────────────────────────────────────────────────────
 
 _DEFAULT_CONFIG = Path(__file__).parent / "pid_config.json"
+_DEFAULT_MISSION_LOG = Path(__file__).parent / "mission_telemetry.jsonl"
 
 _FALLBACK: dict = {
     "steer_kp": 0.65,   "steer_ki": 0.04,    "steer_kd": 0.10,  "steer_out_limit": 0.80,
@@ -134,6 +139,17 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         type=float,
         default=0.5,
         help="When IDLE, print a short perception line at most this often (seconds).",
+    )
+    p.add_argument(
+        "--mission-log",
+        type=str,
+        default=os.environ.get("MISSION_TELEMETRY_PATH", str(_DEFAULT_MISSION_LOG)),
+        help="JSONL path (lateral_err, avg_rpm) for PID tuner charts; truncated each 'g'.",
+    )
+    p.add_argument(
+        "--no-mission-log",
+        action="store_true",
+        help="Disable writing mission telemetry JSONL.",
     )
 
     # ── All tunable values — defaults come from the config file ──────────────
@@ -290,12 +306,20 @@ def main() -> None:
 
     sm      = _make_sm()
     running = False   # waiting for 'g' to start
+    mission_log_fp: TextIO | None = None
+    mission_t0: float | None = None
 
     control.send_claw(args.claw_open)
 
+    def _stop_mission_log() -> None:
+        nonlocal mission_log_fp
+        if mission_log_fp is not None:
+            mission_log_fp.close()
+            mission_log_fp = None
+
     def go_reload_and_start() -> None:
         """Reload pid_config.json (dashboard), apply motor + state machine, then run."""
-        nonlocal sm, running
+        nonlocal sm, running, mission_log_fp, mission_t0
         fresh = load_pid_config(cfg_path)
         apply_pid_config_to_args(fresh, args)
         control.set_motor_pid(
@@ -311,6 +335,12 @@ def main() -> None:
         )
         sm = _make_sm()
         running = True
+        mission_t0 = time.monotonic()
+        _stop_mission_log()
+        if not args.no_mission_log:
+            log_path = Path(args.mission_log)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            mission_log_fp = open(log_path, "w", buffering=1, encoding="utf-8")
         print(
             f"[KEY] go — reloaded {cfg_path}  "
             f"steer_kp={args.steer_kp}  max_speed={args.max_speed}  "
@@ -352,6 +382,8 @@ def main() -> None:
                 go_reload_and_start()
             elif key == "s" and running:
                 running = False
+                mission_t0 = None
+                _stop_mission_log()
                 control.idle()
                 print("[KEY] stop (motors idle, serial still open)", flush=True)
             elif key in ("q", "\x03"):   # q or Ctrl-C
@@ -376,10 +408,31 @@ def main() -> None:
 
                 if output.state == State.DONE:
                     running = False
+                    mission_t0 = None
+                    _stop_mission_log()
                     control.idle()
                     print("Mission complete. Press 'g' to run again.", flush=True)
 
                 rpm_l, rpm_r = control.measured_rpm
+                if (
+                    mission_log_fp is not None
+                    and mission_t0 is not None
+                    and not args.no_mission_log
+                ):
+                    t_m = time.monotonic() - mission_t0
+                    avg_rpm = (rpm_l + rpm_r) / 2.0
+                    mission_log_fp.write(
+                        json.dumps(
+                            {
+                                "t_s": round(t_m, 4),
+                                "lateral_err": det.red_error,
+                                "avg_rpm": avg_rpm,
+                                "state": output.state.value,
+                            },
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
                 status_line = (
                     f"state={output.state.value:14s}  "
                     f"err={det.red_error:+.2f}  "
@@ -412,6 +465,8 @@ def main() -> None:
                     go_reload_and_start()
                 elif k == ord("s") and running:
                     running = False
+                    mission_t0 = None
+                    _stop_mission_log()
                     control.idle()
                     print("[KEY] stop (motors idle, serial still open)", flush=True)
 
@@ -447,6 +502,7 @@ def main() -> None:
                 time.sleep(period - elapsed)
 
     finally:
+        _stop_mission_log()
         kb.stop()
         control.shutdown()
         perception.release()

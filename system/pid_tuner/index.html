@@ -13,7 +13,7 @@
       font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
       font-size: 14px;
       padding: 1.25rem;
-      max-width: 860px;
+      max-width: 960px;
       margin: 0 auto;
     }
 
@@ -217,11 +217,73 @@
     #status        { font-size: 0.8rem; color: #4ade80; }
     #status.error  { color: #f87171;  }
     #status.saving { color: #94a3b8;  }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    @media (min-width: 800px) {
+      .chart-row { grid-template-columns: 1fr 1fr; }
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 220px;
+      width: 100%;
+    }
+
+    .mission-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .mission-toolbar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      cursor: pointer;
+    }
+
+    .mission-meta {
+      font-size: 0.72rem;
+      color: #64748b;
+      word-break: break-all;
+    }
+
+    button.btn-secondary {
+      background: #334155;
+    }
+
+    button.btn-secondary:hover {
+      background: #475569;
+    }
   </style>
 </head>
 <body>
 
   <h1>PID Tuner</h1>
+
+  <!-- Mission telemetry (written by run_local_line_follow.py) -->
+  <div class="card">
+    <h2>Mission run — lateral error &amp; avg RPM</h2>
+    <p class="hint">Run <code>run_local_line_follow.py</code> on the Pi, press <code>g</code> to start; each run truncates <code>mission_telemetry.jsonl</code>. Refresh or enable auto-refresh below.</p>
+    <div class="mission-toolbar">
+      <button type="button" class="btn-secondary" id="mission_refresh">Refresh charts</button>
+      <label><input type="checkbox" id="mission_autorefresh" checked /> Auto-refresh (1.5s)</label>
+      <span class="mission-meta" id="mission_meta"></span>
+    </div>
+    <div class="chart-row">
+      <div class="chart-wrap"><canvas id="chart_lateral" aria-label="Lateral error over time"></canvas></div>
+      <div class="chart-wrap"><canvas id="chart_rpm" aria-label="Average RPM over time"></canvas></div>
+    </div>
+  </div>
 
   <!-- Steering PID -->
   <div class="card">
@@ -378,6 +440,7 @@
     <span id="status"></span>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script>
     // All keys match the JSON keys in pid_config.json exactly.
     const KEYS = [
@@ -711,7 +774,119 @@
       }
     }
 
+    // ── Mission telemetry charts (mission_telemetry.jsonl from run_local_line_follow.py) ──
+    let chartLateral = null;
+    let chartRpm = null;
+    let missionInterval = null;
+
+    function missionChartOptions(yTitle) {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        parsing: false,
+        interaction: { mode: "nearest", intersect: false },
+        scales: {
+          x: {
+            type: "linear",
+            title: { display: true, text: "Time (s)", color: "#64748b" },
+            ticks: { color: "#64748b" },
+            grid: { color: "#2a2a2a" },
+          },
+          y: {
+            title: { display: true, text: yTitle, color: "#64748b" },
+            ticks: { color: "#64748b" },
+            grid: { color: "#2a2a2a" },
+          },
+        },
+        plugins: {
+          legend: { labels: { color: "#94a3b8" } },
+        },
+      };
+    }
+
+    async function refreshMissionCharts() {
+      const meta = document.getElementById("mission_meta");
+      if (!meta || typeof Chart === "undefined") return;
+      try {
+        const res = await fetch("/api/mission");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { points, path } = await res.json();
+        meta.textContent = points.length
+          ? `${points.length} samples · ${path}`
+          : `No data yet · ${path}`;
+
+        const errData = points.map((p) => ({ x: p.t_s, y: p.lateral_err }));
+        const rpmData = points.map((p) => ({ x: p.t_s, y: p.avg_rpm }));
+
+        if (chartLateral) {
+          chartLateral.data.datasets[0].data = errData;
+          chartLateral.update("none");
+        } else {
+          const el = document.getElementById("chart_lateral");
+          if (el) {
+            chartLateral = new Chart(el.getContext("2d"), {
+              type: "line",
+              data: {
+                datasets: [{
+                  label: "Lateral error",
+                  data: errData,
+                  borderColor: "#60a5fa",
+                  backgroundColor: "rgba(96,165,250,0.12)",
+                  fill: true,
+                  tension: 0.12,
+                  pointRadius: 0,
+                  borderWidth: 1.5,
+                }],
+              },
+              options: missionChartOptions("Error (norm.)"),
+            });
+          }
+        }
+
+        if (chartRpm) {
+          chartRpm.data.datasets[0].data = rpmData;
+          chartRpm.update("none");
+        } else {
+          const el = document.getElementById("chart_rpm");
+          if (el) {
+            chartRpm = new Chart(el.getContext("2d"), {
+              type: "line",
+              data: {
+                datasets: [{
+                  label: "Avg RPM",
+                  data: rpmData,
+                  borderColor: "#34d399",
+                  backgroundColor: "rgba(52,211,153,0.1)",
+                  fill: true,
+                  tension: 0.12,
+                  pointRadius: 0,
+                  borderWidth: 1.5,
+                }],
+              },
+              options: missionChartOptions("Avg RPM"),
+            });
+          }
+        }
+      } catch (e) {
+        meta.textContent = "Mission load failed: " + e.message;
+      }
+    }
+
+    document.getElementById("mission_refresh")?.addEventListener("click", refreshMissionCharts);
+
+    function setupMissionAutoRefresh() {
+      const cb = document.getElementById("mission_autorefresh");
+      if (missionInterval) clearInterval(missionInterval);
+      missionInterval = null;
+      if (cb && cb.checked) {
+        missionInterval = setInterval(refreshMissionCharts, 1500);
+      }
+    }
+    document.getElementById("mission_autorefresh")?.addEventListener("change", setupMissionAutoRefresh);
+
     load();
+    refreshMissionCharts();
+    setupMissionAutoRefresh();
   </script>
 </body>
 </html>

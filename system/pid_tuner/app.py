@@ -11,6 +11,10 @@ POST /api/pid  → validates and saves the updated config, returns saved values
 
 The config file is at system/pid_config.json (one level up from this file).
 The robot runner (run_local_line_follow.py) reads that file on startup.
+
+Mission telemetry JSONL (lateral_err, avg_rpm) is written by the runner next to
+pid_config.json by default; GET /api/mission serves it for charts. Override with
+MISSION_TELEMETRY_PATH.
 """
 from __future__ import annotations
 
@@ -24,6 +28,9 @@ from flask import Flask, jsonify, request, send_from_directory
 
 HERE        = Path(__file__).parent
 CONFIG_PATH = Path(os.getenv("PID_CONFIG_PATH", str(HERE.parent / "pid_config.json")))
+MISSION_TELEMETRY_PATH = Path(
+    os.getenv("MISSION_TELEMETRY_PATH", str(HERE.parent / "mission_telemetry.jsonl"))
+)
 PORT        = int(os.getenv("PORT", "5050"))
 
 # ── Defaults (used when the config file is missing or a key is absent) ────────
@@ -151,6 +158,28 @@ def set_pid():
 
     save_config(clean)
     return jsonify({"ok": True, "saved": clean})
+
+
+@app.get("/api/mission")
+def get_mission():
+    """JSONL written by run_local_line_follow.py while mission is running."""
+    path = MISSION_TELEMETRY_PATH
+    if not path.is_file():
+        return jsonify({"points": [], "path": str(path.resolve())})
+    points: list[dict] = []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return jsonify({"points": [], "path": str(path.resolve())})
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            points.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return jsonify({"points": points, "path": str(path.resolve())})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
