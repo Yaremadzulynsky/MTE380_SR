@@ -127,9 +127,12 @@ class MissionRunner:
             ctrl = RotationController(self._control, degrees)
             self._active_ctrl = ctrl
             self._active_ctrl_type = "rotation"
+            interval = 0.02
             while not ctrl.done:
+                t0 = time.monotonic()
                 ctrl.step()
-                time.sleep(0.02)
+                elapsed = time.monotonic() - t0
+                time.sleep(max(0.0, interval - elapsed))
             self._active_ctrl = None
             self._active_ctrl_type = None
             self._control.idle()
