@@ -180,11 +180,17 @@ class MissionRunner:
             running  = self._running
         enc_l, enc_r = self._control.encoder_ticks
         rpm_l, rpm_r = self._control.measured_rpm
+        pos_current = (enc_l + enc_r) / 2.0
+        with self._lock:
+            pos_target = self._sm._pos_pid.setpoint if self._sm else 0.0
         return {
             "sm_state":    sm_state,
             "running":     running,
             "enc_l":       enc_l,  "enc_r": enc_r,
             "rpm_l":       rpm_l,  "rpm_r": rpm_r,
+            "pos_current": pos_current,
+            "pos_target":  pos_target,
+            "pos_error":   pos_target - pos_current,
             "det":         det,
             "output":      output,
             "motor_telem": self._control.motor_telemetry_line(),

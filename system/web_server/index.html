@@ -958,7 +958,8 @@
           `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
           `enc L=${s.enc_l}  R=${s.enc_r}  |  rpm L=${s.rpm_l?.toFixed(1)}  R=${s.rpm_r?.toFixed(1)}  |  ` +
           `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
-          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}`;
+          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}  curve=${s.curve ? "Y" : "N"}\n` +
+          `pos  current=${s.pos_current?.toFixed(1)}  target=${s.pos_target?.toFixed(1)}  error=${s.pos_error?.toFixed(1)}  tolerance=±${s.pos_tolerance ?? "?"}  ticks_to_go=${s.pos_error?.toFixed(0)}`;
         btnStart.disabled = s.running;
         btnStop.disabled  = !s.running;
         btnStart.style.opacity = s.running ? "0.45" : "1";

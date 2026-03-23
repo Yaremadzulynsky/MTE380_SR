@@ -149,16 +149,21 @@ def get_status():
     snap = _runner.snapshot()
     det = snap.get("det")
     return jsonify({
-        "sm_state":   snap["sm_state"],
-        "running":    snap["running"],
-        "enc_l":      snap["enc_l"],
-        "enc_r":      snap["enc_r"],
-        "rpm_l":      snap["rpm_l"],
-        "rpm_r":      snap["rpm_r"],
-        "red_found":  det.red_found  if det else False,
-        "red_error":  det.red_error  if det else 0.0,
-        "blue_found": det.blue_found if det else False,
-        "t_junction": det.t_junction if det else False,
+        "sm_state":    snap["sm_state"],
+        "running":     snap["running"],
+        "enc_l":       snap["enc_l"],
+        "enc_r":       snap["enc_r"],
+        "rpm_l":       snap["rpm_l"],
+        "rpm_r":       snap["rpm_r"],
+        "pos_current":   snap["pos_current"],
+        "pos_target":    snap["pos_target"],
+        "pos_error":     snap["pos_error"],
+        "pos_tolerance": _config_module.get().pos_tolerance,
+        "red_found":   det.red_found       if det else False,
+        "red_error":   det.red_error       if det else 0.0,
+        "blue_found":  det.blue_found      if det else False,
+        "t_junction":  det.t_junction      if det else False,
+        "curve":       det.curve_detected  if det else False,
     })
 
 
