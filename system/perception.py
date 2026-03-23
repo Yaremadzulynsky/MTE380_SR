@@ -202,16 +202,30 @@ class Perception:
         h, w = out.shape[:2]
         roi_y = int(h * self.roi_top_ratio)
 
-        # Vertical centre line (white = frame centre; yellow = tangent-adjusted zero-error)
-        adj_cx = int(round(w / 2.0 - self._error_heading_weight * det.curve_heading * (w / 2.0)))
-        adj_cx = max(0, min(w - 1, adj_cx))
+        # Centre lines:
+        #   white  = frame centre (vertical reference)
+        #   yellow = tangent-adjusted zero-error line, tilted to match curve_heading
+        #
+        # curve_heading (b) = dx_norm/dt at t=0 (near end).
+        # Over half the frame height, x shifts by ±b * half_w/2:
+        #   top endpoint  (far,  t→1): adj_cx + b * half_w/2  (shifts right when b>0)
+        #   bottom endpoint (near, t=0): adj_cx - b * half_w/2
+        half_w_f = w / 2.0
+        adj_cx_f = half_w_f - self._error_heading_weight * det.curve_heading * half_w_f
+        dx_half  = det.curve_heading * half_w_f / 2.0
+        y_top    = roi_y if roi_y > 0 else 0
+        y_bot    = h - 1
+        x_top    = int(round(adj_cx_f + dx_half))
+        x_bot    = int(round(adj_cx_f - dx_half))
+        x_top    = max(0, min(w - 1, x_top))
+        x_bot    = max(0, min(w - 1, x_bot))
+
         if roi_y <= 0:
             cv2.line(out, (w // 2, 0), (w // 2, h - 1), (255, 255, 255), 1)
-            cv2.line(out, (adj_cx, 0), (adj_cx, h - 1), (0, 255, 255), 2)
         else:
             cv2.line(out, (0, roi_y), (w - 1, roi_y), (200, 200, 200), 1)
             cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 1)
-            cv2.line(out, (adj_cx, roi_y), (adj_cx, h - 1), (0, 255, 255), 2)
+        cv2.line(out, (x_top, y_top), (x_bot, y_bot), (0, 255, 255), 2)
 
         tags = [
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
