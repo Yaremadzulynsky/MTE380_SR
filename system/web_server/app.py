@@ -204,7 +204,7 @@ def test_stop():
 
 @app.post("/api/drive")
 def drive():
-    """Send direct voltage to motors, bypassing RPM PID."""
+    """Continuously send direct voltage to motors until /api/drive/stop."""
     if _runner is None:
         return jsonify({"error": "No runner attached."}), 503
     data = request.get_json(silent=True) or {}
@@ -213,16 +213,16 @@ def drive():
         right = float(data["right"])
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "left and right must be numbers"}), 400
-    _runner.control.send_voltage(left, right)
+    _runner.start_drive(left, right)
     return jsonify({"ok": True, "left": left, "right": right})
 
 
 @app.post("/api/drive/stop")
 def drive_stop():
-    """Stop motors."""
+    """Stop the manual drive loop."""
     if _runner is None:
         return jsonify({"error": "No runner attached."}), 503
-    _runner.control.idle()
+    _runner.stop_drive()
     return jsonify({"ok": True})
 
 

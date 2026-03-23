@@ -56,6 +56,7 @@ class MissionRunner:
         self._last_output = None
         self._active_ctrl      = None   # active PositionController or RotationController
         self._active_ctrl_type: str | None = None  # "position" or "rotation"
+        self._drive_stop       = threading.Event()  # set to stop manual drive loop
         # Circular telemetry history: each entry is (t_rel, red_error, rpm_l, rpm_r)
         self._telem_history: collections.deque = collections.deque(maxlen=300)
         self._frame_n     = 0
@@ -152,6 +153,28 @@ class MissionRunner:
             "target":    round(target,    1),
             "remaining": round(remaining, 1),
         }
+
+    def start_drive(self, left: float, right: float) -> None:
+        """Continuously drive motors via speed PID until stop_drive() is called."""
+        from control import MotorCommand
+        with self._lock:
+            self._running = False
+        self._control.reset_wheel_pids()
+        self._drive_stop.clear()
+
+        def _loop():
+            while not self._drive_stop.is_set():
+                t0 = time.monotonic()
+                self._control.send_drive(MotorCommand(left=left, right=right))
+                elapsed = time.monotonic() - t0
+                time.sleep(max(0.0, 0.02 - elapsed))
+            self._control.idle()
+
+        threading.Thread(target=_loop, daemon=True, name="manual-drive").start()
+
+    def stop_drive(self) -> None:
+        """Stop the manual drive loop."""
+        self._drive_stop.set()
 
     def stop_move(self) -> None:
         """Cancel any active position/rotation move and idle motors immediately."""
