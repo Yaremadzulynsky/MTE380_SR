@@ -203,13 +203,7 @@ def test_position():
         delta = int(data["delta_ticks"])
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "delta_ticks must be an integer"}), 400
-    speed = data.get("speed")
-    if speed is not None:
-        try:
-            speed = float(speed)
-        except (TypeError, ValueError):
-            return jsonify({"error": "speed must be a float"}), 400
-    _runner.run_position(delta, speed=speed)
+    _runner.run_position(delta)
     return jsonify({"ok": True, "delta_ticks": delta})
 
 
@@ -223,13 +217,7 @@ def test_rotation():
         degrees = float(data["degrees"])
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "degrees must be a number"}), 400
-    speed = data.get("speed")
-    if speed is not None:
-        try:
-            speed = float(speed)
-        except (TypeError, ValueError):
-            return jsonify({"error": "speed must be a float"}), 400
-    _runner.run_rotation(degrees, speed=speed)
+    _runner.run_rotation(degrees)
     return jsonify({"ok": True, "degrees": degrees})
 
 

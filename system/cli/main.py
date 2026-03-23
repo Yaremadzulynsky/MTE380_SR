@@ -95,7 +95,7 @@ class MissionRunner:
                 self._sm._steer_pid.tunings = (cfg.steer_kp, cfg.steer_ki, cfg.steer_kd)
                 self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
 
-    def run_position(self, delta_ticks: int, speed: float | None = None) -> None:
+    def run_position(self, delta_ticks: int) -> None:
         """Stop the mission and drive delta_ticks in a background thread."""
         from control import PositionController
         with self._lock:
@@ -103,7 +103,7 @@ class MissionRunner:
         self._control.idle()
 
         def _move():
-            ctrl = PositionController(self._control, delta_ticks, speed=speed)
+            ctrl = PositionController(self._control, delta_ticks)
             self._active_ctrl = ctrl
             self._active_ctrl_type = "position"
             while not ctrl.done:
@@ -116,7 +116,7 @@ class MissionRunner:
 
         threading.Thread(target=_move, daemon=True, name="pos-move").start()
 
-    def run_rotation(self, degrees: float, speed: float | None = None) -> None:
+    def run_rotation(self, degrees: float) -> None:
         """Stop the mission and rotate degrees in a background thread."""
         from control import RotationController
         with self._lock:
@@ -124,7 +124,7 @@ class MissionRunner:
         self._control.idle()
 
         def _move():
-            ctrl = RotationController(self._control, degrees, speed=speed)
+            ctrl = RotationController(self._control, degrees)
             self._active_ctrl = ctrl
             self._active_ctrl_type = "rotation"
             while not ctrl.done:

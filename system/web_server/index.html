@@ -405,8 +405,8 @@
 
   <!-- Controllers -->
   <div class="card">
-    <h2>Controllers — geometry &amp; defaults</h2>
-    <p class="hint">Wheel geometry is used to convert degrees → encoder ticks for rotation moves. Speed/tolerance are the defaults used when no override is sent from the test panels below.</p>
+    <h2>Controllers — geometry &amp; PID</h2>
+    <p class="hint">Wheel geometry converts degrees → encoder ticks. Position and rotation PIDs use remaining ticks as error and output a speed fraction [0, 1].</p>
     <div class="fields">
       <div class="field">
         <label for="wheel_diameter_m">wheel diameter (m)</label>
@@ -417,16 +417,32 @@
         <input type="number" id="wheelbase_m" step="0.001" min="0.01" />
       </div>
       <div class="field">
-        <label for="pos_speed">pos speed (fraction)</label>
-        <input type="number" id="pos_speed" step="0.01" min="0" max="1" />
+        <label for="pos_kp">pos kp</label>
+        <input type="number" id="pos_kp" step="0.0001" min="0" />
+      </div>
+      <div class="field">
+        <label for="pos_ki">pos ki</label>
+        <input type="number" id="pos_ki" step="0.0001" min="0" />
+      </div>
+      <div class="field">
+        <label for="pos_kd">pos kd</label>
+        <input type="number" id="pos_kd" step="0.0001" min="0" />
       </div>
       <div class="field">
         <label for="pos_tolerance">pos tolerance (ticks)</label>
         <input type="number" id="pos_tolerance" step="1" min="1" />
       </div>
       <div class="field">
-        <label for="rot_speed">rot speed (fraction)</label>
-        <input type="number" id="rot_speed" step="0.01" min="0" max="1" />
+        <label for="rot_kp">rot kp</label>
+        <input type="number" id="rot_kp" step="0.0001" min="0" />
+      </div>
+      <div class="field">
+        <label for="rot_ki">rot ki</label>
+        <input type="number" id="rot_ki" step="0.0001" min="0" />
+      </div>
+      <div class="field">
+        <label for="rot_kd">rot kd</label>
+        <input type="number" id="rot_kd" step="0.0001" min="0" />
       </div>
       <div class="field">
         <label for="rot_tolerance">rot tolerance (ticks)</label>
@@ -472,15 +488,11 @@
   <!-- Position test -->
   <div class="card">
     <h2>Position test — drive N ticks</h2>
-    <p class="hint">Stops the mission and drives forward (positive) or backward (negative). Leave speed blank to use the configured default.</p>
+    <p class="hint">Stops the mission and drives forward (positive) or backward (negative). Speed is controlled by the position PID above.</p>
     <div class="fields" style="align-items:flex-end;">
       <div class="field">
         <label for="test-pos-ticks">ticks</label>
         <input type="number" id="test-pos-ticks" value="200" step="50" />
-      </div>
-      <div class="field">
-        <label for="test-pos-speed">speed (blank = default)</label>
-        <input type="number" id="test-pos-speed" step="0.01" min="0" max="1" placeholder="default" />
       </div>
       <div class="field">
         <button onclick="testPosition()" style="margin-top:1.2rem;">Run</button>
@@ -499,15 +511,11 @@
   <!-- Rotation test -->
   <div class="card">
     <h2>Rotation test — turn N degrees</h2>
-    <p class="hint">Stops the mission and rotates in place. Positive = clockwise, negative = counter-clockwise. Leave speed blank to use the configured default.</p>
+    <p class="hint">Stops the mission and rotates in place. Positive = clockwise, negative = counter-clockwise. Speed is controlled by the rotation PID above.</p>
     <div class="fields" style="align-items:flex-end;">
       <div class="field">
         <label for="test-rot-degrees">degrees</label>
         <input type="number" id="test-rot-degrees" value="90" step="5" />
-      </div>
-      <div class="field">
-        <label for="test-rot-speed">speed (blank = default)</label>
-        <input type="number" id="test-rot-speed" step="0.01" min="0" max="1" placeholder="default" />
       </div>
       <div class="field">
         <button onclick="testRotation()" style="margin-top:1.2rem;">Run</button>
@@ -547,7 +555,8 @@
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "wheel_diameter_m", "wheelbase_m",
-      "pos_speed", "pos_tolerance", "rot_speed", "rot_tolerance",
+      "pos_kp", "pos_ki", "pos_kd", "pos_tolerance",
+      "rot_kp", "rot_ki", "rot_kd", "rot_tolerance",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
@@ -587,9 +596,13 @@
       turn_duration_s:         [0,    6,      0.05  ],
       wheel_diameter_m:        [0.01, 0.20,   0.001 ],
       wheelbase_m:             [0.05, 0.50,   0.001 ],
-      pos_speed:               [0,    1,      0.01  ],
+      pos_kp:                  [0,    0.05,   0.0001],
+      pos_ki:                  [0,    0.01,   0.0001],
+      pos_kd:                  [0,    0.01,   0.0001],
       pos_tolerance:           [1,    200,    1     ],
-      rot_speed:               [0,    1,      0.01  ],
+      rot_kp:                  [0,    0.05,   0.0001],
+      rot_ki:                  [0,    0.01,   0.0001],
+      rot_kd:                  [0,    0.01,   0.0001],
       rot_tolerance:           [1,    200,    1     ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
@@ -987,11 +1000,9 @@
 
     async function testPosition() {
       const delta = parseInt(document.getElementById("test-pos-ticks").value, 10);
-      const speedVal = document.getElementById("test-pos-speed").value.trim();
       const el = document.getElementById("test-pos-status");
       if (!delta) { el.textContent = "Enter a non-zero tick count."; return; }
       const body = { delta_ticks: delta };
-      if (speedVal !== "") body.speed = parseFloat(speedVal);
       el.textContent = "Running…";
       try {
         const res = await fetch("/api/test/position", {
@@ -1006,11 +1017,9 @@
 
     async function testRotation() {
       const degrees = parseFloat(document.getElementById("test-rot-degrees").value);
-      const speedVal = document.getElementById("test-rot-speed").value.trim();
       const el = document.getElementById("test-rot-status");
       if (!degrees) { el.textContent = "Enter a non-zero degree value."; return; }
       const body = { degrees };
-      if (speedVal !== "") body.speed = parseFloat(speedVal);
       el.textContent = "Running…";
       try {
         const res = await fetch("/api/test/rotation", {
@@ -1047,6 +1056,46 @@
 
     setInterval(pollStatus, 500);
     pollStatus();
+
+    // ── Move-progress polling ─────────────────────────────────────────────────
+
+    async function pollMoveStatus() {
+      try {
+        const res = await fetch("/api/test/status");
+        if (!res.ok) return;
+        const s = await res.json();
+
+        const posProgress = document.getElementById("test-pos-progress");
+        const rotProgress = document.getElementById("test-rot-progress");
+        const posBar      = document.getElementById("test-pos-bar");
+        const rotBar      = document.getElementById("test-rot-bar");
+        const posTelem    = document.getElementById("test-pos-telem");
+        const rotTelem    = document.getElementById("test-rot-telem");
+
+        if (s.active === "position") {
+          posProgress.style.display = "block";
+          rotProgress.style.display = "none";
+          const pct = s.target > 0 ? Math.min(100, (s.traveled / s.target) * 100) : 0;
+          posBar.style.width = pct.toFixed(1) + "%";
+          posTelem.textContent =
+            `traveled: ${s.traveled} ticks  |  target: ${s.target}  |  remaining: ${s.remaining} ticks` +
+            (s.done ? "  ✓ done" : "");
+        } else if (s.active === "rotation") {
+          rotProgress.style.display = "block";
+          posProgress.style.display = "none";
+          const pct = s.target > 0 ? Math.min(100, (s.traveled / s.target) * 100) : 0;
+          rotBar.style.width = pct.toFixed(1) + "%";
+          rotTelem.textContent =
+            `traveled: ${s.traveled} ticks  |  target: ${s.target}  |  remaining: ${s.remaining} ticks` +
+            (s.done ? "  ✓ done" : "");
+        } else {
+          // No active move — hide both unless already done (keep last result visible)
+        }
+      } catch (_) {}
+    }
+
+    setInterval(pollMoveStatus, 250);
+    pollMoveStatus();
 
     // ── Telemetry charts ─────────────────────────────────────────────────────
 
