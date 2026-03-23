@@ -19,6 +19,7 @@ Low-level hardware debug commands:
 from __future__ import annotations
 
 import argparse
+import collections
 import cmd
 import logging
 import os
@@ -53,6 +54,8 @@ class MissionRunner:
         self._last_det    = None
         self._last_output = None
         self._active_mover = None  # set during run_position_move, cleared when done
+        # Circular telemetry history: each entry is (t_rel, red_error, rpm_l, rpm_r)
+        self._telem_history: collections.deque = collections.deque(maxlen=300)
         self._frame_n     = 0
         self._t_start     = time.monotonic()
         self._period      = 1.0 / max(_config_module.get().fps, 1.0)
@@ -175,6 +178,14 @@ class MissionRunner:
         """Return the latest red-mask frame (BGR ndarray), or None."""
         return self._perception.get_red_mask_frame()
 
+    def telemetry_history(self) -> dict:
+        """Return lists of time-series data for graphing."""
+        rows = list(self._telem_history)
+        if not rows:
+            return {"t": [], "red_error": [], "rpm_l": [], "rpm_r": []}
+        t, err, rl, rr = zip(*rows)
+        return {"t": list(t), "red_error": list(err), "rpm_l": list(rl), "rpm_r": list(rr)}
+
     def snapshot(self) -> dict:
         with self._lock:
             det      = self._last_det
@@ -250,6 +261,14 @@ class MissionRunner:
                 with self._lock:
                     self._last_det    = det
                     self._last_output = output
+
+                rpm_l, rpm_r = self._control.measured_rpm
+                self._telem_history.append((
+                    time.monotonic() - self._t_start,
+                    det.red_error if det else 0.0,
+                    rpm_l,
+                    rpm_r,
+                ))
             else:
                 output = None
                 with self._lock:

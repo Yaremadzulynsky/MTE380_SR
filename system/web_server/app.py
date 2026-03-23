@@ -183,6 +183,13 @@ def mission_stop():
     return jsonify({"ok": True, "state": _runner.state})
 
 
+@app.get("/api/telemetry/history")
+def telemetry_history():
+    if _runner is None:
+        return jsonify({"t": [], "red_error": [], "rpm_l": [], "rpm_r": []})
+    return jsonify(_runner.telemetry_history())
+
+
 @app.post("/api/test/move")
 def test_move():
     """Run the position PID for delta_ticks in a background thread."""

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PID Tuner</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -257,6 +258,19 @@
         <img id="cam-mask" src="/stream/mask" alt="mask"
              style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
       </div>
+    </div>
+  </div>
+
+  <!-- Telemetry graphs -->
+  <div class="card">
+    <h2>Telemetry</h2>
+    <div style="margin-bottom:0.5rem;">
+      <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Lateral error</div>
+      <canvas id="chart-error" height="120"></canvas>
+    </div>
+    <div>
+      <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Wheel RPM</div>
+      <canvas id="chart-rpm" height="120"></canvas>
     </div>
   </div>
 
@@ -969,6 +983,63 @@
 
     setInterval(pollStatus, 500);
     pollStatus();
+
+    // ── Telemetry charts ─────────────────────────────────────────────────────
+
+    const _chartDefaults = {
+      animation: false,
+      responsive: true,
+      plugins: { legend: { labels: { color: "#aaa", boxWidth: 12 } } },
+      scales: {
+        x: { ticks: { color: "#555", maxTicksLimit: 8 }, grid: { color: "#1e1e1e" } },
+        y: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+      },
+    };
+
+    const chartError = new Chart(document.getElementById("chart-error"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          label: "lateral error",
+          data: [], borderColor: "#f87171", backgroundColor: "transparent",
+          pointRadius: 0, borderWidth: 1.5, tension: 0.2,
+        }],
+      },
+      options: { ..._chartDefaults, scales: { ..._chartDefaults.scales,
+        y: { ..._chartDefaults.scales.y, min: -1, max: 1 } } },
+    });
+
+    const chartRpm = new Chart(document.getElementById("chart-rpm"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "RPM left",  data: [], borderColor: "#60a5fa", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
+          { label: "RPM right", data: [], borderColor: "#4ade80", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
+        ],
+      },
+      options: _chartDefaults,
+    });
+
+    async function pollCharts() {
+      try {
+        const res = await fetch("/api/telemetry/history");
+        if (!res.ok) return;
+        const d = await res.json();
+        const labels = d.t.map(t => t.toFixed(1));
+        chartError.data.labels = labels;
+        chartError.data.datasets[0].data = d.red_error;
+        chartError.update();
+        chartRpm.data.labels = labels;
+        chartRpm.data.datasets[0].data = d.rpm_l;
+        chartRpm.data.datasets[1].data = d.rpm_r;
+        chartRpm.update();
+      } catch (_) {}
+    }
+
+    setInterval(pollCharts, 500);
+    pollCharts();
   </script>
 </body>
 </html>
