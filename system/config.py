@@ -39,13 +39,9 @@ class Config:
     motor_kd: float = 0.0
 
     # ── Speed ─────────────────────────────────────────────────────────────────
-    base_speed:                float = 0.28
-    min_speed:                 float = 0.16
-    max_speed:                 float = 0.45
-    search_turn:               float = 0.18
-    search_turn_max:           float = 0.32
-    lost_frames_before_search: int   = 5
-    lost_line_coast_speed:     float = 0.0
+    base_speed: float = 0.28
+    min_speed:  float = 0.16
+    max_speed:  float = 0.45
 
     # ── Drive-forward ─────────────────────────────────────────────────────────
     forward_ticks: int   = 800
@@ -118,8 +114,6 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Speed", [
         "base_speed", "min_speed", "max_speed",
-        "search_turn", "search_turn_max", "lost_frames_before_search",
-        "lost_line_coast_speed",
     ]),
     ("Drive-forward", [
         "forward_ticks", "forward_speed",

@@ -373,18 +373,6 @@
         <div class="field-label-row"><label for="max_speed">max</label><button type="button" class="info-btn" data-help="max_speed" aria-label="Help: max_speed">i</button></div>
         <input type="number" id="max_speed" step="0.01" min="0" max="1" />
       </div>
-      <div class="field">
-        <div class="field-label-row"><label for="search_turn">search_turn</label><button type="button" class="info-btn" data-help="search_turn" aria-label="Help: search_turn">i</button></div>
-        <input type="number" id="search_turn" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="search_turn_max">search_turn_max</label><button type="button" class="info-btn" data-help="search_turn_max" aria-label="Help: search_turn_max">i</button></div>
-        <input type="number" id="search_turn_max" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="lost_line_coast_speed">coast speed</label><button type="button" class="info-btn" data-help="lost_line_coast_speed" aria-label="Help: lost_line_coast_speed">i</button></div>
-        <input type="number" id="lost_line_coast_speed" step="0.01" min="0" max="1" />
-      </div>
     </div>
   </div>
 
@@ -640,8 +628,7 @@
     const KEYS = [
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
-      "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
-      "lost_line_coast_speed",
+      "base_speed", "min_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "corner_curvature_thresh", "corner_curve_conf_min",
@@ -677,9 +664,6 @@
       base_speed:              [0,    1,      0.01  ],
       min_speed:               [0,    1,      0.01  ],
       max_speed:               [0,    1,      0.01  ],
-      search_turn:             [0,    1,      0.01  ],
-      search_turn_max:         [0,    1,      0.01  ],
-      lost_line_coast_speed:   [0,    1,      0.01  ],
       line_axle_extrap:        [0,    5,      0.1   ],
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
@@ -801,22 +785,6 @@
         whenInc: "You raised base_speed or need more headroom; course is open and control is solid.",
         whenDec: "Overspeed on straights, instability, or hardware limits (current, vibration).",
       },
-      search_turn: {
-        title: "search_turn",
-        what: "Strength of the differential turn used when the line is lost (search / reacquire behavior).",
-        inc: "More aggressive search rotation; finds the line faster but can overshoot or look erratic.",
-        dec: "Gentler search; smoother but may take longer to find the line.",
-        whenInc: "Robot spins in place too slowly or fails to sweep the camera across the line when lost.",
-        whenDec: "Search looks violent, loses position, or overshoots past the line repeatedly.",
-      },
-      search_turn_max: {
-        title: "search_turn_max",
-        what: "Hard cap on search differential — independent of max_speed so search can stay bounded.",
-        inc: "Allows stronger search turns without raising overall max_speed elsewhere.",
-        dec: "Limits how hard search can turn even if search_turn is high — safer, gentler recovery.",
-        whenInc: "Search needs more bite but you don’t want to raise max_speed for normal follow.",
-        whenDec: "Search is still too aggressive after tuning search_turn; add a safety ceiling.",
-      },
       forward_ticks: {
         title: "forward_ticks",
         what: "Encoder count to drive forward during the “drive to pickup” phase (distance scales with wheel circumference and gearing).",
@@ -872,14 +840,6 @@
         dec: "Shorter mission time; risk of moving before grip is secure.",
         whenInc: "Payload drops when leaving pickup; inconsistent grabs.",
         whenDec: "Mission delay with no benefit; next state already stable.",
-      },
-      lost_line_coast_speed: {
-        title: "lost_line_coast_speed",
-        what: "Forward speed fraction to drive straight during soft line loss (before search spin starts). 0 = stop in place.",
-        inc: "Drives farther forward during brief line loss — useful if tape has small gaps.",
-        dec: "Stops sooner when line is lost; avoids overrunning the tape edge.",
-        whenInc: "Robot stops dead on small tape gaps and misses the line when it reappears.",
-        whenDec: "Robot drives too far when losing the line and can't recover.",
       },
       line_axle_extrap: {
         title: "line_axle_extrap",
