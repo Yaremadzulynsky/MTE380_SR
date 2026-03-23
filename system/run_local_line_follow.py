@@ -12,6 +12,10 @@ Run:
 
 While running, optional JSONL (lateral_err, avg_rpm) is written for the PID tuner
 charts; truncated each time you press ``g``. See ``--mission-log`` / ``--no-mission-log``.
+
+Use ``--web-preview`` to write camera+mask JPEGs for the PID tuner page
+(``GET /api/camera/preview.jpg``). Default path: ``CAMERA_PREVIEW_PATH`` or
+``system/.camera_preview.jpg``.
 """
 from __future__ import annotations
 
@@ -31,13 +35,14 @@ import cv2
 import numpy as np
 
 from local.control import LocalMotorController, MotorCommand, MotorPIDConfig
-from local.perception import Perception
-from local.state_machine import Config, MissionStateMachine, State
+from local.perception import FrameDetection, Perception
+from local.state_machine import Config, ControlOutput, MissionStateMachine, State
 
 # ── Config file ───────────────────────────────────────────────────────────────
 
 _DEFAULT_CONFIG = Path(__file__).parent / "pid_config.json"
 _DEFAULT_MISSION_LOG = Path(__file__).parent / "mission_telemetry.jsonl"
+_DEFAULT_CAMERA_PREVIEW = Path(__file__).parent / ".camera_preview.jpg"
 
 _FALLBACK: dict = {
     "steer_kp": 0.65,   "steer_ki": 0.04,    "steer_kd": 0.10,  "steer_out_limit": 0.80,
@@ -50,6 +55,7 @@ _FALLBACK: dict = {
     # Ground error: height/pitch/FOV are fixed in local/perception.py — tune scale only
     "geom_enable": True,
     "geom_lateral_norm_m": 0.10,
+    "geom_camera_to_axle_m": 0.0,
     "red_loss_debounce_frames": 4,
     "red_error_ema_alpha": 0.35,
 }
@@ -97,6 +103,60 @@ def apply_pid_config_to_args(cfg: dict, args: argparse.Namespace) -> None:
             setattr(args, k, v)
 
 
+def _build_mission_preview_bgr(
+    perception: Perception,
+    frame: np.ndarray,
+    det: FrameDetection,
+    output: ControlOutput | None,
+    rpm_l: float,
+    rpm_r: float,
+) -> np.ndarray:
+    """Side-by-side debug overlay and red mask (same as the OpenCV window)."""
+    overlay = perception.draw_debug(frame, det)
+    label = (
+        f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
+        if output
+        else "IDLE — press 'g'"
+    )
+    cv2.putText(
+        overlay,
+        label,
+        (10, overlay.shape[0] - 15),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (255, 255, 0),
+        2,
+        cv2.LINE_AA,
+    )
+    mh, mw = overlay.shape[:2]
+    mask_gray = perception.red_mask_full(frame)
+    mask_bgr = cv2.cvtColor(mask_gray, cv2.COLOR_GRAY2BGR)
+    roi_y = int(mh * perception.roi_top_ratio)
+    if roi_y > 0:
+        cv2.line(mask_bgr, (0, roi_y), (mw - 1, roi_y), (128, 128, 128), 1)
+    cv2.putText(
+        mask_bgr,
+        "red mask",
+        (10, 28),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        (0, 255, 0),
+        2,
+        cv2.LINE_AA,
+    )
+    return np.hstack([overlay, mask_bgr])
+
+
+def _write_camera_preview_jpeg(path: Path, bgr: np.ndarray) -> None:
+    ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    if not ok:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(buf.tobytes())
+    tmp.replace(path)
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
@@ -121,6 +181,19 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         action="store_true",
         help="Main stream is true RGB order (forces RGB→BGR before HSV). Default matches "
         "local/perception: BGR order buffer.",
+    )
+    p.add_argument(
+        "--web-preview",
+        action="store_true",
+        help="Write camera+mask JPEG for the PID tuner (CAMERA_PREVIEW_PATH or "
+        "--camera-preview-path). Use with headless --no-display if needed.",
+    )
+    p.add_argument(
+        "--camera-preview-path",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Output JPEG for web UI (overrides CAMERA_PREVIEW_PATH env).",
     )
     p.add_argument("--serial-port",   default="/dev/ttyACM0")
     p.add_argument("--baud",          type=int,   default=115200)
@@ -203,6 +276,12 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         help="Metres of lateral offset → ~1.0 steering error (track-tune).",
     )
     p.add_argument(
+        "--geom-camera-to-axle-m",
+        type=float,
+        default=float(cfg.get("geom_camera_to_axle_m", 0.0)),
+        help="Ground-plane distance camera→axle; >0 extrapolates lateral error to the wheelbase.",
+    )
+    p.add_argument(
         "--red-loss-debounce-frames",
         type=int,
         default=int(cfg["red_loss_debounce_frames"]),
@@ -271,6 +350,10 @@ def main() -> None:
     args = build_arg_parser(cfg).parse_args()
     period = 1.0 / max(args.fps, 1.0)
 
+    camera_preview_path = args.camera_preview_path or Path(
+        os.environ.get("CAMERA_PREVIEW_PATH", str(_DEFAULT_CAMERA_PREVIEW))
+    )
+
     should_stop = False
     def _handle_stop(_sig, _frame):
         nonlocal should_stop
@@ -285,6 +368,7 @@ def main() -> None:
         camera_channel_order="rgb" if args.camera_rgb else "bgr",
         geom_enable=args.geom_enable,
         geom_lateral_norm_m=args.geom_lateral_norm_m,
+        geom_camera_to_axle_m=args.geom_camera_to_axle_m,
         red_loss_debounce_frames=args.red_loss_debounce_frames,
         red_error_ema_alpha=args.red_error_ema_alpha,
     )
@@ -336,6 +420,7 @@ def main() -> None:
         perception.configure_geometry(
             geom_enable=args.geom_enable,
             geom_lateral_norm_m=args.geom_lateral_norm_m,
+            geom_camera_to_axle_m=args.geom_camera_to_axle_m,
         )
         perception.configure_red_stability(
             red_loss_debounce_frames=args.red_loss_debounce_frames,
@@ -356,12 +441,17 @@ def main() -> None:
             flush=True,
         )
 
+    ready_extra = ""
+    if args.web_preview:
+        ready_extra = f"\n  web preview : {camera_preview_path.resolve()}  (PID tuner /api/camera/preview.jpg)"
+
     print(
         f"Ready — serial={args.serial_port}  dry_run={args.dry_run}\n"
         f"  config      : {cfg_path}\n"
         f"  steering PID: kp={args.steer_kp}  ki={args.steer_ki}  kd={args.steer_kd}\n"
         f"  motor    PID: kp={args.motor_kp:.6f}  ki={args.motor_ki}  kd={args.motor_kd}\n"
-        f"  Press 'g' to go (reloads config from file), 's' to stop, 'q' to quit.",
+        f"  Press 'g' to go (reloads config from file), 's' to stop, 'q' to quit."
+        f"{ready_extra}",
         flush=True,
     )
 
@@ -372,6 +462,9 @@ def main() -> None:
     frame_n = 0
     t_start = time.monotonic()
     last_idle_log = 0.0
+    last_web_preview_t = 0.0
+    _WEB_PREVIEW_MIN_INTERVAL_S = 0.12  # ~8 Hz; limits SD card / flash writes
+    need_preview = (not args.no_display) or args.web_preview
 
     if telemetry:
         print(
@@ -454,46 +547,31 @@ def main() -> None:
                 rpm_l = rpm_r = 0.0
                 status_line = "IDLE — press 'g' to start"
 
-            # ── Display ───────────────────────────────────────────────────────
+            # ── Display / web preview ─────────────────────────────────────────
             if args.no_display and not telemetry:
                 print(status_line, flush=True)
-            elif not args.no_display:
-                overlay = perception.draw_debug(frame, det)
-                label   = (
-                    f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
-                    if output else "IDLE — press 'g'"
+            elif need_preview:
+                preview_bgr = _build_mission_preview_bgr(
+                    perception, frame, det, output, rpm_l, rpm_r
                 )
-                cv2.putText(overlay, label, (10, overlay.shape[0] - 15),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 0), 2, cv2.LINE_AA)
-                # Red detection mask (same HSV + morphology as _detect_red), side-by-side
-                mh, mw = overlay.shape[:2]
-                mask_gray = perception.red_mask_full(frame)
-                mask_bgr = cv2.cvtColor(mask_gray, cv2.COLOR_GRAY2BGR)
-                roi_y = int(mh * perception.roi_top_ratio)
-                if roi_y > 0:
-                    cv2.line(mask_bgr, (0, roi_y), (mw - 1, roi_y), (128, 128, 128), 1)
-                cv2.putText(
-                    mask_bgr,
-                    "red mask",
-                    (10, 28),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.65,
-                    (0, 255, 0),
-                    2,
-                    cv2.LINE_AA,
-                )
-                cv2.imshow("mission", np.hstack([overlay, mask_bgr]))
-                k = cv2.waitKey(1) & 0xFF
-                if k == ord("q"):
-                    break
-                elif k == ord("g") and not running:
-                    go_reload_and_start()
-                elif k == ord("s") and running:
-                    running = False
-                    mission_t0 = None
-                    _stop_mission_log()
-                    control.idle()
-                    print("[KEY] stop (motors idle, serial still open)", flush=True)
+                if args.web_preview:
+                    now = time.monotonic()
+                    if now - last_web_preview_t >= _WEB_PREVIEW_MIN_INTERVAL_S:
+                        _write_camera_preview_jpeg(camera_preview_path, preview_bgr)
+                        last_web_preview_t = now
+                if not args.no_display:
+                    cv2.imshow("mission", preview_bgr)
+                    k = cv2.waitKey(1) & 0xFF
+                    if k == ord("q"):
+                        break
+                    elif k == ord("g") and not running:
+                        go_reload_and_start()
+                    elif k == ord("s") and running:
+                        running = False
+                        mission_t0 = None
+                        _stop_mission_log()
+                        control.idle()
+                        print("[KEY] stop (motors idle, serial still open)", flush=True)
 
             elapsed = time.time() - t0
             iter_ms = elapsed * 1000.0

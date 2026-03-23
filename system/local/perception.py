@@ -75,6 +75,31 @@ def lateral_error_normalized(x_m: float, lateral_norm_m: float) -> float:
     return _clamp(x_m / lateral_norm_m, -1.0, 1.0)
 
 
+def lateral_x_at_axle(
+    x_b: float,
+    z_b: float,
+    x_c: float,
+    z_c: float,
+    camera_to_axle_m: float,
+) -> float:
+    """
+    Lateral tape position X on the ground at Z = -camera_to_axle_m.
+
+    World X–Z: X = right, Z = forward from the camera vertical (see ``ground_xz_from_pixel``).
+    The rear axle lies *behind* the camera along -Z; ``camera_to_axle_m`` is that distance (positive).
+
+    Two ground samples (bottom + centroid of the red blob) define a line in the X–Z plane;
+    we linearly extrapolate/interpolate X at the axle Z. If the samples are degenerate, returns ``x_b``.
+    """
+    if camera_to_axle_m <= 0.0:
+        return x_b
+    z_axle = -camera_to_axle_m
+    dz = z_c - z_b
+    if abs(dz) < 1e-6:
+        return x_b
+    return float(x_b + (x_c - x_b) * (z_axle - z_b) / dz)
+
+
 # Measured on robot — change in code if you remount the camera (not in pid_config).
 _CAMERA_HEIGHT_M = 0.095
 _CAMERA_PITCH_DEG = 39.0
@@ -97,8 +122,13 @@ class Perception:
     Blue target : HSV mask → any contour above min area
     T-junction  : red bounding-rect width > half the frame = horizontal end bar
 
-    When ``geom_enable`` is True, ``red_error`` uses a ground-plane ray (camera pose is
-    fixed in code; tune only ``geom_lateral_norm_m`` in config to map metres → ±1).
+    When ``geom_enable`` is True, ``red_error`` uses ground-plane rays (camera pose is
+    fixed in code; tune ``geom_lateral_norm_m`` to map metres → ±1).
+
+    ``geom_camera_to_axle_m`` (optional): distance along the ground from the camera foot
+    to the wheelbase / control point. If > 0, lateral error is evaluated at Z = −that distance
+    by extrapolating from the blob bottom and centroid on the ground (two-point line in X–Z).
+    If 0, only the blob-bottom ground point is used (legacy behaviour).
 
     ``red_loss_debounce_frames``: require this many consecutive raw misses before reporting
     ``red_found=False`` (holds last smoothed error meanwhile).
@@ -129,6 +159,7 @@ class Perception:
         camera_channel_order: Literal["rgb", "bgr"] = "bgr",
         geom_enable: bool = True,
         geom_lateral_norm_m: float = 0.10,
+        geom_camera_to_axle_m: float = 0.0,
         red_loss_debounce_frames: int = 4,
         red_error_ema_alpha: float = 0.35,
     ) -> None:
@@ -144,6 +175,7 @@ class Perception:
 
         self.geom_enable = geom_enable
         self.geom_lateral_norm_m = float(geom_lateral_norm_m)
+        self.geom_camera_to_axle_m = max(0.0, float(geom_camera_to_axle_m))
         self.red_loss_debounce_frames = max(1, int(red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(red_error_ema_alpha), 0.0, 1.0)
 
@@ -172,12 +204,15 @@ class Perception:
         *,
         geom_enable: bool | None = None,
         geom_lateral_norm_m: float | None = None,
+        geom_camera_to_axle_m: float | None = None,
     ) -> None:
         """Update geometry toggles from pid_config without reopening the camera."""
         if geom_enable is not None:
             self.geom_enable = bool(geom_enable)
         if geom_lateral_norm_m is not None:
             self.geom_lateral_norm_m = float(geom_lateral_norm_m)
+        if geom_camera_to_axle_m is not None:
+            self.geom_camera_to_axle_m = max(0.0, float(geom_camera_to_axle_m))
 
     def configure_red_stability(
         self,
@@ -352,7 +387,7 @@ class Perception:
         if not self.geom_enable:
             return True, image_err, t_junction
 
-        g = ground_xz_from_pixel(
+        g_b = ground_xz_from_pixel(
             u_pix,
             v_pix,
             camera_height_m=_CAMERA_HEIGHT_M,
@@ -362,10 +397,31 @@ class Perception:
             cx=self._cx,
             cy=self._cy,
         )
-        if g is None:
+        if g_b is None:
             return True, image_err, t_junction
 
-        x_m, _ = g
+        x_b, z_b = g_b
+        x_m = x_b
+
+        if self.geom_camera_to_axle_m > 1e-9:
+            v_c_full = float(roi_y + cy_roi)
+            u_c = float(cx_roi)
+            g_c = ground_xz_from_pixel(
+                u_c,
+                v_c_full,
+                camera_height_m=_CAMERA_HEIGHT_M,
+                pitch_deg=_CAMERA_PITCH_DEG,
+                fx=self._fx,
+                fy=self._fy,
+                cx=self._cx,
+                cy=self._cy,
+            )
+            if g_c is not None:
+                x_c, z_c = g_c
+                x_m = lateral_x_at_axle(
+                    x_b, z_b, x_c, z_c, self.geom_camera_to_axle_m
+                )
+
         err = lateral_error_normalized(x_m, self.geom_lateral_norm_m)
         return True, err, t_junction
 

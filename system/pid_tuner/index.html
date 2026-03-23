@@ -264,11 +264,37 @@
     button.btn-secondary:hover {
       background: #475569;
     }
+
+    /* ── Camera preview (run_local_line_follow.py --web-preview) ───────────── */
+    .camera-preview-wrap {
+      margin-top: 0.5rem;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #2a2a2a;
+      background: #0d0d0d;
+      line-height: 0;
+    }
+
+    .camera-preview-wrap img {
+      width: 100%;
+      height: auto;
+      display: block;
+      vertical-align: top;
+    }
   </style>
 </head>
 <body>
 
   <h1>PID Tuner</h1>
+
+  <!-- Camera + mask preview (JPEG from run_local_line_follow.py --web-preview) -->
+  <div class="card">
+    <h2>Camera &amp; red mask</h2>
+    <p class="hint">Start the mission runner with <code>--web-preview</code> on the Pi (same <code>CAMERA_PREVIEW_PATH</code> as this server, default <code>system/.camera_preview.jpg</code>). Image updates ~8×/s.</p>
+    <div class="camera-preview-wrap">
+      <img id="camera_preview" src="/api/camera/preview.jpg" width="1280" height="480" alt="Camera and mask preview" />
+    </div>
+  </div>
 
   <!-- Mission telemetry (written by run_local_line_follow.py) -->
   <div class="card">
@@ -357,7 +383,7 @@
   <!-- Line error: ground model -->
   <div class="card">
     <h2>Line error — ground model</h2>
-    <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Here: on/off and how many metres ≈ full steering error. Red debounce / EMA reduce one-frame glitches.</p>
+    <p class="hint">Camera height / pitch / FOV are set in code (<code>local/perception.py</code>). Scale maps metres → ±1 steering error. Optional <strong>camera→axle</strong> extrapolates lateral error to the wheelbase. Red debounce / EMA reduce one-frame glitches.</p>
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="geom_enable">use ground model</label><button type="button" class="info-btn" data-help="geom_enable" aria-label="Help: geom_enable">i</button></div>
@@ -366,6 +392,10 @@
       <div class="field">
         <div class="field-label-row"><label for="geom_lateral_norm_m">scale (m → ±1)</label><button type="button" class="info-btn" data-help="geom_lateral_norm_m" aria-label="Help: geom_lateral_norm_m">i</button></div>
         <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="geom_camera_to_axle_m">camera → axle (m)</label><button type="button" class="info-btn" data-help="geom_camera_to_axle_m" aria-label="Help: geom_camera_to_axle_m">i</button></div>
+        <input type="number" id="geom_camera_to_axle_m" step="0.01" min="0" title="0 = off; else lateral error at wheelbase" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="red_loss_debounce_frames">red miss frames</label><button type="button" class="info-btn" data-help="red_loss_debounce_frames" aria-label="Help: red_loss_debounce_frames">i</button></div>
@@ -447,7 +477,7 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
-      "geom_enable", "geom_lateral_norm_m",
+      "geom_enable", "geom_lateral_norm_m", "geom_camera_to_axle_m",
       "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
@@ -569,6 +599,14 @@
         dec: "Softer response per metre; robot under-corrects for the same physical offset.",
         whenInc: "Robot consistently undershoots corrections (error stays same sign) with ground model on.",
         whenDec: "Oscillation or over-correction; steering too twitchy for small real-world offsets.",
+      },
+      geom_camera_to_axle_m: {
+        title: "geom_camera_to_axle_m",
+        what: "Distance along the ground from the camera vertical to the wheelbase (or where you want to regulate lateral error). If positive, two ground points (blob bottom + centroid) define a line in X–Z; lateral error is evaluated at Z = −this distance (axle behind the camera in +Z forward frame). Zero = use only the blob-bottom ground point (legacy).",
+        inc: "Stronger geometric correction toward the wheels; can fix systematic offset between “camera centered” and “wheels on tape” if other parameters match reality.",
+        dec: "Closer to single-point error at the tape near the camera; less extrapolation sensitivity.",
+        whenInc: "Line looks centered in the image but wheels sit off the tape on straights; you want steering to reference the axle.",
+        whenDec: "Oscillation or weird steering in curves (bad extrapolation or wrong measured distance); set to 0 to verify baseline.",
       },
       red_loss_debounce_frames: {
         title: "red_loss_debounce_frames",
@@ -883,6 +921,14 @@
       }
     }
     document.getElementById("mission_autorefresh")?.addEventListener("change", setupMissionAutoRefresh);
+
+    let cameraPreviewInterval = null;
+    function tickCameraPreview() {
+      const img = document.getElementById("camera_preview");
+      if (!img) return;
+      img.src = "/api/camera/preview.jpg?t=" + Date.now();
+    }
+    cameraPreviewInterval = setInterval(tickCameraPreview, 150);
 
     load();
     refreshMissionCharts();
