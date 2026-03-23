@@ -29,6 +29,7 @@ def on_enter(sm, det, left_ticks: int, right_ticks: int) -> None:
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
+    return
     if sm._corner_phase == "forward":
         return _step_forward(sm, left_ticks, right_ticks)
     return _step_rotate(sm, left_ticks, right_ticks)
