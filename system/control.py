@@ -208,6 +208,10 @@ class RotationController:
         """Returns (abs_degrees_traveled, abs_degrees_target) for display."""
         return abs(math.degrees(self._heading)), abs(math.degrees(self._target))
 
+    def error_deg(self) -> float:
+        """Signed error in degrees: positive = not yet reached, negative = overshot."""
+        return math.degrees(self._target - self._heading)
+
     def step(self) -> None:
         """Integrate heading, run PID, send voltage. Matches HeadingPID.update() logic."""
         if self.done:

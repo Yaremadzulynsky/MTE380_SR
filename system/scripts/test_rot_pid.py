@@ -47,7 +47,8 @@ def run(args: argparse.Namespace) -> None:
             t0 = time.monotonic()
             ctrl.step()
             traveled, target = ctrl.progress()
-            print(f"\r  traveled={traveled:6.1f}°  remaining={max(0.0, target - traveled):6.1f}°  "
+            error = ctrl.error_deg()
+            print(f"\r  traveled={traveled:6.1f}°  error={error:+7.2f}°  "
                   f"t={time.monotonic() - t_start:.2f}s",
                   end="", flush=True)
             elapsed = time.monotonic() - t0
