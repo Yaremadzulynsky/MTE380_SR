@@ -113,8 +113,32 @@ def _build_mission_preview_bgr(
     rpm_l: float,
     rpm_r: float,
 ) -> np.ndarray:
-    """Side-by-side debug overlay and red mask (same as the OpenCV window)."""
+    """Side-by-side: camera overlay (+ lateral error viz), red mask, Canny edges."""
     overlay = perception.draw_debug(frame, det)
+    mh, mw = overlay.shape[:2]
+    roi_y = int(mh * perception.roi_top_ratio)
+
+    # Lateral error: err = (cx - w/2) / (w/2)  =>  cx = (w/2) * (1 + err)
+    x_line = int(round(mw * 0.5 * (1.0 + float(det.red_error))))
+    x_line = max(0, min(mw - 1, x_line))
+    y_pt = min(mh - 18, max(roi_y + 20, mh // 2))
+    if det.red_found:
+        cv2.line(overlay, (x_line, 0), (x_line, mh - 1), (255, 128, 0), 2, cv2.LINE_AA)  # orange = line position
+        cv2.circle(overlay, (x_line, y_pt), 7, (255, 128, 0), 2, cv2.LINE_AA)
+        cv2.circle(overlay, (x_line, y_pt), 2, (255, 128, 0), -1, cv2.LINE_AA)
+    else:
+        cv2.line(overlay, (x_line, roi_y), (x_line, mh - 1), (80, 80, 80), 1, cv2.LINE_AA)
+    cv2.putText(
+        overlay,
+        "white=center  orange=err",
+        (mw - 220, 28),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA,
+    )
+
     label = (
         f"{output.state.value}  L={output.left:+.2f}({rpm_l:+.0f})  R={output.right:+.2f}({rpm_r:+.0f})"
         if output
@@ -130,10 +154,9 @@ def _build_mission_preview_bgr(
         2,
         cv2.LINE_AA,
     )
-    mh, mw = overlay.shape[:2]
+
     mask_gray = perception.red_mask_full(frame)
     mask_bgr = cv2.cvtColor(mask_gray, cv2.COLOR_GRAY2BGR)
-    roi_y = int(mh * perception.roi_top_ratio)
     if roi_y > 0:
         cv2.line(mask_bgr, (0, roi_y), (mw - 1, roi_y), (128, 128, 128), 1)
     cv2.putText(
@@ -146,7 +169,24 @@ def _build_mission_preview_bgr(
         2,
         cv2.LINE_AA,
     )
-    return np.hstack([overlay, mask_bgr])
+
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 60, 140)
+    edges_bgr = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    if roi_y > 0:
+        cv2.line(edges_bgr, (0, roi_y), (mw - 1, roi_y), (128, 128, 128), 1)
+    cv2.putText(
+        edges_bgr,
+        "edges (Canny)",
+        (10, 28),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        (0, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+    return np.hstack([overlay, mask_bgr, edges_bgr])
 
 
 def _write_camera_preview_jpeg(path: Path, bgr: np.ndarray) -> None:
