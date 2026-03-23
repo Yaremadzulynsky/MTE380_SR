@@ -3,7 +3,7 @@ Mission state machine.
 
 State sequence
 ──────────────
-LINE_FOLLOW   : follow the red line (steering PID + lost-line search)
+LINE_FOLLOW   : follow the red line (steering PID + lost-line coast optional + search spin)
                 → transitions to DRIVE_FORWARD when blue target is seen
 
 DRIVE_FORWARD : drive straight for a fixed encoder distance to reach pickup
@@ -78,6 +78,9 @@ class Config:
     # Require this many consecutive frames with no red before starting search spin.
     # Stops brief contour flicker from looking like “rotating on the line”.
     lost_frames_before_search: int = 5
+    # Symmetric forward command during soft loss (before search spin). 0 = hold position
+    # (no forward coast); >0 drives straight at min(speed, max_speed) until search starts.
+    lost_line_coast_speed: float = 0.0
 
     # ── Drive-forward (encoder-based) ────────────────────────────────────────
     forward_ticks:   int   = 800    # average encoder ticks — tune on hardware
@@ -172,12 +175,9 @@ class MissionStateMachine:
             self._consecutive_lost += 1
             n = max(1, self.cfg.lost_frames_before_search)
             if self._consecutive_lost < n:
-                # Soft loss: contour flicker — coast straight, keep steering PID state
-                lo, hi = sorted((self.cfg.min_speed, self.cfg.max_speed))
-                coast = _clamp(self.cfg.min_speed, lo, hi)
-                return ControlOutput(
-                    left=coast, right=coast, claw=None, state=self.state
-                )
+                # Soft loss: optional forward coast (tunable); 0 = stop until search spin
+                c = _clamp(max(0.0, self.cfg.lost_line_coast_speed), 0.0, self.cfg.max_speed)
+                return ControlOutput(left=c, right=c, claw=None, state=self.state)
             # Hard loss: search spin toward last known line side (see _search_spin_pair)
             self._steer_pid.reset()
             st = self._clamp_search_turn()
@@ -218,11 +218,8 @@ class MissionStateMachine:
             self._consecutive_lost += 1
             n = max(1, self.cfg.lost_frames_before_search)
             if self._consecutive_lost < n:
-                lo, hi = sorted((self.cfg.min_speed, self.cfg.max_speed))
-                coast = _clamp(self.cfg.min_speed, lo, hi)
-                return ControlOutput(
-                    left=coast, right=coast, claw=None, state=self.state
-                )
+                c = _clamp(max(0.0, self.cfg.lost_line_coast_speed), 0.0, self.cfg.max_speed)
+                return ControlOutput(left=c, right=c, claw=None, state=self.state)
             self._steer_pid.reset()
             st = self._clamp_search_turn()
             left, right = self._search_spin_pair(st)

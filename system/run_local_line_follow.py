@@ -51,6 +51,8 @@ _FALLBACK: dict = {
     "motor_kp": 0.003125, "motor_ki": 0.0005, "motor_kd": 0.0,
     "base_speed": 0.28, "min_speed": 0.16,   "max_speed": 0.45,
     "search_turn": 0.18, "search_turn_max": 0.32,
+    "lost_frames_before_search": 5,
+    "lost_line_coast_speed": 0.0,
     "forward_ticks": 800, "forward_speed": 0.25,
     "turn_speed": 0.30,   "turn_duration_s": 2.2,
     "claw_open": 0.0,     "claw_closed": 90.0, "pickup_hold_s": 0.8,
@@ -99,6 +101,8 @@ def apply_pid_config_to_args(cfg: dict, args: argparse.Namespace) -> None:
             setattr(args, "forward_ticks", int(v))
         elif k == "red_loss_debounce_frames":
             setattr(args, "red_loss_debounce_frames", int(v))
+        elif k == "lost_frames_before_search":
+            setattr(args, "lost_frames_before_search", int(v))
         else:
             setattr(args, k, v)
 
@@ -338,6 +342,18 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         default=cfg["search_turn_max"],
         help="Max wheel fraction for lost-line search (independent of --max-speed).",
     )
+    p.add_argument(
+        "--lost-frames-before-search",
+        type=int,
+        default=int(cfg.get("lost_frames_before_search", 5)),
+        help="Frames with no red (state machine) before in-place search spin starts.",
+    )
+    p.add_argument(
+        "--lost-line-coast-speed",
+        type=float,
+        default=float(cfg.get("lost_line_coast_speed", 0.0)),
+        help="Forward fraction both wheels during soft loss; 0=no coast (hold), else min(speed,max_speed).",
+    )
 
     p.add_argument("--forward-ticks",         type=int,   default=cfg["forward_ticks"])
     p.add_argument("--forward-speed",         type=float, default=cfg["forward_speed"])
@@ -462,6 +478,8 @@ def main() -> None:
             base_speed=args.base_speed,   min_speed=args.min_speed,
             max_speed=args.max_speed,
             search_turn=args.search_turn, search_turn_max=args.search_turn_max,
+            lost_frames_before_search=args.lost_frames_before_search,
+            lost_line_coast_speed=args.lost_line_coast_speed,
             forward_ticks=args.forward_ticks, forward_speed=args.forward_speed,
             turn_speed=args.turn_speed,   turn_duration_s=args.turn_duration,
             claw_open=args.claw_open,     claw_closed=args.claw_closed,

@@ -57,6 +57,8 @@ DEFAULTS: dict[str, float | int] = {
     "max_speed":           0.45,
     "search_turn":         0.18,
     "search_turn_max":     0.32,
+    "lost_frames_before_search": 5,
+    "lost_line_coast_speed":   0.0,
 
     "forward_ticks":       800,
     "forward_speed":       0.25,
@@ -75,7 +77,7 @@ DEFAULTS: dict[str, float | int] = {
 }
 
 # Keys that must be integers (not floats)
-INT_KEYS = {"forward_ticks", "red_loss_debounce_frames"}
+INT_KEYS = {"forward_ticks", "red_loss_debounce_frames", "lost_frames_before_search"}
 
 # ── Flask app ─────────────────────────────────────────────────────────────────
 

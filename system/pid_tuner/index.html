@@ -383,6 +383,14 @@
         <div class="field-label-row"><label for="search_turn_max">search_turn_max</label><button type="button" class="info-btn" data-help="search_turn_max" aria-label="Help: search_turn_max">i</button></div>
         <input type="number" id="search_turn_max" step="0.01" min="0" max="1" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="lost_frames_before_search">lost frames → search</label><button type="button" class="info-btn" data-help="lost_frames_before_search" aria-label="Help: lost_frames_before_search">i</button></div>
+        <input type="number" id="lost_frames_before_search" step="1" min="1" title="Consecutive no-red frames before in-place spin" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="lost_line_coast_speed">lost line coast FWD</label><button type="button" class="info-btn" data-help="lost_line_coast_speed" aria-label="Help: lost_line_coast_speed">i</button></div>
+        <input type="number" id="lost_line_coast_speed" step="0.01" min="0" max="1" title="0 = stop during soft loss; else straight speed until search" />
+      </div>
     </div>
   </div>
 
@@ -475,6 +483,7 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
+      "lost_frames_before_search", "lost_line_coast_speed",
       "line_axle_extrap",
       "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
@@ -482,6 +491,7 @@
       "claw_open", "claw_closed", "pickup_hold_s",
     ];
     const BOOL_KEYS = new Set([]);
+    const INT_KEYS_JS = new Set(["forward_ticks", "red_loss_debounce_frames", "lost_frames_before_search"]);
 
     /** Rich help for each config key — shown in the (i) dialog */
     const HELP = {
@@ -580,6 +590,22 @@
         dec: "Limits how hard search can turn even if search_turn is high — safer, gentler recovery.",
         whenInc: "Search needs more bite but you don’t want to raise max_speed for normal follow.",
         whenDec: "Search is still too aggressive after tuning search_turn; add a safety ceiling.",
+      },
+      lost_frames_before_search: {
+        title: "lost_frames_before_search",
+        what: "After perception reports no red line, how many consecutive frames the state machine waits (soft-loss phase) before starting the in-place search spin. During soft loss it applies lost_line_coast_speed only — no steering PID.",
+        inc: "Longer wait before spinning; more time at coast speed or stopped; tolerates flicker but delays recovery.",
+        dec: "Starts search spin sooner; faster reacquire, risk of spinning on brief dropouts.",
+        whenInc: "Search triggers too eagerly on one-frame glitches; robot spins while the line is still there.",
+        whenDec: "Robot coasts or sits too long after a real loss; you want quicker pivot toward last error.",
+      },
+      lost_line_coast_speed: {
+        title: "lost_line_coast_speed",
+        what: "Symmetric forward wheel fraction during soft loss (before search_turn spin). Clamped to [0, max_speed]. 0 = both wheels 0 — stop in place, then spin when lost_frames_before_search expires. Match old “always coast” behaviour by setting to your min_speed (e.g. 0.16).",
+        inc: "More forward drift while deciding if line is really lost; can re-find tape without spinning but risks driving off it on hairpins.",
+        dec: "Less forward motion; 0 keeps the robot planted while waiting, then search spin only.",
+        whenInc: "Straight segments with brief dropouts — a little roll-forward helps reacquire without spinning.",
+        whenDec: "Sharp turns: forward coast drives the camera past the tape; use 0 and rely on slow search_turn.",
       },
       line_axle_extrap: {
         title: "line_axle_extrap",
@@ -730,7 +756,7 @@
           out[key] = el.checked;
           continue;
         }
-        const val = key === "forward_ticks" ? parseInt(el.value, 10) : parseFloat(el.value);
+        const val = INT_KEYS_JS.has(key) ? parseInt(el.value, 10) : parseFloat(el.value);
         if (!isNaN(val)) out[key] = val;
       }
       return out;
@@ -743,7 +769,7 @@
         if (!el) continue;
         let current;
         if (BOOL_KEYS.has(key)) current = el.checked;
-        else if (key === "forward_ticks") current = parseInt(el.value, 10);
+        else if (INT_KEYS_JS.has(key)) current = parseInt(el.value, 10);
         else current = parseFloat(el.value);
         el.classList.toggle("changed", current !== savedValues[key]);
       }
