@@ -53,7 +53,6 @@ class MissionRunner:
 
         self._last_det    = None
         self._last_output = None
-        self._active_mover = None  # set during run_position_move, cleared when done
         # Circular telemetry history: each entry is (t_rel, red_error, rpm_l, rpm_r)
         self._telem_history: collections.deque = collections.deque(maxlen=300)
         self._frame_n     = 0
@@ -93,28 +92,6 @@ class MissionRunner:
                 self._sm.cfg = cfg
                 self._sm._steer_pid.tunings = (cfg.steer_kp, cfg.steer_ki, cfg.steer_kd)
                 self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
-                self._sm._pos_pid.tunings = (cfg.pos_kp, cfg.pos_ki, cfg.pos_kd)
-                self._sm._pos_pid.output_limits = (-cfg.pos_max_speed, cfg.pos_max_speed)
-
-    def run_position_move(self, delta_ticks: int) -> None:
-        """Run a position PID move in a background thread (stops the mission first)."""
-        from control import PositionMover, MotorCommand
-        with self._lock:
-            self._running = False
-        self._control.idle()
-
-        def _move():
-            mover = PositionMover(self._control, delta_ticks)
-            self._active_mover = mover
-            while not mover.done:
-                l, r = mover.step()
-                self._control.send_voltage(l, r)
-                import time as _time
-                _time.sleep(0.02)
-            self._active_mover = None
-            self._control.idle()
-
-        threading.Thread(target=_move, daemon=True, name="pos-move").start()
 
     def stop(self) -> None:
         with self._lock:
@@ -194,21 +171,11 @@ class MissionRunner:
             running  = self._running
         enc_l, enc_r = self._control.encoder_ticks
         rpm_l, rpm_r = self._control.measured_rpm
-        pos_current = (enc_l + enc_r) / 2.0
-        mover = self._active_mover
-        if mover is not None:
-            pos_target = mover._pid.setpoint
-        else:
-            with self._lock:
-                pos_target = self._sm._pos_pid.setpoint if self._sm else 0.0
         return {
             "sm_state":    sm_state,
             "running":     running,
             "enc_l":       enc_l,  "enc_r": enc_r,
             "rpm_l":       rpm_l,  "rpm_r": rpm_r,
-            "pos_current": pos_current,
-            "pos_target":  pos_target,
-            "pos_error":   pos_target - pos_current,
             "det":         det,
             "output":      output,
             "motor_telem": self._control.motor_telemetry_line(),
@@ -413,12 +380,13 @@ class MissionShell(cmd.Cmd):
             ("Steering PID",   ["steer_kp", "steer_ki", "steer_kd", "steer_out_limit"]),
             ("Motor PID",      ["motor_kp", "motor_ki", "motor_kd"]),
             ("Speed",          ["base_speed", "min_speed", "max_speed",
-                                "search_turn", "search_turn_max", "lost_frames_before_search"]),
+                                "search_turn", "search_turn_max", "lost_frames_before_search",
+                                "lost_line_coast_speed"]),
             ("Mission",        ["forward_ticks", "forward_speed",
                                 "turn_speed", "turn_duration_s"]),
             ("Claw",           ["claw_open", "claw_closed", "pickup_hold_s"]),
-            ("Vision",         ["geom_enable", "geom_lateral_norm_m",
-                                "red_loss_debounce_frames", "red_error_ema_alpha"]),
+            ("Vision",         ["red_loss_debounce_frames", "red_error_ema_alpha",
+                                "line_axle_extrap"]),
             ("Camera/runtime", ["camera_width", "camera_height", "fps", "roi_top_ratio"]),
         ]
         for section, keys in sections:

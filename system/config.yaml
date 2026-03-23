@@ -16,6 +16,7 @@ max_speed: 0.15
 search_turn: 0.06
 search_turn_max: 0.32
 lost_frames_before_search: 5
+lost_line_coast_speed: 0.0
 
 # Drive-forward
 forward_ticks: 800
@@ -31,10 +32,9 @@ claw_closed: 90.0
 pickup_hold_s: 0.8
 
 # Vision / perception
-geom_enable: true
-geom_lateral_norm_m: 1.55
 red_loss_debounce_frames: 4
 red_error_ema_alpha: 0.35
+line_axle_extrap: 0.0
 
 # Camera / runtime
 camera_width: 640

@@ -45,13 +45,7 @@ class Config:
     search_turn:               float = 0.18
     search_turn_max:           float = 0.32
     lost_frames_before_search: int   = 5
-
-    # ── Position move ─────────────────────────────────────────────────────────
-    pos_kp:        float = 0.002
-    pos_ki:        float = 0.0
-    pos_kd:        float = 0.0
-    pos_tolerance: int   = 20
-    pos_max_speed: float = 0.40
+    lost_line_coast_speed:     float = 0.0
 
     # ── Drive-forward ─────────────────────────────────────────────────────────
     forward_ticks: int   = 800
@@ -67,21 +61,17 @@ class Config:
     pickup_hold_s: float = 0.8
 
     # ── Vision / perception ───────────────────────────────────────────────────
-    geom_enable:              bool  = True
-    geom_lateral_norm_m:      float = 0.10
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
-    curve_threshold:          float = 0.15
-    curve_coast_ticks:        int   = 100
-    curve_debounce_s:         float = 1.0
+    line_axle_extrap:         float = 0.0
 
     # ── Line detection HSV ────────────────────────────────────────────────────
     red_h_lo1:  int = 0
-    red_h_hi1:  int = 12
-    red_h_lo2:  int = 168
+    red_h_hi1:  int = 10
+    red_h_lo2:  int = 161
     red_h_hi2:  int = 179
-    red_s_min:  int = 100
-    red_v_min:  int = 70
+    red_s_min:  int = 155
+    red_v_min:  int = 84
     blue_h_lo:  int = 95
     blue_h_hi:  int = 135
     blue_s_min: int = 120
@@ -106,9 +96,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Speed", [
         "base_speed", "min_speed", "max_speed",
         "search_turn", "search_turn_max", "lost_frames_before_search",
-    ]),
-    ("Position move", [
-        "pos_kp", "pos_ki", "pos_kd", "pos_tolerance", "pos_max_speed",
+        "lost_line_coast_speed",
     ]),
     ("Drive-forward", [
         "forward_ticks", "forward_speed",
@@ -120,9 +108,8 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "claw_open", "claw_closed", "pickup_hold_s",
     ]),
     ("Vision / perception", [
-        "geom_enable", "geom_lateral_norm_m",
         "red_loss_debounce_frames", "red_error_ema_alpha",
-        "curve_threshold", "curve_coast_ticks", "curve_debounce_s",
+        "line_axle_extrap",
     ]),
     ("Line detection HSV", [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",

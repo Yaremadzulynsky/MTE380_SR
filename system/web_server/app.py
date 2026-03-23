@@ -149,21 +149,16 @@ def get_status():
     snap = _runner.snapshot()
     det = snap.get("det")
     return jsonify({
-        "sm_state":    snap["sm_state"],
-        "running":     snap["running"],
-        "enc_l":       snap["enc_l"],
-        "enc_r":       snap["enc_r"],
-        "rpm_l":       snap["rpm_l"],
-        "rpm_r":       snap["rpm_r"],
-        "pos_current":   snap["pos_current"],
-        "pos_target":    snap["pos_target"],
-        "pos_error":     snap["pos_error"],
-        "pos_tolerance": _config_module.get().pos_tolerance,
-        "red_found":   det.red_found       if det else False,
-        "red_error":   det.red_error       if det else 0.0,
-        "blue_found":  det.blue_found      if det else False,
-        "t_junction":  det.t_junction      if det else False,
-        "curve":       det.curve_detected  if det else False,
+        "sm_state":  snap["sm_state"],
+        "running":   snap["running"],
+        "enc_l":     snap["enc_l"],
+        "enc_r":     snap["enc_r"],
+        "rpm_l":     snap["rpm_l"],
+        "rpm_r":     snap["rpm_r"],
+        "red_found": det.red_found  if det else False,
+        "red_error": det.red_error  if det else 0.0,
+        "blue_found":det.blue_found if det else False,
+        "t_junction":det.t_junction if det else False,
     })
 
 
@@ -188,22 +183,6 @@ def telemetry_history():
     if _runner is None:
         return jsonify({"t": [], "red_error": [], "rpm_l": [], "rpm_r": []})
     return jsonify(_runner.telemetry_history())
-
-
-@app.post("/api/test/move")
-def test_move():
-    """Run the position PID for delta_ticks in a background thread."""
-    if _runner is None:
-        return jsonify({"error": "No runner attached."}), 503
-    data = request.get_json(silent=True) or {}
-    try:
-        delta = int(data.get("delta_ticks", 0))
-    except (TypeError, ValueError):
-        return jsonify({"error": "delta_ticks must be an integer"}), 400
-    if delta == 0:
-        return jsonify({"error": "delta_ticks cannot be zero"}), 400
-    _runner.run_position_move(delta)
-    return jsonify({"ok": True, "delta_ticks": delta})
 
 
 @app.get("/stream/camera")

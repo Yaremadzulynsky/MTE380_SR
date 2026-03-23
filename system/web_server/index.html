@@ -296,17 +296,13 @@
     </div>
   </div>
 
-  <!-- Line error: ground model -->
+  <!-- Line error: perception -->
   <div class="card">
-    <h2>Line error — ground model</h2>
+    <h2>Line error — perception</h2>
     <div class="fields">
       <div class="field">
-        <label for="geom_enable">use ground model</label>
-        <input type="checkbox" id="geom_enable" />
-      </div>
-      <div class="field">
-        <label for="geom_lateral_norm_m">scale (m → ±1)</label>
-        <input type="number" id="geom_lateral_norm_m" step="0.01" min="0.01" />
+        <div class="field-label-row"><label for="line_axle_extrap">axle extrap</label><button type="button" class="info-btn" data-help="line_axle_extrap" aria-label="Help: line_axle_extrap">i</button></div>
+        <input type="number" id="line_axle_extrap" step="0.1" min="0" max="5" />
       </div>
       <div class="field">
         <label for="red_loss_debounce_frames">red miss frames</label>
@@ -315,18 +311,6 @@
       <div class="field">
         <label for="red_error_ema_alpha">red error EMA α</label>
         <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
-      </div>
-      <div class="field">
-        <label for="curve_threshold">curve threshold</label>
-        <input type="number" id="curve_threshold" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <label for="curve_coast_ticks">curve coast (ticks)</label>
-        <input type="number" id="curve_coast_ticks" step="10" min="0" />
-      </div>
-      <div class="field">
-        <label for="curve_debounce_s">curve debounce (s)</label>
-        <input type="number" id="curve_debounce_s" step="0.1" min="0" />
       </div>
     </div>
   </div>
@@ -397,50 +381,11 @@
         <div class="field-label-row"><label for="search_turn_max">search_turn_max</label><button type="button" class="info-btn" data-help="search_turn_max" aria-label="Help: search_turn_max">i</button></div>
         <input type="number" id="search_turn_max" step="0.01" min="0" max="1" />
       </div>
-    </div>
-  </div>
-
-  <!-- Position PID -->
-  <div class="card">
-    <h2>Position PID — curve coast &amp; tick-based moves</h2>
-    <div class="fields">
       <div class="field">
-        <label for="pos_kp">kp</label>
-        <input type="number" id="pos_kp" step="0.0001" />
-      </div>
-      <div class="field">
-        <label for="pos_ki">ki</label>
-        <input type="number" id="pos_ki" step="0.0001" />
-      </div>
-      <div class="field">
-        <label for="pos_kd">kd</label>
-        <input type="number" id="pos_kd" step="0.0001" />
-      </div>
-      <div class="field">
-        <label for="pos_tolerance">tolerance (ticks)</label>
-        <input type="number" id="pos_tolerance" step="1" min="1" />
-      </div>
-      <div class="field">
-        <label for="pos_max_speed">max speed</label>
-        <input type="number" id="pos_max_speed" step="0.01" min="0" max="1" />
+        <div class="field-label-row"><label for="lost_line_coast_speed">coast speed</label><button type="button" class="info-btn" data-help="lost_line_coast_speed" aria-label="Help: lost_line_coast_speed">i</button></div>
+        <input type="number" id="lost_line_coast_speed" step="0.01" min="0" max="1" />
       </div>
     </div>
-  </div>
-
-  <!-- Position PID test -->
-  <div class="card">
-    <h2>Position PID — test move</h2>
-    <p class="hint">Stops the mission and drives the robot a fixed number of ticks to tune pos PID gains. Positive = forward, negative = backward.</p>
-    <div class="fields" style="align-items:flex-end;">
-      <div class="field">
-        <label for="test-delta-ticks">ticks</label>
-        <input type="number" id="test-delta-ticks" value="200" step="50" />
-      </div>
-      <div class="field">
-        <button onclick="testMove()" style="margin-top:1.2rem;">Run</button>
-      </div>
-    </div>
-    <p id="test-move-status" class="hint" style="margin-top:0.5rem;"></p>
   </div>
 
   <!-- Drive forward -->
@@ -506,15 +451,13 @@
   </div>
 
   <script>
-    // All keys match the JSON keys in pid_config.json exactly.
+    // All keys match the JSON keys in config.yaml exactly.
     const KEYS = [
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed", "search_turn", "search_turn_max",
-      "geom_enable", "geom_lateral_norm_m",
-      "red_loss_debounce_frames", "red_error_ema_alpha",
-      "curve_threshold", "curve_coast_ticks", "curve_debounce_s",
-      "pos_kp", "pos_ki", "pos_kd", "pos_tolerance", "pos_max_speed",
+      "lost_line_coast_speed",
+      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
       "turn_speed", "turn_duration_s",
       "claw_open", "claw_closed", "pickup_hold_s",
@@ -525,12 +468,11 @@
     const INT_KEYS = new Set([
       "forward_ticks",
       "red_loss_debounce_frames",
-      "curve_coast_ticks", "pos_tolerance",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
     ]);
-    const BOOL_KEYS = new Set(["geom_enable"]);
+    const BOOL_KEYS = new Set([]);
 
     // [min, max, step] for each slider — drives both the range input and clamps the number input
     const SLIDER_RANGES = {
@@ -546,17 +488,10 @@
       max_speed:               [0,    1,      0.01  ],
       search_turn:             [0,    1,      0.01  ],
       search_turn_max:         [0,    1,      0.01  ],
-      geom_lateral_norm_m:     [0.01, 1,      0.01  ],
+      lost_line_coast_speed:   [0,    1,      0.01  ],
+      line_axle_extrap:        [0,    5,      0.1   ],
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
-      curve_threshold:         [0,    1,      0.01  ],
-      curve_coast_ticks:       [0,    500,    10    ],
-      curve_debounce_s:        [0,    10,     0.1   ],
-      pos_kp:                  [0,    0.02,   0.0001],
-      pos_ki:                  [0,    0.005,  0.0001],
-      pos_kd:                  [0,    0.005,  0.0001],
-      pos_tolerance:           [1,    100,    1     ],
-      pos_max_speed:           [0,    1,      0.01  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       turn_speed:              [0,    1,      0.01  ],
@@ -729,6 +664,22 @@
         dec: "Shorter mission time; risk of moving before grip is secure.",
         whenInc: "Payload drops when leaving pickup; inconsistent grabs.",
         whenDec: "Mission delay with no benefit; next state already stable.",
+      },
+      lost_line_coast_speed: {
+        title: "lost_line_coast_speed",
+        what: "Forward speed fraction to drive straight during soft line loss (before search spin starts). 0 = stop in place.",
+        inc: "Drives farther forward during brief line loss — useful if tape has small gaps.",
+        dec: "Stops sooner when line is lost; avoids overrunning the tape edge.",
+        whenInc: "Robot stops dead on small tape gaps and misses the line when it reappears.",
+        whenDec: "Robot drives too far when losing the line and can't recover.",
+      },
+      line_axle_extrap: {
+        title: "line_axle_extrap",
+        what: "How far past the blob bottom to extrapolate the tape line toward the axle. 0 = use blob bottom directly. 1 = extend by one blob-height below the bottom.",
+        inc: "Steering references a point further toward the axle — anticipates curves more aggressively.",
+        dec: "Closer to raw blob-bottom; less predictive but more stable on straight segments.",
+        whenInc: "Robot cuts corners or reacts too late to curves.",
+        whenDec: "Steering is jittery or oversteers because the extrapolated point swings too far.",
       },
     };
 
@@ -939,25 +890,6 @@
       }
     }
 
-    async function testMove() {
-      const delta = parseInt(document.getElementById("test-delta-ticks").value, 10);
-      const el = document.getElementById("test-move-status");
-      if (!delta) { el.textContent = "Enter a non-zero tick count."; return; }
-      el.textContent = "Running…";
-      try {
-        const res  = await fetch("/api/test/move", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ delta_ticks: delta }),
-        });
-        const body = await safeJson(res);
-        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-        el.textContent = `Sent: ${delta} ticks`;
-      } catch (e) {
-        el.textContent = "Error: " + e.message;
-      }
-    }
-
     // ── Status polling ───────────────────────────────────────────────────────
 
     async function pollStatus() {
@@ -972,8 +904,7 @@
           `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
           `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
           `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
-          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}  curve=${s.curve ? "Y" : "N"}\n` +
-          `pos  current=${s.pos_current?.toFixed(1)}  target=${s.pos_target?.toFixed(1)}  error=${s.pos_error?.toFixed(1)}  tolerance=±${s.pos_tolerance ?? "?"}  ticks_to_go=${s.pos_error?.toFixed(0)}`;
+          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}`;
         btnStart.disabled = s.running;
         btnStop.disabled  = !s.running;
         btnStart.style.opacity = s.running ? "0.45" : "1";

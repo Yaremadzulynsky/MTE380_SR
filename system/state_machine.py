@@ -24,7 +24,6 @@ from perception import FrameDetection
 from states import ControlOutput, State
 
 import states.line_follow   as _line_follow
-import states.curve_coast   as _curve_coast
 import states.drive_forward as _drive_forward
 import states.pickup        as _pickup
 import states.turn_180      as _turn_180
@@ -43,7 +42,6 @@ class MissionStateMachine:
         self._enc0_right       = 0
         self._last_red_error   = 0.0
         self._consecutive_lost = 0
-        self._last_curve_coast_t = 0.0
 
         self._steer_pid = PID(
             Kp=self.cfg.steer_kp,
@@ -54,20 +52,9 @@ class MissionStateMachine:
             sample_time=None,
         )
 
-        self._pos_pid = PID(
-            Kp=self.cfg.pos_kp,
-            Ki=self.cfg.pos_ki,
-            Kd=self.cfg.pos_kd,
-            setpoint=0,
-            output_limits=(-self.cfg.pos_max_speed, self.cfg.pos_max_speed),
-            sample_time=None,
-        )
-
     def step(self, det: FrameDetection, left_ticks: int, right_ticks: int) -> ControlOutput:
         if self.state == State.LINE_FOLLOW:
             return _line_follow.step(self, det, left_ticks, right_ticks)
-        if self.state == State.CURVE_COAST:
-            return _curve_coast.step(self, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return _drive_forward.step(self, left_ticks, right_ticks)
         if self.state == State.PICKUP:

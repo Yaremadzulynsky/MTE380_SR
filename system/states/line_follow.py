@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from states import ControlOutput, State, clamp_search_turn, search_spin_pair, steer
+from states import ControlOutput, State, _clamp, clamp_search_turn, search_spin_pair, steer
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
@@ -14,9 +14,9 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         n = max(1, sm.cfg.lost_frames_before_search)
 
         if sm._consecutive_lost < n:
-            # Soft loss: brief flicker or tape gap — coast straight at min_speed
-            # and keep the steering PID warm so it's ready when the line reappears
-            return ControlOutput(left=sm.cfg.min_speed, right=sm.cfg.min_speed, claw=None, state=sm.state)
+            # Soft loss: coast at lost_line_coast_speed (0 = stop in place until search spin)
+            c = _clamp(max(0.0, sm.cfg.lost_line_coast_speed), 0.0, sm.cfg.max_speed)
+            return ControlOutput(left=c, right=c, claw=None, state=sm.state)
 
         # Hard loss: line gone for too many frames — spin toward the side it was
         # last seen on (sign of _last_red_error) to try to reacquire it

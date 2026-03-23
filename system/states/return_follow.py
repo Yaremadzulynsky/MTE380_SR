@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from states import ControlOutput, State, clamp_search_turn, search_spin_pair, steer
+from states import ControlOutput, State, _clamp, clamp_search_turn, search_spin_pair, steer
 
 
 def step(sm, det) -> ControlOutput:
@@ -12,7 +12,8 @@ def step(sm, det) -> ControlOutput:
         sm._consecutive_lost += 1
         n = max(1, sm.cfg.lost_frames_before_search)
         if sm._consecutive_lost < n:
-            return ControlOutput(left=sm.cfg.min_speed, right=sm.cfg.min_speed, claw=None, state=sm.state)
+            c = _clamp(max(0.0, sm.cfg.lost_line_coast_speed), 0.0, sm.cfg.max_speed)
+            return ControlOutput(left=c, right=c, claw=None, state=sm.state)
         sm._steer_pid.reset()
         st = clamp_search_turn(sm)
         left, right = search_spin_pair(sm, st)

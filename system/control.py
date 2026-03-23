@@ -49,58 +49,6 @@ class MotorCommand:
     right: float
 
 
-# ── Position mover ────────────────────────────────────────────────────────────
-
-class PositionMover:
-    """
-    Moves the robot a fixed number of encoder ticks using a position PID.
-
-    Uses the average of both wheel encoders as the position measurement so the
-    robot drives straight.  Positive delta = forward, negative = backward.
-
-    Usage (call each control-loop tick until done):
-
-        mover = PositionMover(control, delta_ticks=500)
-        while not mover.done:
-            l, r = mover.step()
-            control.send_voltage(l, r)   # bypasses motor speed PID
-        control.idle()
-    """
-
-    def __init__(
-        self,
-        control: "LocalMotorController",
-        delta_ticks: int,
-        cfg: _config_module.Config | None = None,
-    ) -> None:
-        c = cfg if cfg is not None else _config_module.get()
-        self._control   = control
-        l, r            = control.encoder_ticks
-        self._target    = (l + r) / 2.0 + delta_ticks
-        self._tolerance = max(1, int(c.pos_tolerance))
-        self._pid = PID(
-            c.pos_kp, c.pos_ki, c.pos_kd,
-            setpoint=self._target,
-            output_limits=(-abs(c.pos_max_speed), abs(c.pos_max_speed)),
-            sample_time=None,
-        )
-        self.done = False
-
-    def step(self) -> tuple[float, float]:
-        """
-        Compute one PID step. Returns (left_voltage, right_voltage) to pass to
-        send_voltage() — bypasses the motor speed PID entirely.
-        Sets self.done=True and returns (0, 0) when on target.
-        """
-        l, r = self._control.encoder_ticks
-        pos  = (l + r) / 2.0
-        if abs(self._target - pos) <= self._tolerance:
-            self.done = True
-            return 0.0, 0.0
-        v = self._pid(pos)
-        return v, v
-
-
 # ── Controller ────────────────────────────────────────────────────────────────
 
 class LocalMotorController:
@@ -165,6 +113,11 @@ class LocalMotorController:
         t = (cfg.motor_kp, cfg.motor_ki, cfg.motor_kd)
         self._pid_left.tunings = t
         self._pid_right.tunings = t
+        self._pid_left.reset()
+        self._pid_right.reset()
+
+    def reset_wheel_pids(self) -> None:
+        """Clear inner-loop integral state (e.g. when entering lost-line search spin)."""
         self._pid_left.reset()
         self._pid_right.reset()
 
