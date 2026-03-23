@@ -13,12 +13,18 @@ After the rotation reaches tolerance the state transitions back to LINE_FOLLOW.
 from __future__ import annotations
 
 from states import ControlOutput, State
+import time
 
 
 def on_enter(sm, det, left_ticks: int, right_ticks: int) -> None:
     """Stash corner-specific state on the SM before the generic _enter() call."""
     from control.position_controller import PositionController
     from control.rotation_controller import RotationController
+
+    # Stop motors before handing off to position/rotation controllers
+    sm._brain.send_voltage(0.0, 0.0)
+
+    time.sleep(0.1)
 
     # +90° = CW (curves right);  −90° = CCW (curves left)
     degrees = 90.0 if det.curvature >= 0.0 else -90.0
