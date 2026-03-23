@@ -112,7 +112,7 @@ class PositionController:
             self.done = True
             return
         speed = self._pid(traveled)
-        self._control.send_drive(MotorCommand(left=self._sign * speed, right=self._sign * speed))
+        self._control.send_voltage(self._sign * speed, self._sign * speed)
 
 
 # ── Rotation controller ───────────────────────────────────────────────────────
@@ -174,10 +174,7 @@ class RotationController:
             return
         speed = self._pid(traveled)
         # CW: left fwd, right rev.  CCW: opposite.
-        self._control.send_drive(MotorCommand(
-            left= self._sign * speed,
-            right=-self._sign * speed,
-        ))
+        self._control.send_voltage(self._sign * speed, -self._sign * speed)
 
 
 # ── Controller ────────────────────────────────────────────────────────────────
