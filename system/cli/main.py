@@ -227,9 +227,9 @@ class MissionRunner:
         """Return lists of time-series data for graphing."""
         rows = list(self._telem_history)
         if not rows:
-            return {"t": [], "red_error": [], "speed_rpm": []}
-        t, err, spd = zip(*rows)
-        return {"t": list(t), "red_error": list(err), "speed_rpm": list(spd)}
+            return {"t": [], "red_error": [], "rpm_l": [], "rpm_r": []}
+        t, err, rpm_l, rpm_r = zip(*rows)
+        return {"t": list(t), "red_error": list(err), "rpm_l": list(rpm_l), "rpm_r": list(rpm_r)}
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -306,7 +306,8 @@ class MissionRunner:
             self._telem_history.append((
                 time.monotonic() - self._t_start,
                 det.red_error if det else 0.0,
-                (rpm_l + rpm_r) / 2.0,
+                rpm_l,
+                rpm_r,
             ))
 
             if not no_display:

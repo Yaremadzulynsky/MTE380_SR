@@ -1132,7 +1132,7 @@
       data: {
         labels: [],
         datasets: [{
-          label: "lateral error",
+          label: "lateral error (norm. [-1, 1])",
           data: [], borderColor: "#f87171", backgroundColor: "transparent",
           pointRadius: 0, borderWidth: 1.5, tension: 0.2,
         }],
@@ -1145,11 +1145,18 @@
       type: "line",
       data: {
         labels: [],
-        datasets: [{
-          label: "forward speed (RPM avg)",
-          data: [], borderColor: "#4ade80", backgroundColor: "transparent",
-          pointRadius: 0, borderWidth: 1.5, tension: 0.2,
-        }],
+        datasets: [
+          {
+            label: "RPM L",
+            data: [], borderColor: "#4ade80", backgroundColor: "transparent",
+            pointRadius: 0, borderWidth: 1.5, tension: 0.2,
+          },
+          {
+            label: "RPM R",
+            data: [], borderColor: "#60a5fa", backgroundColor: "transparent",
+            pointRadius: 0, borderWidth: 1.5, tension: 0.2,
+          },
+        ],
       },
       options: _chartDefaults,
     });
@@ -1164,7 +1171,8 @@
         chartError.data.datasets[0].data = d.red_error;
         chartError.update();
         chartRpm.data.labels = labels;
-        chartRpm.data.datasets[0].data = d.speed_rpm;
+        chartRpm.data.datasets[0].data = d.rpm_l;
+        chartRpm.data.datasets[1].data = d.rpm_r;
         chartRpm.update();
       } catch (_) {}
     }
