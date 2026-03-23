@@ -116,6 +116,12 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
         default=0.0,
         help="Crop this fraction from the top of the frame before line detection (0 = full frame).",
     )
+    p.add_argument(
+        "--camera-rgb",
+        action="store_true",
+        help="Main stream is true RGB order (forces RGB→BGR before HSV). Default matches "
+        "local/perception: BGR order buffer.",
+    )
     p.add_argument("--serial-port",   default="/dev/ttyACM0")
     p.add_argument("--baud",          type=int,   default=115200)
     p.add_argument("--dry-run",       action="store_true")
@@ -276,6 +282,7 @@ def main() -> None:
         width=args.width,
         height=args.height,
         roi_top_ratio=args.roi_top_ratio,
+        camera_channel_order="rgb" if args.camera_rgb else "bgr",
         geom_enable=args.geom_enable,
         geom_lateral_norm_m=args.geom_lateral_norm_m,
         red_loss_debounce_frames=args.red_loss_debounce_frames,

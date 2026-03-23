@@ -26,10 +26,10 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 
-# Red: two hue bands (wraps at 0/179). Blue: single wedge. Tune under your lights.
-RED_LO1 = np.array([0, 100, 70], np.uint8)
-RED_HI1 = np.array([12, 255, 255], np.uint8)
-RED_LO2 = np.array([168, 100, 70], np.uint8)
+# Red: two hue bands (wraps at 0/179). Match local/perception.py. Tune under your lights.
+RED_LO1 = np.array([0, 50, 45], np.uint8)
+RED_HI1 = np.array([20, 255, 255], np.uint8)
+RED_LO2 = np.array([160, 50, 45], np.uint8)
 RED_HI2 = np.array([179, 255, 255], np.uint8)
 
 BLUE_LO = np.array([95, 120, 70], np.uint8)
@@ -76,13 +76,14 @@ def detect(
         cv2.inRange(hsv_roi, RED_LO1, RED_HI1),
         cv2.inRange(hsv_roi, RED_LO2, RED_HI2),
     )
-    kernel = np.ones((5, 5), np.uint8)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    k3 = np.ones((3, 3), np.uint8)
+    k5 = np.ones((5, 5), np.uint8)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_OPEN, k3, iterations=1)
+    red_mask = cv2.morphologyEx(red_mask, cv2.MORPH_CLOSE, k5, iterations=2)
 
     blue_mask = cv2.inRange(hsv_roi, BLUE_LO, BLUE_HI)
-    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_OPEN, k5, iterations=1)
+    blue_mask = cv2.morphologyEx(blue_mask, cv2.MORPH_CLOSE, k5, iterations=1)
 
     contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     red_found = False

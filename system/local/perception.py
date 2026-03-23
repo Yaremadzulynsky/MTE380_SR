@@ -107,10 +107,11 @@ class Perception:
     """
 
     # ── HSV colour ranges ─────────────────────────────────────────────────────
-    # Red often wraps around 0/179 in HSV, so keep two bands.
-    _RED_LO1 = np.array([  0, 100,  70], np.uint8)
-    _RED_HI1 = np.array([ 12, 255, 255], np.uint8)
-    _RED_LO2 = np.array([168, 100,  70], np.uint8)
+    # Red wraps at 0/179 in OpenCV H (0–180). Two bands: orange-red and magenta-red.
+    # Previous S≥100, V≥70, H≤12 produced sparse masks on real tape (AWB/exposure).
+    _RED_LO1 = np.array([  0,  50,  45], np.uint8)
+    _RED_HI1 = np.array([ 20, 255, 255], np.uint8)
+    _RED_LO2 = np.array([160,  50,  45], np.uint8)
     _RED_HI2 = np.array([179, 255, 255], np.uint8)
 
     # Blue tuned to be a bit more forgiving but still reject washed-out noise.
@@ -122,7 +123,7 @@ class Perception:
         width:  int   = 640,
         height: int   = 480,
         roi_top_ratio: float = 0.0,   # 0 = full frame; else ignore top fraction (e.g. 0.5 = bottom half)
-        red_min_area:  float = 80.0,
+        red_min_area:  float = 50.0,
         blue_min_area: float = 1500.0,  # require a substantial blue patch to avoid false triggers
         t_junction_width_ratio: float = 0.5,  # red bbox > this fraction of frame = T-junction
         camera_channel_order: Literal["rgb", "bgr"] = "bgr",
@@ -306,9 +307,11 @@ class Perception:
             cv2.inRange(hsv, self._RED_LO1, self._RED_HI1),
             cv2.inRange(hsv, self._RED_LO2, self._RED_HI2),
         )
-        kernel = np.ones((5, 5), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+        # Light open removes salt noise; heavy 5×5 open was shredding thin vertical tape.
+        k3 = np.ones((3, 3), np.uint8)
+        k5 = np.ones((5, 5), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k3, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k5, iterations=2)
         return mask
 
     def _detect_red(
