@@ -445,8 +445,8 @@
         <input type="number" id="rot_kd" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_tolerance">rot tolerance (ticks)</label>
-        <input type="number" id="rot_tolerance" step="1" min="1" />
+        <label for="rot_tolerance">rot tolerance (degrees)</label>
+        <input type="number" id="rot_tolerance" step="0.5" min="0.1" />
       </div>
     </div>
   </div>
@@ -571,7 +571,7 @@
     const INT_KEYS = new Set([
       "forward_ticks",
       "red_loss_debounce_frames",
-      "pos_tolerance", "rot_tolerance",
+      "pos_tolerance",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
@@ -609,7 +609,7 @@
       rot_kp:                  [0,    5,      0.001 ],
       rot_ki:                  [0,    1,      0.001 ],
       rot_kd:                  [0,    1,      0.001 ],
-      rot_tolerance:           [1,    200,    1     ],
+      rot_tolerance:           [0.5,  45,     0.5   ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
       pickup_hold_s:           [0,    5,      0.1   ],
@@ -1099,7 +1099,7 @@
           const pct = s.target > 0 ? Math.min(100, (s.traveled / s.target) * 100) : 0;
           rotBar.style.width = pct.toFixed(1) + "%";
           rotTelem.textContent =
-            `traveled: ${s.traveled} ticks  |  target: ${s.target}  |  remaining: ${s.remaining} ticks` +
+            `traveled: ${s.traveled}°  |  target: ${s.target}°  |  remaining: ${s.remaining}°` +
             (s.done ? "  ✓ done" : "");
         } else {
           // No active move — hide both unless already done (keep last result visible)

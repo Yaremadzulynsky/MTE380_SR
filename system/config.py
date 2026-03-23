@@ -62,10 +62,10 @@ class Config:
     pos_ki:           float = 0.0    # position PID — integral gain
     pos_kd:           float = 0.0    # position PID — derivative gain
     pos_tolerance:    int   = 20     # done when within this many ticks of target
-    rot_kp:           float = 0.001  # rotation PID — proportional gain
+    rot_kp:           float = 0.5    # rotation PID — proportional gain (radian-space)
     rot_ki:           float = 0.0    # rotation PID — integral gain
     rot_kd:           float = 0.0    # rotation PID — derivative gain
-    rot_tolerance:    int   = 15     # done when within this many ticks of target
+    rot_tolerance:    float = 3.0    # done when within this many degrees of target
 
     # ── Claw / servo ──────────────────────────────────────────────────────────
     claw_open:     float = 0.0

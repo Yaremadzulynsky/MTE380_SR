@@ -120,12 +120,13 @@ class RotationController:
     """
     Rotates the robot in place by a fixed number of degrees.
 
-    Positive degrees = clockwise (right): left wheel forward, right backward.
-    Negative degrees = counter-clockwise (left): opposite.
+    Positive degrees = clockwise: left wheel forward, right backward.
+    Negative degrees = counter-clockwise: opposite.
 
-    PID error = target_ticks - traveled (positive = not there, negative = overshot).
-    Output is a signed voltage magnitude [-1, 1] applied differentially so the
-    robot can reverse to correct overshoot, enabling proper PID behaviour.
+    Each step integrates encoder deltas into a running heading (radians) using
+    differential-drive kinematics — the same approach used in the reference
+    robot_control_system.  The PID operates on angle error (radians), so
+    rot_kp/ki/kd are radian-space gains and rot_tolerance is in degrees.
 
         ctrl = RotationController(control, degrees=90)
         while not ctrl.done:
@@ -137,46 +138,49 @@ class RotationController:
         self,
         control:   "LocalMotorController",
         degrees:   float,
-        tolerance: int   | None = None,
+        tolerance: float | None = None,
         cfg:       _config_module.Config | None = None,
     ) -> None:
         c = cfg if cfg is not None else _config_module.get()
-        tol = tolerance if tolerance is not None else c.rot_tolerance
+        tol_deg = tolerance if tolerance is not None else c.rot_tolerance
         l, r = control.encoder_ticks
-        self._control     = control
-        self._start_left  = l
-        self._start_right = r
-        # Signed target: positive = CW, negative = CCW.
-        # CW: left wheel forward (+), right backward (-), so angular = (dl - dr) / 2 > 0.
-        mag                = _ticks_for_degrees(degrees, c.wheel_diameter_m, c.wheelbase_m)
-        self._target       = math.copysign(mag, degrees)
-        self._tolerance    = max(1, tol)
-        self.done          = False
-        # PID: setpoint = signed target, input = signed angular displacement,
-        # output = signed voltage [-1, 1].  Negative output reverses rotation.
+        self._control    = control
+        self._prev_left  = l
+        self._prev_right = r
+        self._wheel_circ = math.pi * c.wheel_diameter_m
+        self._wheelbase  = c.wheelbase_m
+        self._heading    = 0.0                       # integrated from start, radians; positive = CW
+        self._target     = math.radians(degrees)     # positive = CW
+        self._tol_rad    = math.radians(abs(tol_deg))
+        self.done        = False
+        # PID: setpoint = target (rad), input = heading (rad), output = voltage [-1, 1].
+        # Positive output → CW (send_voltage(+v, -v)); negative → CCW.
         self._pid = PID(c.rot_kp, c.rot_ki, c.rot_kd,
                         setpoint=self._target,
                         output_limits=(-1.0, 1.0),
                         sample_time=None)
 
-    def _angular(self) -> float:
-        """Signed angular displacement since start (positive = CW)."""
-        l, r = self._control.encoder_ticks
-        return ((l - self._start_left) - (r - self._start_right)) / 2.0
-
     def progress(self) -> tuple[float, float]:
-        """Returns (abs_angular_traveled, abs_target_ticks) for display."""
-        return abs(self._angular()), abs(self._target)
+        """Returns (abs_degrees_traveled, abs_degrees_target) for display."""
+        return abs(math.degrees(self._heading)), abs(math.degrees(self._target))
 
     def step(self) -> None:
-        """Send one drive command. Sets self.done=True when within tolerance."""
+        """Integrate heading, run PID, send voltage. Sets done when within tolerance."""
         if self.done:
             return
-        angular = self._angular()
-        if abs(angular - self._target) <= self._tolerance:
+        l, r = self._control.encoder_ticks
+        dl = (l - self._prev_left)  * self._wheel_circ / TICKS_PER_REV
+        dr = (r - self._prev_right) * self._wheel_circ / TICKS_PER_REV
+        # CW: left fwd (dl > 0), right rev (dr < 0) → heading increases
+        self._heading   += (dl - dr) / self._wheelbase
+        self._prev_left  = l
+        self._prev_right = r
+
+        if abs(self._target - self._heading) <= self._tol_rad:
             self.done = True
             return
-        voltage = self._pid(angular)
+
+        voltage = self._pid(self._heading)
         # Positive voltage = CW (left fwd, right rev); negative = CCW.
         self._control.send_voltage(voltage, -voltage)
 
