@@ -448,6 +448,10 @@
         <label for="rot_tolerance">rot tolerance (degrees)</label>
         <input type="number" id="rot_tolerance" step="0.5" min="0.1" />
       </div>
+      <div class="field">
+        <label for="rot_motor_deadband">rot motor deadband</label>
+        <input type="number" id="rot_motor_deadband" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -562,7 +566,7 @@
       "turn_speed", "turn_duration_s",
       "wheel_diameter_m", "wheelbase_m",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance",
-      "rot_kp", "rot_ki", "rot_kd", "rot_tolerance",
+      "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
@@ -610,6 +614,7 @@
       rot_ki:                  [0,    1,      0.001 ],
       rot_kd:                  [0,    1,      0.001 ],
       rot_tolerance:           [0.5,  45,     0.5   ],
+      rot_motor_deadband:      [0,    0.5,    0.01  ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
       pickup_hold_s:           [0,    5,      0.1   ],

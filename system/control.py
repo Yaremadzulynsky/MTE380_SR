@@ -38,6 +38,40 @@ TICKS_PER_REV = 680   # encoder ticks per wheel revolution
 MAX_RPM       = 320   # maximum commanded RPM
 
 
+# ── Discrete PID (matches robot_control_system/pid.py) ───────────────────────
+
+class _DiscretePID:
+    """Discrete PID with real dt, derivative-on-error, and integral clamping."""
+
+    def __init__(self, kp: float, ki: float, kd: float,
+                 out_min: float = -1.0, out_max: float = 1.0,
+                 integral_limit: float = 1.0) -> None:
+        self.kp = kp; self.ki = ki; self.kd = kd
+        self.out_min = out_min; self.out_max = out_max
+        self.integral_limit = integral_limit
+        self._integral   = 0.0
+        self._prev_error = 0.0
+        self._prev_time: float | None = None
+
+    def reset(self) -> None:
+        self._integral   = 0.0
+        self._prev_error = 0.0
+        self._prev_time  = None
+
+    def update(self, setpoint: float, measurement: float) -> float:
+        now   = time.monotonic()
+        error = setpoint - measurement
+        dt    = (now - self._prev_time) if self._prev_time is not None else 0.0
+        if dt > 0:
+            self._integral = max(-self.integral_limit,
+                                 min(self.integral_limit, self._integral + error * dt))
+        deriv = (error - self._prev_error) / dt if dt > 0 else 0.0
+        self._prev_error = error
+        self._prev_time  = now
+        raw = self.kp * error + self.ki * self._integral + self.kd * deriv
+        return max(self.out_min, min(self.out_max, raw))
+
+
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
@@ -134,6 +168,18 @@ class RotationController:
         control.idle()
     """
 
+    @staticmethod
+    def _wrap(angle: float) -> float:
+        """Wrap angle to (-π, π]."""
+        return (angle + math.pi) % (2 * math.pi) - math.pi
+
+    @staticmethod
+    def _apply_deadband(value: float, deadband: float) -> float:
+        """Zero tiny signals; boost non-zero signals to at least deadband."""
+        if abs(value) < 1e-6:
+            return 0.0
+        return math.copysign(max(abs(value), deadband), value)
+
     def __init__(
         self,
         control:   "LocalMotorController",
@@ -144,45 +190,54 @@ class RotationController:
         c = cfg if cfg is not None else _config_module.get()
         tol_deg = tolerance if tolerance is not None else c.rot_tolerance
         l, r = control.encoder_ticks
-        self._control    = control
-        self._prev_left  = l
-        self._prev_right = r
-        self._wheel_circ = math.pi * c.wheel_diameter_m
-        self._wheelbase  = c.wheelbase_m
-        self._heading    = 0.0                       # integrated from start, radians; positive = CW
-        self._target     = math.radians(degrees)     # positive = CW
-        self._tol_rad    = math.radians(abs(tol_deg))
-        self.done        = False
-        # PID: setpoint = target (rad), input = heading (rad), output = voltage [-1, 1].
-        # Positive output → CW (send_voltage(+v, -v)); negative → CCW.
-        self._pid = PID(c.rot_kp, c.rot_ki, c.rot_kd,
-                        setpoint=self._target,
-                        output_limits=(-1.0, 1.0),
-                        sample_time=None)
+        self._control        = control
+        self._prev_left      = l
+        self._prev_right     = r
+        self._wheel_circ     = math.pi * c.wheel_diameter_m
+        self._wheelbase      = c.wheelbase_m
+        self._heading        = 0.0                   # integrated, radians; positive = CW
+        self._target         = math.radians(degrees) # positive = CW
+        self._tol_rad        = math.radians(abs(tol_deg))
+        self._motor_deadband = c.rot_motor_deadband
+        self.done            = False
+        # Discrete PID matching robot_control_system/pid.py.
+        # Called with (error, 0.0) — error as setpoint, 0 as measurement.
+        self._pid = _DiscretePID(c.rot_kp, c.rot_ki, c.rot_kd)
 
     def progress(self) -> tuple[float, float]:
         """Returns (abs_degrees_traveled, abs_degrees_target) for display."""
         return abs(math.degrees(self._heading)), abs(math.degrees(self._target))
 
     def step(self) -> None:
-        """Integrate heading, run PID, send voltage. Sets done when within tolerance."""
+        """Integrate heading, run PID, send voltage. Matches HeadingPID.update() logic."""
         if self.done:
             return
+
+        # Integrate encoder deltas → heading (CW = positive)
         l, r = self._control.encoder_ticks
         dl = (l - self._prev_left)  * self._wheel_circ / TICKS_PER_REV
         dr = (r - self._prev_right) * self._wheel_circ / TICKS_PER_REV
-        # CW: left fwd (dl > 0), right rev (dr < 0) → heading increases
         self._heading   += (dl - dr) / self._wheelbase
         self._prev_left  = l
         self._prev_right = r
 
-        if abs(self._target - self._heading) <= self._tol_rad:
+        # Angle-wrapped error — same as HeadingPID: error = _wrap(desired - current)
+        error = self._wrap(self._target - self._heading)
+
+        # Done when within tolerance — equivalent to HEADING_DEADBAND check
+        if abs(error) <= self._tol_rad:
+            self._pid.reset()
             self.done = True
             return
 
-        voltage = self._pid(self._heading)
-        # Positive voltage = CW (left fwd, right rev); negative = CCW.
-        self._control.send_voltage(voltage, -voltage)
+        # PID on error directly, matching: pid.update(error, 0.0)
+        output = self._pid.update(error, 0.0)
+
+        # Motor deadband — matching: _apply_deadband(output)
+        output = self._apply_deadband(output, self._motor_deadband)
+
+        # Positive output = CW (left fwd, right rev); negative = CCW.
+        self._control.send_voltage(output, -output)
 
 
 # ── Controller ────────────────────────────────────────────────────────────────

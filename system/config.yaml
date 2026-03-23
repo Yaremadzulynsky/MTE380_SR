@@ -37,6 +37,7 @@ rot_kp: 0.5
 rot_ki: 0.0
 rot_kd: 0.0
 rot_tolerance: 3.0
+rot_motor_deadband: 0.05
 
 # Claw / servo
 claw_open: 0.0
