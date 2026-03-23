@@ -72,6 +72,9 @@ class Config:
     claw_closed:   float = 90.0
     pickup_hold_s: float = 0.8
 
+    # ── Find line ─────────────────────────────────────────────────────────────
+    find_line_turn_speed: float = 0.20  # in-place spin voltage while searching
+
     # ── Corner turn ───────────────────────────────────────────────────────────
     corner_curvature_thresh: float = 0.3   # |curvature| above this triggers CORNER_TURN
     corner_curve_conf_min:   float = 0.6   # minimum curve_conf required (fraction of strips)
@@ -128,6 +131,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Claw / servo", [
         "claw_open", "claw_closed", "pickup_hold_s",
+    ]),
+    ("Find line", [
+        "find_line_turn_speed",
     ]),
     ("Corner turn", [
         "corner_curvature_thresh", "corner_curve_conf_min",

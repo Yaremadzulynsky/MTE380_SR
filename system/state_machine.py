@@ -24,6 +24,7 @@ from perception import FrameDetection
 from states import ControlOutput, State
 
 import states.line_follow   as _line_follow
+import states.find_line     as _find_line
 import states.corner_turn   as _corner_turn
 import states.drive_forward as _drive_forward
 import states.pickup        as _pickup
@@ -43,6 +44,7 @@ class MissionStateMachine:
         self._enc0_left        = 0
         self._enc0_right       = 0
         self._last_red_error   = 0.0
+        self._last_curvature   = 0.0
         self._consecutive_lost = 0
 
         self._steer_pid = PID(
@@ -57,6 +59,8 @@ class MissionStateMachine:
     def step(self, det: FrameDetection, left_ticks: int, right_ticks: int) -> ControlOutput:
         if self.state == State.LINE_FOLLOW:
             return _line_follow.step(self, det, left_ticks, right_ticks)
+        if self.state == State.FIND_LINE:
+            return _find_line.step(self, det, left_ticks, right_ticks)
         if self.state == State.CORNER_TURN:
             return _corner_turn.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:

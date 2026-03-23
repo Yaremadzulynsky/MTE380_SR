@@ -18,10 +18,12 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         sm._enter(State.DRIVE_FORWARD, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
-    # No line — stop and wait
+    # No line — transition to FIND_LINE to spin toward last known curvature
     if not det.red_found:
+        sm._enter(State.FIND_LINE, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
-    # Line found — steer along it
+    # Line found — store curvature for FIND_LINE recovery, then steer
+    sm._last_curvature = det.curvature
     left, right = steer(sm, det.red_error)
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)

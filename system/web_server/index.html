@@ -391,6 +391,17 @@
     </div>
   </div>
 
+  <!-- Find Line -->
+  <div class="card">
+    <h2>Find Line — spin to reacquire lost line</h2>
+    <div class="fields">
+      <div class="field">
+        <label for="find_line_turn_speed">turn speed</label>
+        <input type="number" id="find_line_turn_speed" step="0.01" min="0" max="1" />
+      </div>
+    </div>
+  </div>
+
   <!-- Corner Turn -->
   <div class="card">
     <h2>Corner Turn — curvature-triggered 90° turn</h2>
@@ -631,6 +642,7 @@
       "base_speed", "min_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha",
       "forward_ticks", "forward_speed",
+      "find_line_turn_speed",
       "corner_curvature_thresh", "corner_curve_conf_min",
       "corner_forward_m", "corner_forward_speed", "curve_n_strips",
       "turn_speed", "turn_duration_s",
@@ -669,6 +681,7 @@
       red_error_ema_alpha:     [0,    1,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
+      find_line_turn_speed:    [0,    1,      0.01  ],
       corner_curvature_thresh: [0,    2,      0.05  ],
       corner_curve_conf_min:   [0,    1,      0.1   ],
       corner_forward_m:        [0,    2,      0.01  ],
