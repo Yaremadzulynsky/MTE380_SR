@@ -103,7 +103,7 @@ def build_arg_parser(cfg: dict) -> argparse.ArgumentParser:
     # Camera / runtime
     p.add_argument("--width",         type=int,   default=640)
     p.add_argument("--height",        type=int,   default=480)
-    p.add_argument("--fps",           type=float, default=30.0)
+    p.add_argument("--fps",           type=float, default=60.0)
     p.add_argument(
         "--roi-top-ratio",
         type=float,
