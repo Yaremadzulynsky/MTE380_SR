@@ -182,9 +182,9 @@ class MissionRunner:
         """Return lists of time-series data for graphing."""
         rows = list(self._telem_history)
         if not rows:
-            return {"t": [], "red_error": [], "rpm_l": [], "rpm_r": []}
-        t, err, rl, rr = zip(*rows)
-        return {"t": list(t), "red_error": list(err), "rpm_l": list(rl), "rpm_r": list(rr)}
+            return {"t": [], "red_error": [], "speed_rpm": []}
+        t, err, spd = zip(*rows)
+        return {"t": list(t), "red_error": list(err), "speed_rpm": list(spd)}
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -261,19 +261,18 @@ class MissionRunner:
                 with self._lock:
                     self._last_det    = det
                     self._last_output = output
-
-                rpm_l, rpm_r = self._control.measured_rpm
-                self._telem_history.append((
-                    time.monotonic() - self._t_start,
-                    det.red_error if det else 0.0,
-                    rpm_l,
-                    rpm_r,
-                ))
             else:
                 output = None
                 with self._lock:
                     self._last_det    = det
                     self._last_output = None
+
+            rpm_l, rpm_r = self._control.measured_rpm
+            self._telem_history.append((
+                time.monotonic() - self._t_start,
+                det.red_error if det else 0.0,
+                (rpm_l + rpm_r) / 2.0,
+            ))
 
             if not no_display:
                 overlay = self._perception.draw_debug(frame, det)

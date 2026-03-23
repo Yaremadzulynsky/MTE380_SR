@@ -970,7 +970,7 @@
         const btnStop  = document.getElementById("btn-stop");
         telem.textContent =
           `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
-          `enc L=${s.enc_l}  R=${s.enc_r}  |  rpm L=${s.rpm_l?.toFixed(1)}  R=${s.rpm_r?.toFixed(1)}  |  ` +
+          `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
           `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
           `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}  curve=${s.curve ? "Y" : "N"}\n` +
           `pos  current=${s.pos_current?.toFixed(1)}  target=${s.pos_target?.toFixed(1)}  error=${s.pos_error?.toFixed(1)}  tolerance=±${s.pos_tolerance ?? "?"}  ticks_to_go=${s.pos_error?.toFixed(0)}`;
@@ -1014,10 +1014,11 @@
       type: "line",
       data: {
         labels: [],
-        datasets: [
-          { label: "RPM left",  data: [], borderColor: "#60a5fa", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
-          { label: "RPM right", data: [], borderColor: "#4ade80", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, tension: 0.2 },
-        ],
+        datasets: [{
+          label: "forward speed (RPM avg)",
+          data: [], borderColor: "#4ade80", backgroundColor: "transparent",
+          pointRadius: 0, borderWidth: 1.5, tension: 0.2,
+        }],
       },
       options: _chartDefaults,
     });
@@ -1032,8 +1033,7 @@
         chartError.data.datasets[0].data = d.red_error;
         chartError.update();
         chartRpm.data.labels = labels;
-        chartRpm.data.datasets[0].data = d.rpm_l;
-        chartRpm.data.datasets[1].data = d.rpm_r;
+        chartRpm.data.datasets[0].data = d.speed_rpm;
         chartRpm.update();
       } catch (_) {}
     }
