@@ -312,6 +312,10 @@
         <label for="red_error_ema_alpha">red error EMA α</label>
         <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
       </div>
+      <div class="field">
+        <label for="error_heading_weight">heading weight</label>
+        <input type="number" id="error_heading_weight" step="0.05" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -640,7 +644,7 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
-      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha",
+      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "error_heading_weight",
       "forward_ticks", "forward_speed",
       "find_line_turn_speed",
       "corner_curvature_thresh", "corner_curve_conf_min",
@@ -679,6 +683,7 @@
       line_axle_extrap:        [0,    5,      0.1   ],
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
+      error_heading_weight:    [0,    1,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       find_line_turn_speed:    [0,    1,      0.01  ],

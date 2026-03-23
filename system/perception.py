@@ -84,6 +84,7 @@ class Perception:
         self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
         self._curve_n_strips = max(2, int(c.curve_n_strips))
+        self._error_heading_weight = float(c.error_heading_weight)
 
         # Raw-red debounce + EMA (see _stabilize_red)
         self._red_miss_streak = 0
@@ -113,6 +114,7 @@ class Perception:
         self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
         self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
+        self._error_heading_weight    = float(cfg.error_heading_weight)
         self._update_hsv_ranges(cfg)
 
     def _update_hsv_ranges(self, cfg: Config) -> None:
@@ -161,6 +163,10 @@ class Perception:
             curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
                 self._last_red_mask, w, roi_y
             )
+            # Blend local tangent into the lateral error so curves produce a larger signal
+            red_error = _clamp(
+                red_error + self._error_heading_weight * curve_heading, -1.0, 1.0
+            )
         else:
             curvature = curve_heading = curve_conf = 0.0
             curve_pts = []
@@ -196,12 +202,16 @@ class Perception:
         h, w = out.shape[:2]
         roi_y = int(h * self.roi_top_ratio)
 
-        # Vertical centre line (with ROI boundary when applicable)
+        # Vertical centre line (white = frame centre; yellow = tangent-adjusted zero-error)
+        adj_cx = int(round(w / 2.0 - self._error_heading_weight * det.curve_heading * (w / 2.0)))
+        adj_cx = max(0, min(w - 1, adj_cx))
         if roi_y <= 0:
-            cv2.line(out, (w // 2, 0), (w // 2, h - 1), (255, 255, 255), 2)
+            cv2.line(out, (w // 2, 0), (w // 2, h - 1), (255, 255, 255), 1)
+            cv2.line(out, (adj_cx, 0), (adj_cx, h - 1), (0, 255, 255), 2)
         else:
             cv2.line(out, (0, roi_y), (w - 1, roi_y), (200, 200, 200), 1)
-            cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 2)
+            cv2.line(out, (w // 2, roi_y), (w // 2, h - 1), (255, 255, 255), 1)
+            cv2.line(out, (adj_cx, roi_y), (adj_cx, h - 1), (0, 255, 255), 2)
 
         tags = [
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
