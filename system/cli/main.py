@@ -52,6 +52,7 @@ class MissionRunner:
 
         self._last_det    = None
         self._last_output = None
+        self._active_mover = None  # set during run_position_move, cleared when done
         self._frame_n     = 0
         self._t_start     = time.monotonic()
         self._period      = 1.0 / max(_config_module.get().fps, 1.0)
@@ -101,11 +102,13 @@ class MissionRunner:
 
         def _move():
             mover = PositionMover(self._control, delta_ticks)
+            self._active_mover = mover
             while not mover.done:
                 l, r = mover.step()
                 self._control.send_voltage(l, r)
                 import time as _time
                 _time.sleep(0.02)
+            self._active_mover = None
             self._control.idle()
 
         threading.Thread(target=_move, daemon=True, name="pos-move").start()
@@ -181,8 +184,12 @@ class MissionRunner:
         enc_l, enc_r = self._control.encoder_ticks
         rpm_l, rpm_r = self._control.measured_rpm
         pos_current = (enc_l + enc_r) / 2.0
-        with self._lock:
-            pos_target = self._sm._pos_pid.setpoint if self._sm else 0.0
+        mover = self._active_mover
+        if mover is not None:
+            pos_target = mover._pid.setpoint
+        else:
+            with self._lock:
+                pos_target = self._sm._pos_pid.setpoint if self._sm else 0.0
         return {
             "sm_state":    sm_state,
             "running":     running,
