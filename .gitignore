@@ -14,6 +14,9 @@ ENV/
 .vscode/
 *.swp
 
+# Local PID dashboard output (machine-specific; use pid_tuner defaults on fresh clone)
+system/pid_config.json
+
 # Env
 .env
 .env.*
