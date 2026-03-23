@@ -163,15 +163,6 @@ class MissionStateMachine:
         self._consecutive_lost = 0
         self._last_red_error = det.red_error
 
-        if det.curve_detected:
-            if time.time() - self._last_curve_coast_t >= self.cfg.curve_debounce_s:
-                self._enter(State.CURVE_COAST, left_ticks, right_ticks)
-                target = (left_ticks + right_ticks) / 2.0 + self.cfg.curve_coast_ticks
-                self._pos_pid.setpoint = target
-                self._pos_pid.reset()
-                spd = _clamp(self._pos_pid((left_ticks + right_ticks) / 2.0), -self.cfg.pos_max_speed, self.cfg.pos_max_speed)
-                return ControlOutput(left=spd, right=spd, claw=None, state=self.state, direct_voltage=True)
-
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
 
