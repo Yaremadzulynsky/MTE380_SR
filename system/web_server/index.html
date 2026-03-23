@@ -418,15 +418,15 @@
       </div>
       <div class="field">
         <label for="pos_kp">pos kp</label>
-        <input type="number" id="pos_kp" step="0.0001" min="0" />
+        <input type="number" id="pos_kp" step="0.001" min="0" />
       </div>
       <div class="field">
         <label for="pos_ki">pos ki</label>
-        <input type="number" id="pos_ki" step="0.0001" min="0" />
+        <input type="number" id="pos_ki" step="0.001" min="0" />
       </div>
       <div class="field">
         <label for="pos_kd">pos kd</label>
-        <input type="number" id="pos_kd" step="0.0001" min="0" />
+        <input type="number" id="pos_kd" step="0.001" min="0" />
       </div>
       <div class="field">
         <label for="pos_tolerance">pos tolerance (ticks)</label>
@@ -434,15 +434,15 @@
       </div>
       <div class="field">
         <label for="rot_kp">rot kp</label>
-        <input type="number" id="rot_kp" step="0.0001" min="0" />
+        <input type="number" id="rot_kp" step="0.001" min="0" />
       </div>
       <div class="field">
         <label for="rot_ki">rot ki</label>
-        <input type="number" id="rot_ki" step="0.0001" min="0" />
+        <input type="number" id="rot_ki" step="0.001" min="0" />
       </div>
       <div class="field">
         <label for="rot_kd">rot kd</label>
-        <input type="number" id="rot_kd" step="0.0001" min="0" />
+        <input type="number" id="rot_kd" step="0.001" min="0" />
       </div>
       <div class="field">
         <label for="rot_tolerance">rot tolerance (ticks)</label>
@@ -596,13 +596,13 @@
       turn_duration_s:         [0,    6,      0.05  ],
       wheel_diameter_m:        [0.01, 0.20,   0.001 ],
       wheelbase_m:             [0.05, 0.50,   0.001 ],
-      pos_kp:                  [0,    0.05,   0.0001],
-      pos_ki:                  [0,    0.01,   0.0001],
-      pos_kd:                  [0,    0.01,   0.0001],
+      pos_kp:                  [0,    5,      0.001 ],
+      pos_ki:                  [0,    1,      0.001 ],
+      pos_kd:                  [0,    1,      0.001 ],
       pos_tolerance:           [1,    200,    1     ],
-      rot_kp:                  [0,    0.05,   0.0001],
-      rot_ki:                  [0,    0.01,   0.0001],
-      rot_kd:                  [0,    0.01,   0.0001],
+      rot_kp:                  [0,    5,      0.001 ],
+      rot_ki:                  [0,    1,      0.001 ],
+      rot_kd:                  [0,    1,      0.001 ],
       rot_tolerance:           [1,    200,    1     ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
@@ -877,12 +877,7 @@
     }
 
     document.querySelectorAll("input").forEach(el => {
-      if (el.type === "range" || el.type === "checkbox") {
-        el.addEventListener("input", () => { markChanges(); scheduleAutoSave(); });
-      } else {
-        el.addEventListener("input", markChanges);
-        el.addEventListener("change", () => { markChanges(); scheduleAutoSave(); });
-      }
+      el.addEventListener("input", () => { markChanges(); scheduleAutoSave(); });
     });
 
     document.querySelectorAll(".info-btn").forEach(btn => {
