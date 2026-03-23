@@ -81,6 +81,7 @@ class RobotBrain:
         self._active_ctrl:        object | None = None   # RotationController
         self._active_ctrl_type:   str    | None = None
         self._rotation_degrees:   float         = 0.0
+        self._last_move_result:   dict   | None = None  # final state after done
 
         # ── Telemetry ─────────────────────────────────────────────────────────
         self._last_det    = None
@@ -202,6 +203,7 @@ class RobotBrain:
         from control.rotation_controller import RotationController
         self._idle()
         ctrl = RotationController(self, degrees)
+        self._last_move_result = None
         with self._lock:
             self._active_ctrl      = ctrl
             self._active_ctrl_type = "rotation"
@@ -214,15 +216,16 @@ class RobotBrain:
             self._mode             = "idle"
             self._active_ctrl      = None
             self._active_ctrl_type = None
+            self._last_move_result = None
         self._idle()
 
     def move_status(self) -> dict:
-        """Progress of the currently running rotation, or {"active": None}."""
+        """Progress of the currently running rotation, or the last completed result."""
         with self._lock:
             ctrl = self._active_ctrl
             typ  = self._active_ctrl_type
         if ctrl is None:
-            return {"active": None}
+            return self._last_move_result or {"active": None}
         traveled, target = ctrl.progress()
         error = ctrl.error_deg() if hasattr(ctrl, "error_deg") else target - traveled
         enc_l, enc_r = self.encoder_ticks
@@ -375,13 +378,25 @@ class RobotBrain:
                 if ctrl is not None:
                     ctrl.step()
                     if ctrl.done:
-                        deg = self._rotation_degrees
+                        traveled, target = ctrl.progress()
+                        err = ctrl.error_deg()
+                        self._last_move_result = {
+                            "active":   "rotation",
+                            "done":     True,
+                            "traveled": round(traveled, 1),
+                            "target":   round(target,   1),
+                            "error":    round(err,      1),
+                        }
                         with self._lock:
                             self._mode             = "idle"
                             self._active_ctrl      = None
                             self._active_ctrl_type = None
                         self._idle()
-                        print(f"[rot-move] done  degrees={deg}", flush=True)
+                        print(
+                            f"[rot-move] done  "
+                            f"traveled={traveled:.1f}°  target={target:.1f}°  error={err:.1f}°",
+                            flush=True,
+                        )
 
             # idle: nothing to do, just sleep
 
