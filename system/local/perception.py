@@ -140,11 +140,11 @@ class Perception:
     # Red wraps at 0/179 in OpenCV H (0–180). Two bands: orange-red and magenta-red.
     # Midpoint between loose (wood noise) and tight (thin mask on pink tape).
     # Stricter S/V + narrower H: wood grain is less saturated than tape; orange-brown sits in wider H1.
-    _RED_LO1 = np.array([  0,  85,  62], np.uint8)
-    _RED_HI1 = np.array([ 14, 255, 255], np.uint8)
-    _RED_LO2 = np.array([168,  85,  62], np.uint8)
-    _RED_HI2 = np.array([179, 255, 255], np.uint8)
 
+    _RED_LO1 = np.array([0, 155, 84], np.uint8)
+    _RED_HI1 = np.array([10, 255, 255], np.uint8)
+    _RED_LO2 = np.array([161, 155, 84], np.uint8)
+    _RED_HI2 = np.array([179, 255, 255], np.uint8)
     # Blue tuned to be a bit more forgiving but still reject washed-out noise.
     _BLUE_LO = np.array([ 95, 120,  70], np.uint8)
     _BLUE_HI = np.array([135, 255, 255], np.uint8)
