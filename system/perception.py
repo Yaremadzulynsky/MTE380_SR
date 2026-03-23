@@ -391,18 +391,7 @@ class Perception:
 
         a, b, c = np.polyfit(ts, xs, 2)
 
-        # Generate smooth draw points spanning the full camera frame (y=0 to y=roi_y+h)
-        frame_h = roi_y + h
-        N_DRAW = 30
-        draw_pts: list[tuple[float, float]] = []
-        for i in range(N_DRAW):
-            y_full = frame_h * i / (N_DRAW - 1)
-            t_val  = 1.0 - (y_full - roi_y) / h  # may be outside [0,1] above ROI
-            x_norm = a * t_val ** 2 + b * t_val + c
-            x_px   = x_norm * half_w + half_w
-            draw_pts.append((x_px, y_full))
-
-        return float(a), float(b), conf, draw_pts
+        return float(a), float(b), conf, pts
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
