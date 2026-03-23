@@ -53,12 +53,13 @@ def search_spin_pair(sm, st: float) -> tuple[float, float]:
     return -st, st
 
 
-def steer(sm, error: float) -> tuple[float, float]:
+def steer(sm, error: float, base_speed: float | None = None) -> tuple[float, float]:
     error = _clamp(error, -1.0, 1.0)
     turn  = sm._steer_pid(-error)
 
+    _base = base_speed if base_speed is not None else sm.cfg.base_speed
     speed_scale = 1.0 - abs(error)
-    fwd = sm.cfg.min_speed + (sm.cfg.base_speed - sm.cfg.min_speed) * speed_scale
+    fwd = sm.cfg.min_speed + (_base - sm.cfg.min_speed) * speed_scale
     lo, hi = sorted((sm.cfg.min_speed, sm.cfg.max_speed))
     fwd = _clamp(fwd, lo, hi)
 
