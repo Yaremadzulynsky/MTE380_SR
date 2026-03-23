@@ -372,10 +372,14 @@ class RobotBrain:
                 # camera read inside _mission_tick paces this branch naturally
 
             elif mode == "drive":
+                if self._perception is not None:
+                    self._perception.read_frame()
                 self._speed_ctrl.step()
                 time.sleep(max(0.0, drive_period - (time.monotonic() - t0)))
 
             elif mode == "rotation":
+                if self._perception is not None:
+                    self._perception.read_frame()
                 with self._lock:
                     ctrl = self._active_ctrl
                 if ctrl is not None:
@@ -391,6 +395,8 @@ class RobotBrain:
                 time.sleep(max(0.0, rotation_period - (time.monotonic() - t0)))
 
             else:   # idle
+                if self._perception is not None:
+                    self._perception.read_frame()
                 time.sleep(idle_period)
 
         if not self._no_display:
