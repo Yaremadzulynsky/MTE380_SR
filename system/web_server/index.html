@@ -837,11 +837,15 @@
       el.className   = type;
     }
 
-    function populate(cfg) {
+    function populate(cfg, skipFocused = false) {
       savedValues = { ...cfg };
       for (const key of KEYS) {
         const el = document.getElementById(key);
         if (el && cfg[key] !== undefined) {
+          if (skipFocused && document.activeElement === el) {
+            el.classList.toggle("changed", parseFloat(el.value) !== cfg[key]);
+            continue;
+          }
           if (el.type === "checkbox") el.checked = !!cfg[key];
           else el.value = cfg[key];
           el.classList.remove("changed");
@@ -933,7 +937,7 @@
         });
         const body = await safeJson(res);
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-        populate(body.saved);
+        populate(body.saved, true);
         setStatus("Saved ✓");
         setTimeout(() => setStatus(""), 3000);
       } catch (e) {
