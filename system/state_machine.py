@@ -77,3 +77,5 @@ class MissionStateMachine:
         self._enc0_right       = right_ticks
         self._consecutive_lost = 0
         self._steer_pid.reset()
+        if self._brain is not None:
+            self._brain._speed_ctrl.reset()
