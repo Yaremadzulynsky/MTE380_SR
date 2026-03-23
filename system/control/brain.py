@@ -144,7 +144,7 @@ class RobotBrain:
 
         from state_machine import MissionStateMachine
         with self._lock:
-            self._sm   = MissionStateMachine(fresh)
+            self._sm   = MissionStateMachine(fresh, brain=self)
             self._mode = "mission"
 
         print(
@@ -476,11 +476,12 @@ class RobotBrain:
 
         output = sm.step(det, enc_l, enc_r)
 
-        if output.direct_voltage:
-            self.send_voltage(output.left, output.right)
-        else:
-            self._speed_ctrl.set_target(output.left, output.right)
-            self._speed_ctrl.step()
+        if not output.skip:
+            if output.direct_voltage:
+                self.send_voltage(output.left, output.right)
+            else:
+                self._speed_ctrl.set_target(output.left, output.right)
+                self._speed_ctrl.step()
         if output.claw is not None:
             self.send_claw(output.claw)
 

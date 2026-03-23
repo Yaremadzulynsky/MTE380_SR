@@ -76,6 +76,12 @@ class Config:
     claw_closed:   float = 90.0
     pickup_hold_s: float = 0.8
 
+    # ── Corner turn ───────────────────────────────────────────────────────────
+    corner_curvature_thresh: float = 0.3   # |curvature| above this triggers CORNER_TURN
+    corner_curve_conf_min:   float = 0.6   # minimum curve_conf required (fraction of strips)
+    corner_forward_m:        float = 0.2   # metres to drive forward before rotating
+    corner_forward_speed:    float = 0.25  # speed during forward drive phase
+
     # ── Vision / perception ───────────────────────────────────────────────────
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
@@ -128,6 +134,10 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Claw / servo", [
         "claw_open", "claw_closed", "pickup_hold_s",
+    ]),
+    ("Corner turn", [
+        "corner_curvature_thresh", "corner_curve_conf_min",
+        "corner_forward_m", "corner_forward_speed",
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha",

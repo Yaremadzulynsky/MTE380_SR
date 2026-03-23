@@ -24,6 +24,7 @@ from perception import FrameDetection
 from states import ControlOutput, State
 
 import states.line_follow   as _line_follow
+import states.corner_turn   as _corner_turn
 import states.drive_forward as _drive_forward
 import states.pickup        as _pickup
 import states.turn_180      as _turn_180
@@ -33,9 +34,10 @@ import states.return_follow as _return_follow
 class MissionStateMachine:
     """One step() call per control-loop tick."""
 
-    def __init__(self, cfg: Config | None = None) -> None:
-        self.cfg   = cfg if cfg is not None else _config_module.get()
-        self.state = State.LINE_FOLLOW
+    def __init__(self, cfg: Config | None = None, brain=None) -> None:
+        self.cfg    = cfg if cfg is not None else _config_module.get()
+        self.state  = State.LINE_FOLLOW
+        self._brain = brain  # RobotBrain reference, used by controllers in states
 
         self._t0               = time.time()
         self._enc0_left        = 0
@@ -55,6 +57,8 @@ class MissionStateMachine:
     def step(self, det: FrameDetection, left_ticks: int, right_ticks: int) -> ControlOutput:
         if self.state == State.LINE_FOLLOW:
             return _line_follow.step(self, det, left_ticks, right_ticks)
+        if self.state == State.CORNER_TURN:
+            return _corner_turn.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return _drive_forward.step(self, left_ticks, right_ticks)
         if self.state == State.PICKUP:

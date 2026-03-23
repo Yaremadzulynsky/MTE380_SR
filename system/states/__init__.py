@@ -7,11 +7,13 @@ from enum import Enum
 
 class State(Enum):
     LINE_FOLLOW   = "LINE_FOLLOW"
+    CORNER_TURN   = "CORNER_TURN"
     DRIVE_FORWARD = "DRIVE_FORWARD"
     PICKUP        = "PICKUP"
     TURN_180      = "TURN_180"
     RETURN        = "RETURN"
     DONE          = "DONE"
+
 
 
 @dataclass
@@ -21,6 +23,7 @@ class ControlOutput:
     claw:           float | None  # servo angle in degrees, or None = leave unchanged
     state:          State
     direct_voltage: bool = False  # bypass motor speed PID, send voltages directly
+    skip:           bool = False  # controller already sent voltages — brain skips motor apply
 
 
 # ── Shared helpers (take sm = MissionStateMachine as context) ─────────────────
