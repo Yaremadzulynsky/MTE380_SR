@@ -80,6 +80,7 @@ class Config:
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
     line_axle_extrap:         float = 0.0
+    curve_n_strips:           int   = 5   # horizontal slices for curvature fit
 
     # ── Line detection HSV ────────────────────────────────────────────────────
     red_h_lo1:  int = 0
@@ -130,7 +131,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha",
-        "line_axle_extrap",
+        "line_axle_extrap", "curve_n_strips",
     ]),
     ("Line detection HSV", [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",

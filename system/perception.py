@@ -46,6 +46,11 @@ class FrameDetection:
     tape_cy_px: float | None = None   # vertical centre of mask centroid
     track_x_px: float | None = None   # lateral anchor: u used for red_error (extrapolated or blob bottom)
     track_y_px: float | None = None
+    # Curvature from N-strip polynomial fit (only valid when red_found)
+    curvature:  float = 0.0   # signed: +ve = curves right, -ve = left
+    curve_heading: float = 0.0  # local heading slope at robot position (+ve = angled right)
+    curve_conf: float = 0.0   # fraction of strips that had valid data [0, 1]
+    curve_pts: list | None = None  # full-frame (x, y) of each strip centroid
 
 
 class Perception:
@@ -78,6 +83,7 @@ class Perception:
 
         self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
+        self._curve_n_strips = max(2, int(c.curve_n_strips))
 
         # Raw-red debounce + EMA (see _stabilize_red)
         self._red_miss_streak = 0
@@ -106,6 +112,7 @@ class Perception:
         self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
         self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
+        self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
         self._update_hsv_ranges(cfg)
 
     def _update_hsv_ranges(self, cfg: Config) -> None:
@@ -150,6 +157,14 @@ class Perception:
         ) = self._stabilize_red(raw_found, raw_err, raw_tj, tcx, tcy, trx, try_)
         blue_found = self._detect_blue(hsv)
 
+        if raw_found and self._last_red_mask is not None:
+            curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
+                self._last_red_mask, w, roi_y
+            )
+        else:
+            curvature = curve_heading = curve_conf = 0.0
+            curve_pts = []
+
         return FrameDetection(
             red_found=red_found,
             red_error=red_error,
@@ -159,6 +174,10 @@ class Perception:
             tape_cy_px=tape_cy_px,
             track_x_px=track_x_px,
             track_y_px=track_y_px,
+            curvature=curvature,
+            curve_heading=curve_heading,
+            curve_conf=curve_conf,
+            curve_pts=curve_pts if curve_pts else None,
         )
 
     def get_red_mask_frame(self) -> np.ndarray | None:
@@ -188,10 +207,18 @@ class Perception:
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
             f"blue={'Y' if det.blue_found else 'N'}",
             f"T={'Y' if det.t_junction else 'N'}",
+            f"curv={det.curvature:+.2f}  conf={det.curve_conf:.0%}",
         ]
         for i, tag in enumerate(tags):
             cv2.putText(out, tag, (10, 30 + i * 25),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2, cv2.LINE_AA)
+
+        if det.curve_pts and len(det.curve_pts) >= 2:
+            ipts = [(int(round(x)), int(round(y))) for x, y in det.curve_pts]
+            for a, b in zip(ipts, ipts[1:]):
+                cv2.line(out, a, b, (0, 165, 255), 2, cv2.LINE_AA)
+            for pt in ipts:
+                cv2.circle(out, pt, 4, (0, 200, 255), -1, cv2.LINE_AA)
 
         if det.red_found and det.tape_cx_px is not None:
             tcx = int(round(det.tape_cx_px))
@@ -293,6 +320,53 @@ class Perception:
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k3, iterations=1)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k5, iterations=2)
         return mask
+
+    def _detect_curvature(
+        self, mask: np.ndarray, frame_w: int, roi_y: int
+    ) -> tuple[float, float, float, list]:
+        """
+        Split the ROI mask into _curve_n_strips horizontal bands and fit a
+        degree-2 polynomial  x_norm = a·t² + b·t + c  where:
+          t = 0  → bottom of ROI (near robot)
+          t = 1  → top of ROI (far ahead)
+          x_norm → lateral centroid normalised to [-1, 1] from image centre
+
+        Returns (curvature=a, heading=b, confidence, pts).
+          curvature > 0  → line curves right ahead
+          heading   > 0  → line already angled right at the robot
+          pts            → list of full-frame (x, y) for each valid strip centroid
+        """
+        h, w = mask.shape[:2]
+        if h < self._curve_n_strips or w < 2:
+            return 0.0, 0.0, 0.0, []
+
+        half_w     = w / 2.0
+        strip_h    = h / self._curve_n_strips
+        xs: list[float] = []
+        ts: list[float] = []
+        pts: list[tuple[float, float]] = []
+
+        for i in range(self._curve_n_strips):
+            y0 = int(round(i * strip_h))
+            y1 = min(int(round((i + 1) * strip_h)), h)
+            strip = mask[y0:y1, :]
+            px_cols = np.flatnonzero(np.any(strip > 0, axis=0))
+            if len(px_cols) < 5:
+                continue
+            cx = float(np.mean(px_cols))
+            mid_y = (y0 + y1) / 2.0
+            pts.append((cx, roi_y + mid_y))
+            # t=0 at bottom (near), t=1 at top (far)
+            t = 1.0 - mid_y / h
+            xs.append((cx - half_w) / half_w)
+            ts.append(t)
+
+        conf = len(xs) / self._curve_n_strips
+        if len(xs) < 3:
+            return 0.0, 0.0, conf, pts
+
+        a, b, _ = np.polyfit(ts, xs, 2)
+        return float(a), float(b), conf, pts
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
