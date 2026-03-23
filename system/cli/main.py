@@ -221,7 +221,10 @@ class MissionRunner:
                 enc_l, enc_r = self._control.encoder_ticks
                 output       = sm.step(det, enc_l, enc_r)
 
-                self._control.send_drive(MotorCommand(left=output.left, right=output.right))
+                if output.direct_voltage:
+                    self._control.send_voltage(output.left, output.right)
+                else:
+                    self._control.send_drive(MotorCommand(left=output.left, right=output.right))
                 if output.claw is not None:
                     self._control.send_claw(output.claw)
 

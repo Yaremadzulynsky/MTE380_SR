@@ -64,10 +64,11 @@ class State(Enum):
 
 @dataclass
 class ControlOutput:
-    left:  float          # desired speed fraction for left  wheel [-1, 1]
-    right: float          # desired speed fraction for right wheel [-1, 1]
-    claw:  float | None   # servo angle in degrees, or None = leave unchanged
-    state: State
+    left:           float       # desired speed fraction [-1, 1], or direct voltage if direct_voltage=True
+    right:          float
+    claw:           float | None  # servo angle in degrees, or None = leave unchanged
+    state:          State
+    direct_voltage: bool = False  # if True, left/right are sent directly as voltages (bypass motor speed PID)
 
 
 # ── State machine ─────────────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ class MissionStateMachine:
                 self._pos_pid.setpoint = target
                 self._pos_pid.reset()
                 spd = _clamp(self._pos_pid((left_ticks + right_ticks) / 2.0), -self.cfg.pos_max_speed, self.cfg.pos_max_speed)
-                return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
+                return ControlOutput(left=spd, right=spd, claw=None, state=self.state, direct_voltage=True)
 
         left, right = self._steer(det.red_error)
         return ControlOutput(left=left, right=right, claw=None, state=self.state)
@@ -181,7 +182,7 @@ class MissionStateMachine:
             self._enter(State.LINE_FOLLOW)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
         spd = self._pos_pid(pos)
-        return ControlOutput(left=spd, right=spd, claw=None, state=self.state)
+        return ControlOutput(left=spd, right=spd, claw=None, state=self.state, direct_voltage=True)
 
     def _drive_forward(self, left_ticks: int, right_ticks: int) -> ControlOutput:
         avg_delta = ((left_ticks - self._enc0_left) + (right_ticks - self._enc0_right)) // 2
