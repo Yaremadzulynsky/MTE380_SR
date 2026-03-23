@@ -56,6 +56,7 @@ class MissionRunner:
         self._last_output = None
         self._active_ctrl      = None   # active PositionController or RotationController
         self._active_ctrl_type: str | None = None  # "position" or "rotation"
+        self._rot_thread:      threading.Thread | None = None
         self._drive_stop       = threading.Event()  # set to stop manual drive loop
         # Circular telemetry history: each entry is (t_rel, red_error, rpm_l, rpm_r)
         self._telem_history: collections.deque = collections.deque(maxlen=300)
@@ -119,13 +120,18 @@ class MissionRunner:
         threading.Thread(target=_move, daemon=True, name="pos-move").start()
 
     def run_rotation(self, degrees: float) -> None:
-        """Stop the mission and rotate in a background thread."""
+        """Stop any running rotation, then start a new one in a background thread."""
         from control import RotationController
         with self._lock:
             self._running = False
+
+        # Stop and wait for any existing rotation thread to finish
         existing = self._active_ctrl
         if existing is not None:
             existing.done = True
+        if self._rot_thread is not None:
+            self._rot_thread.join(timeout=1.0)
+
         self._control.idle()
 
         def _move():
@@ -143,7 +149,8 @@ class MissionRunner:
             self._control.idle()
             print(f"[rot-move] done  degrees={degrees}", flush=True)
 
-        threading.Thread(target=_move, daemon=True, name="rot-move").start()
+        self._rot_thread = threading.Thread(target=_move, daemon=True, name="rot-move")
+        self._rot_thread.start()
 
     def move_status(self) -> dict:
         """Return progress of the currently running position/rotation move, if any."""
