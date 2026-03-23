@@ -372,14 +372,12 @@ class RobotBrain:
                 # camera read inside _mission_tick paces this branch naturally
 
             elif mode == "drive":
-                if self._perception is not None:
-                    self._perception.read_frame()
+                self._idle_camera_tick()
                 self._speed_ctrl.step()
                 time.sleep(max(0.0, drive_period - (time.monotonic() - t0)))
 
             elif mode == "rotation":
-                if self._perception is not None:
-                    self._perception.read_frame()
+                self._idle_camera_tick()
                 with self._lock:
                     ctrl = self._active_ctrl
                 if ctrl is not None:
@@ -395,8 +393,7 @@ class RobotBrain:
                 time.sleep(max(0.0, rotation_period - (time.monotonic() - t0)))
 
             else:   # idle
-                if self._perception is not None:
-                    self._perception.read_frame()
+                self._idle_camera_tick()
                 time.sleep(idle_period)
 
         if not self._no_display:
@@ -488,6 +485,14 @@ class RobotBrain:
             )
 
     # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _idle_camera_tick(self) -> None:
+        """Read one frame and run detection so web streams stay live outside mission mode."""
+        if self._perception is None:
+            return
+        frame = self._perception.read_frame()
+        if frame is not None:
+            self._perception.detect(frame)
 
     def _idle(self) -> None:
         """Reset speed PID integrators and zero motor voltages."""
