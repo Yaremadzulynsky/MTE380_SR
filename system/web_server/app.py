@@ -226,6 +226,20 @@ def drive_stop():
     return jsonify({"ok": True})
 
 
+@app.post("/api/test/position")
+def test_position():
+    """Drive forward/backward by metres using the position PID."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    data = request.get_json(silent=True) or {}
+    try:
+        meters = float(data["meters"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "meters must be a number"}), 400
+    _runner.run_position(meters)
+    return jsonify({"ok": True, "meters": meters})
+
+
 @app.post("/api/test/rotation")
 def test_rotation():
     """Stop the mission and rotate degrees (positive = CW)."""

@@ -415,6 +415,32 @@ class RobotBrain:
                             flush=True,
                         )
 
+            elif mode == "position":
+                with self._lock:
+                    ctrl = self._active_ctrl
+                if ctrl is not None:
+                    ctrl.step()
+                    if ctrl.done:
+                        traveled, target = ctrl.progress()
+                        err = ctrl.error_m()
+                        self._last_move_result = {
+                            "active":   "position",
+                            "done":     True,
+                            "traveled": round(traveled, 3),
+                            "target":   round(target,   3),
+                            "error":    round(err,      3),
+                        }
+                        with self._lock:
+                            self._mode             = "idle"
+                            self._active_ctrl      = None
+                            self._active_ctrl_type = None
+                        self._idle()
+                        print(
+                            f"[pos-move] done  "
+                            f"traveled={traveled:.3f}m  target={target:.3f}m  error={err:.3f}m",
+                            flush=True,
+                        )
+
             else:
                 # idle: keep camera ticking so web streams have a live frame
                 now = time.monotonic()

@@ -403,10 +403,9 @@
     </div>
   </div>
 
-  <!-- Controllers -->
+  <!-- Wheel geometry -->
   <div class="card">
-    <h2>Controllers — geometry &amp; PID</h2>
-    <p class="hint">Wheel geometry converts degrees → encoder ticks. Position and rotation PIDs use remaining ticks as error and output a speed fraction [0, 1].</p>
+    <h2>Wheel geometry</h2>
     <div class="fields">
       <div class="field">
         <label for="wheel_diameter_m">wheel diameter (m)</label>
@@ -416,25 +415,59 @@
         <label for="wheelbase_m">wheelbase (m)</label>
         <input type="number" id="wheelbase_m" step="0.001" min="0.01" />
       </div>
+    </div>
+  </div>
+
+  <!-- Rotation PID -->
+  <div class="card">
+    <h2>Rotation PID</h2>
+    <div class="fields">
       <div class="field">
-        <label for="rot_kp">rot kp</label>
+        <label for="rot_kp">kp</label>
         <input type="number" id="rot_kp" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_ki">rot ki</label>
+        <label for="rot_ki">ki</label>
         <input type="number" id="rot_ki" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_kd">rot kd</label>
+        <label for="rot_kd">kd</label>
         <input type="number" id="rot_kd" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_tolerance">rot tolerance (degrees)</label>
+        <label for="rot_tolerance">tolerance (degrees)</label>
         <input type="number" id="rot_tolerance" step="0.5" min="0.1" />
       </div>
       <div class="field">
-        <label for="rot_motor_deadband">rot motor deadband</label>
+        <label for="rot_motor_deadband">motor deadband</label>
         <input type="number" id="rot_motor_deadband" step="0.01" min="0" max="1" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Position PID -->
+  <div class="card">
+    <h2>Position PID</h2>
+    <div class="fields">
+      <div class="field">
+        <label for="pos_kp">kp</label>
+        <input type="number" id="pos_kp" step="0.01" min="0" />
+      </div>
+      <div class="field">
+        <label for="pos_ki">ki</label>
+        <input type="number" id="pos_ki" step="0.001" min="0" />
+      </div>
+      <div class="field">
+        <label for="pos_kd">kd</label>
+        <input type="number" id="pos_kd" step="0.001" min="0" />
+      </div>
+      <div class="field">
+        <label for="pos_tolerance_m">tolerance (m)</label>
+        <input type="number" id="pos_tolerance_m" step="0.001" min="0" />
+      </div>
+      <div class="field">
+        <label for="pos_motor_deadband">motor deadband</label>
+        <input type="number" id="pos_motor_deadband" step="0.01" min="0" max="1" />
       </div>
     </div>
   </div>
@@ -475,12 +508,12 @@
 
   <!-- Position test -->
   <div class="card">
-    <h2>Position test — drive N ticks</h2>
-    <p class="hint">Stops the mission and drives forward (positive) or backward (negative). Speed is controlled by the position PID above.</p>
+    <h2>Position test — drive N metres</h2>
+    <p class="hint">Stops the mission and drives forward (positive) or backward (negative) by the given distance in metres using the position PID.</p>
     <div class="fields" style="align-items:flex-end;">
       <div class="field">
-        <label for="test-pos-ticks">ticks</label>
-        <input type="number" id="test-pos-ticks" value="200" step="50" />
+        <label for="test-pos-meters">metres</label>
+        <input type="number" id="test-pos-meters" value="0.5" step="0.05" />
       </div>
       <div class="field">
         <button onclick="testPosition()" style="margin-top:1.2rem;">Run</button>
@@ -490,6 +523,13 @@
       </div>
     </div>
     <p id="test-pos-status" class="hint" style="margin-top:0.5rem;"></p>
+    <div style="margin-top:0.6rem;">
+      <span id="pos-pid-state" style="
+        display:inline-block; padding:0.2rem 0.6rem; border-radius:4px;
+        font-size:0.72rem; font-weight:600; letter-spacing:0.08em;
+        background:#1a1a1a; color:#555; border:1px solid #2a2a2a;
+      ">IDLE</span>
+    </div>
     <div id="test-pos-progress" style="display:none; margin-top:0.6rem;">
       <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem;">Progress</div>
       <div style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:5px; height:8px; overflow:hidden;">
@@ -580,6 +620,7 @@
       "turn_speed", "turn_duration_s",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
+      "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
@@ -623,6 +664,11 @@
       rot_kd:                  [0,    1,      0.001 ],
       rot_tolerance:           [0.5,  45,     0.5   ],
       rot_motor_deadband:      [0,    0.5,    0.01  ],
+      pos_kp:                  [0,    10,     0.01  ],
+      pos_ki:                  [0,    1,      0.001 ],
+      pos_kd:                  [0,    2,      0.001 ],
+      pos_tolerance_m:         [0.001,0.10,   0.001 ],
+      pos_motor_deadband:      [0,    0.5,    0.01  ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
       pickup_hold_s:           [0,    5,      0.1   ],
@@ -1017,19 +1063,18 @@
     }
 
     async function testPosition() {
-      const delta = parseInt(document.getElementById("test-pos-ticks").value, 10);
+      const meters = parseFloat(document.getElementById("test-pos-meters").value);
       const el = document.getElementById("test-pos-status");
-      if (!delta) { el.textContent = "Enter a non-zero tick count."; return; }
-      const body = { delta_ticks: delta };
+      if (!meters) { el.textContent = "Enter a non-zero distance."; return; }
       el.textContent = "Running…";
       try {
         const res = await fetch("/api/test/position", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ meters }),
         });
         const data = await safeJson(res);
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-        el.textContent = `Sent: ${delta} ticks`;
+        el.textContent = `Sent: ${meters} m`;
       } catch (e) { el.textContent = "Error: " + e.message; }
     }
 
@@ -1120,8 +1165,9 @@
         const posTelem     = document.getElementById("test-pos-telem");
         const rotTelem     = document.getElementById("test-rot-telem");
         const rotPidState  = document.getElementById("rot-pid-state");
+        const posPidState  = document.getElementById("pos-pid-state");
 
-        // Update PID state badge
+        // Update rotation PID state badge
         if (s.active === "rotation") {
           if (s.done) {
             rotPidState.textContent = "DONE";
@@ -1141,13 +1187,33 @@
           rotPidState.style.borderColor = "#2a2a2a";
         }
 
+        // Update position PID state badge
+        if (s.active === "position") {
+          if (s.done) {
+            posPidState.textContent = "DONE";
+            posPidState.style.background = "#14532d";
+            posPidState.style.color      = "#86efac";
+            posPidState.style.borderColor = "#166534";
+          } else {
+            posPidState.textContent = "RUNNING";
+            posPidState.style.background = "#713f12";
+            posPidState.style.color      = "#fde047";
+            posPidState.style.borderColor = "#854d0e";
+          }
+        } else {
+          posPidState.textContent = "IDLE";
+          posPidState.style.background  = "#1a1a1a";
+          posPidState.style.color       = "#555";
+          posPidState.style.borderColor = "#2a2a2a";
+        }
+
         if (s.active === "position") {
           posProgress.style.display = "block";
           rotProgress.style.display = "none";
           const pct = s.target > 0 ? Math.min(100, (s.traveled / s.target) * 100) : 0;
           posBar.style.width = pct.toFixed(1) + "%";
           posTelem.textContent =
-            `traveled: ${s.traveled} ticks  |  target: ${s.target}  |  remaining: ${s.remaining} ticks` +
+            `traveled: ${s.traveled}m  |  target: ${s.target}m  |  error: ${s.error}m` +
             (s.done ? "  ✓ done" : "");
         } else if (s.active === "rotation") {
           rotProgress.style.display = "block";
