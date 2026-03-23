@@ -117,31 +117,25 @@ class MissionRunner:
         threading.Thread(target=_move, daemon=True, name="pos-move").start()
 
     def run_rotation(self, degrees: float) -> None:
-        """Stop the mission and rotate degrees in a background thread."""
+        """Stop the mission and run the rotation PID synchronously (blocks until done)."""
         from control import RotationController
         with self._lock:
             self._running = False
-        existing = self._active_ctrl
-        if existing is not None:
-            existing.done = True
         self._control.idle()
 
-        def _move():
-            ctrl = RotationController(self._control, degrees)
-            self._active_ctrl = ctrl
-            self._active_ctrl_type = "rotation"
-            interval = 0.005  # 200 Hz
-            while not ctrl.done:
-                t0 = time.monotonic()
-                ctrl.step()
-                elapsed = time.monotonic() - t0
-                time.sleep(max(0.0, interval - elapsed))
-            self._active_ctrl = None
-            self._active_ctrl_type = None
-            self._control.idle()
-            print(f"[rot-move] done  degrees={degrees}", flush=True)
-
-        threading.Thread(target=_move, daemon=True, name="rot-move").start()
+        ctrl = RotationController(self._control, degrees)
+        self._active_ctrl = ctrl
+        self._active_ctrl_type = "rotation"
+        interval = 0.005  # 200 Hz
+        while not ctrl.done:
+            t0 = time.monotonic()
+            ctrl.step()
+            elapsed = time.monotonic() - t0
+            time.sleep(max(0.0, interval - elapsed))
+        self._active_ctrl = None
+        self._active_ctrl_type = None
+        self._control.idle()
+        print(f"[rot-move] done  degrees={degrees}", flush=True)
 
     def move_status(self) -> dict:
         """Return progress of the currently running position/rotation move, if any."""
