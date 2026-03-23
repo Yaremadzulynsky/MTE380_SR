@@ -87,6 +87,7 @@ class Config:
     line_axle_extrap:         float = 0.0
     curve_n_strips:           int   = 5   # horizontal slices for curvature fit
     error_heading_weight:     float = 0.3  # how much local tangent contributes to red_error
+    error_curvature_weight:   float = 0.2  # how much curvature (bend ahead) contributes to red_error
 
     # ── Line detection HSV ────────────────────────────────────────────────────
     red_h_lo1:  int = 0
@@ -142,7 +143,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha",
-        "line_axle_extrap", "curve_n_strips", "error_heading_weight",
+        "line_axle_extrap", "curve_n_strips", "error_heading_weight", "error_curvature_weight",
     ]),
     ("Line detection HSV", [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",

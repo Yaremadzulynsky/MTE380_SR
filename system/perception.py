@@ -84,7 +84,8 @@ class Perception:
         self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
         self._curve_n_strips = max(2, int(c.curve_n_strips))
-        self._error_heading_weight = float(c.error_heading_weight)
+        self._error_heading_weight   = float(c.error_heading_weight)
+        self._error_curvature_weight = float(c.error_curvature_weight)
 
         # Raw-red debounce + EMA (see _stabilize_red)
         self._red_miss_streak = 0
@@ -115,6 +116,7 @@ class Perception:
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
         self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
         self._error_heading_weight    = float(cfg.error_heading_weight)
+        self._error_curvature_weight  = float(cfg.error_curvature_weight)
         self._update_hsv_ranges(cfg)
 
     def _update_hsv_ranges(self, cfg: Config) -> None:
@@ -163,9 +165,12 @@ class Perception:
             curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
                 self._last_red_mask, w, roi_y
             )
-            # Blend local tangent into the lateral error so curves produce a larger signal
+            # Blend tangent (heading) and curvature into error for feedforward steering
             red_error = _clamp(
-                red_error + self._error_heading_weight * curve_heading, -1.0, 1.0
+                red_error
+                + self._error_heading_weight   * curve_heading
+                + self._error_curvature_weight * curvature,
+                -1.0, 1.0,
             )
         else:
             curvature = curve_heading = curve_conf = 0.0
