@@ -62,7 +62,7 @@ class RobotBrain:
         self._quit = threading.Event()
 
         # ── Loop mode ─────────────────────────────────────────────────────────
-        self._mode: str = "idle"   # "idle" | "mission" | "drive" | "rotation"
+        self._mode: str = "idle"   # "idle" | "mission" | "drive" | "rotation" | "position"
 
         # ── Encoder / RPM state ───────────────────────────────────────────────
         self._left_ticks  = 0
@@ -96,6 +96,7 @@ class RobotBrain:
         self._no_telemetry  = False
         self._telem_every   = 1
         self._telem_idle_s  = 0.5
+        self._last_idle_cam = 0.0
 
         # ── Perception (lazy — created in start_loop) ─────────────────────────
         self._perception = None
@@ -198,6 +199,17 @@ class RobotBrain:
             self._mode = "idle"
         self._idle()
 
+    def run_position(self, meters: float) -> None:
+        """Drive forward/backward by metres in the main loop (mode → position)."""
+        from control.position_controller import PositionController
+        self._idle()
+        ctrl = PositionController(self, meters)
+        self._last_move_result = None
+        with self._lock:
+            self._active_ctrl      = ctrl
+            self._active_ctrl_type = "position"
+            self._mode             = "position"
+
     def run_rotation(self, degrees: float) -> None:
         """Rotate by degrees in the main loop (mode → rotation)."""
         from control.rotation_controller import RotationController
@@ -227,7 +239,12 @@ class RobotBrain:
         if ctrl is None:
             return self._last_move_result or {"active": None}
         traveled, target = ctrl.progress()
-        error = ctrl.error_deg() if hasattr(ctrl, "error_deg") else target - traveled
+        if hasattr(ctrl, "error_deg"):
+            error = ctrl.error_deg()
+        elif hasattr(ctrl, "error_m"):
+            error = ctrl.error_m()
+        else:
+            error = target - traveled
         enc_l, enc_r = self.encoder_ticks
         return {
             "active":   typ,
@@ -398,7 +415,12 @@ class RobotBrain:
                             flush=True,
                         )
 
-            # idle: nothing to do, just sleep
+            else:
+                # idle: keep camera ticking so web streams have a live frame
+                now = time.monotonic()
+                if now - self._last_idle_cam >= self._period:
+                    self._last_idle_cam = now
+                    self._idle_camera_tick()
 
             time.sleep(max(0.0, period - (time.monotonic() - t0)))
 

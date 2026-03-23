@@ -64,6 +64,13 @@ class Config:
     rot_tolerance:    float = 3.0    # done when within this many degrees of target
     rot_motor_deadband: float = 0.05 # minimum motor voltage (overcomes stiction)
 
+    # ── Controllers (position) ────────────────────────────────────────────────
+    pos_kp:           float = 2.0    # position PID — proportional gain
+    pos_ki:           float = 0.0    # position PID — integral gain
+    pos_kd:           float = 0.1    # position PID — derivative gain
+    pos_tolerance_m:  float = 0.01   # done when within this many metres of target
+    pos_motor_deadband: float = 0.05 # minimum motor voltage (overcomes stiction)
+
     # ── Claw / servo ──────────────────────────────────────────────────────────
     claw_open:     float = 0.0
     claw_closed:   float = 90.0
@@ -116,6 +123,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",
         "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
+        "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
     ]),
     ("Claw / servo", [
         "claw_open", "claw_closed", "pickup_hold_s",
