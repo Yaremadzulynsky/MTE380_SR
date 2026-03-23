@@ -139,9 +139,10 @@ class Perception:
     # ── HSV colour ranges ─────────────────────────────────────────────────────
     # Red wraps at 0/179 in OpenCV H (0–180). Two bands: orange-red and magenta-red.
     # Midpoint between loose (wood noise) and tight (thin mask on pink tape).
-    _RED_LO1 = np.array([  0,  62,  52], np.uint8)
-    _RED_HI1 = np.array([ 18, 255, 255], np.uint8)
-    _RED_LO2 = np.array([163,  62,  52], np.uint8)
+    # Stricter S/V + narrower H: wood grain is less saturated than tape; orange-brown sits in wider H1.
+    _RED_LO1 = np.array([  0,  85,  62], np.uint8)
+    _RED_HI1 = np.array([ 14, 255, 255], np.uint8)
+    _RED_LO2 = np.array([168,  85,  62], np.uint8)
     _RED_HI2 = np.array([179, 255, 255], np.uint8)
 
     # Blue tuned to be a bit more forgiving but still reject washed-out noise.
