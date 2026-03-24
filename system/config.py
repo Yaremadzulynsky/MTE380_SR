@@ -111,10 +111,11 @@ class Config:
     green_v_min: int = 60
 
     # ── Camera / runtime ──────────────────────────────────────────────────────
-    camera_width:  int   = 640
-    camera_height: int   = 480
-    fps:           float = 30.0
-    roi_top_ratio: float = 0.0
+    camera_width:        int   = 640
+    camera_height:       int   = 480
+    fps:                 float = 30.0
+    roi_top_ratio:       float = 0.0
+    camera_rotation_deg: float = 0.0  # extra CW rotation (degrees) applied after 180° flip
 
 
 # ── YAML serialisation ────────────────────────────────────────────────────────
@@ -166,7 +167,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
     ]),
     ("Camera / runtime", [
-        "camera_width", "camera_height", "fps", "roi_top_ratio",
+        "camera_width", "camera_height", "fps", "roi_top_ratio", "camera_rotation_deg",
     ]),
 ]
 
