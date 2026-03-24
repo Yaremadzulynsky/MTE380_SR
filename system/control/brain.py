@@ -134,8 +134,12 @@ class RobotBrain:
         self._telem_idle_s = telemetry_idle_s
         self._thread.start()
 
-    def go(self) -> None:
-        """Reload config.yaml and start the mission (mode → mission)."""
+    def go(self, initial_state: str | None = None) -> None:
+        """Reload config.yaml and start the mission (mode → mission).
+
+        initial_state: optional State enum value name, e.g. "LINE_FOLLOW_REVERSED".
+                       Defaults to LINE_FOLLOW.
+        """
         fresh = _config_module.reload()
         self._period = 1.0 / max(fresh.fps, 1.0)
         self._speed_ctrl.set_gains(fresh)
@@ -143,12 +147,19 @@ class RobotBrain:
             self._perception.reconfigure(fresh)
 
         from state_machine import MissionStateMachine
+        from states import State
+        sm = MissionStateMachine(fresh, brain=self)
+        if initial_state is not None:
+            try:
+                sm.state = State(initial_state)
+            except ValueError:
+                print(f"[go] unknown initial_state {initial_state!r} — using LINE_FOLLOW", flush=True)
         with self._lock:
-            self._sm   = MissionStateMachine(fresh, brain=self)
+            self._sm   = sm
             self._mode = "mission"
 
         print(
-            f"[go] mission started — "
+            f"[go] mission started — initial={sm.state.value}  "
             f"steer_kp={fresh.steer_kp}  max_speed={fresh.max_speed}  "
             f"motor_kp={fresh.motor_kp:.6f}",
             flush=True,

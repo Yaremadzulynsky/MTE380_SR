@@ -168,7 +168,9 @@ def get_status():
 def mission_start():
     if _runner is None:
         return jsonify({"error": "No runner attached."}), 503
-    _runner.go()
+    data = request.get_json(silent=True) or {}
+    initial_state = data.get("initial_state") or None
+    _runner.go(initial_state=initial_state)
     return jsonify({"ok": True, "state": _runner.state})
 
 

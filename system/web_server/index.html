@@ -238,6 +238,7 @@
     <h2>Mission</h2>
     <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:0.9rem;">
       <button id="btn-start" onclick="missionStart()">Start</button>
+      <button id="btn-start-rev" onclick="missionStartReversed()" style="background:#7c3aed;">Start Reversed</button>
       <button id="btn-stop"  onclick="missionStop()"  style="background:#dc2626;">Stop</button>
       <span id="mission-status" style="font-size:0.85rem; color:#94a3b8;"></span>
     </div>
@@ -1368,15 +1369,24 @@
 
     // ── Mission control ──────────────────────────────────────────────────────
 
-    async function missionStart() {
+    async function missionStart(initialState) {
       try {
-        const res  = await fetch("/api/mission/start", { method: "POST" });
+        const body_data = initialState ? { initial_state: initialState } : {};
+        const res  = await fetch("/api/mission/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body_data),
+        });
         const body = await safeJson(res);
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         document.getElementById("mission-status").textContent = "Started — " + body.state;
       } catch (e) {
         document.getElementById("mission-status").textContent = "Error: " + e.message;
       }
+    }
+
+    function missionStartReversed() {
+      return missionStart("LINE_FOLLOW_REVERSED");
     }
 
     async function missionStop() {
