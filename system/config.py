@@ -28,8 +28,9 @@ _CONFIG_PATH = Path(__file__).parent / "config.yaml"
 @dataclass
 class Config:
     # ── Line follow mode ──────────────────────────────────────────────────────
-    line_follow_mode: int = 0        # 0=simple  1=find_line  2=pid_turn
+    line_follow_mode: int = 0        # 0=simple  1=find_line  2=pid_turn  3=adaptive
     simple_curv_thresh: float = 0.5  # curvature at which simple mode reaches min_speed
+    adaptive_horiz_weight: float = 1.0  # scale [0,1] for horizontal bias in adaptive mode
 
     # ── Steering PID ─────────────────────────────────────────────────────────
     steer_kp:        float = 0.65
@@ -116,7 +117,7 @@ class Config:
 
 _SECTIONS: list[tuple[str, list[str]]] = [
     ("Line follow mode", [
-        "line_follow_mode", "simple_curv_thresh",
+        "line_follow_mode", "simple_curv_thresh", "adaptive_horiz_weight",
     ]),
     ("Steering PID", [
         "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",

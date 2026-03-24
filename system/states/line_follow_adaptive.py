@@ -39,7 +39,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
 
     # Blend: full red_error when line fills frame, full bias when line is thin/fading
     blended = _clamp(
-        vert_frac * det.red_error + (1.0 - vert_frac) * horiz_bias,
+        vert_frac * det.red_error + (1.0 - vert_frac) * sm.cfg.adaptive_horiz_weight * horiz_bias,
         -1.0, 1.0,
     )
 
