@@ -39,6 +39,11 @@ class Config:
     steer_kd:        float = 0.10
     steer_out_limit: float = 0.80
 
+    # ── Heading PID (mode 4: line tangent vs robot direction) ─────────────
+    heading_kp: float = 0.4
+    heading_ki: float = 0.0
+    heading_kd: float = 0.05
+
     # ── Motor PID ─────────────────────────────────────────────────────────────
     motor_kp: float = 0.003125
     motor_ki: float = 0.0005
@@ -80,6 +85,10 @@ class Config:
 
     # ── Find line ─────────────────────────────────────────────────────────────
     find_line_turn_speed: float = 0.20  # in-place spin voltage while searching
+
+    # ── Slow down (line_follow_mode 5) ────────────────────────────────────────
+    slow_down_after_s: float = 10.0   # seconds before speed ramp begins
+    slow_down_ramp_s:  float = 5.0    # seconds to ramp from base_speed to min_speed
 
     # ── Corner turn ───────────────────────────────────────────────────────────
     corner_curvature_thresh: float = 0.3   # |curvature| above this triggers CORNER_TURN
@@ -123,6 +132,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Steering PID", [
         "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
     ]),
+    ("Heading PID", [
+        "heading_kp", "heading_ki", "heading_kd",
+    ]),
     ("Motor PID", [
         "motor_kp", "motor_ki", "motor_kd",
     ]),
@@ -145,6 +157,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Find line", [
         "find_line_turn_speed",
+    ]),
+    ("Slow down", [
+        "slow_down_after_s", "slow_down_ramp_s",
     ]),
     ("Corner turn", [
         "corner_curvature_thresh", "corner_curve_conf_min",

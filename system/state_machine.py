@@ -59,6 +59,15 @@ class MissionStateMachine:
             sample_time=None,
         )
 
+        self._heading_pid = PID(
+            Kp=self.cfg.heading_kp,
+            Ki=self.cfg.heading_ki,
+            Kd=self.cfg.heading_kd,
+            setpoint=0,
+            output_limits=(-self.cfg.steer_out_limit, self.cfg.steer_out_limit),
+            sample_time=None,
+        )
+
     def step(self, det: FrameDetection, left_ticks: int, right_ticks: int) -> ControlOutput:
         if self.state == State.LINE_FOLLOW:
             return _line_follow.step(self, det, left_ticks, right_ticks)
@@ -84,5 +93,6 @@ class MissionStateMachine:
         self._enc0_right       = right_ticks
         self._consecutive_lost = 0
         self._steer_pid.reset()
+        self._heading_pid.reset()
         if self._brain is not None:
             self._brain._speed_ctrl.reset()

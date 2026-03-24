@@ -302,7 +302,7 @@
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="line_follow_mode">mode (0/1/2/3)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
-        <input type="number" id="line_follow_mode" step="1" min="0" max="3" />
+        <input type="number" id="line_follow_mode" step="1" min="0" max="4" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="simple_curv_thresh">simple curv thresh</label><button type="button" class="info-btn" data-help="simple_curv_thresh" aria-label="Help: simple_curv_thresh">i</button></div>
@@ -317,7 +317,7 @@
         <input type="number" id="curv_speed_bias" step="0.1" min="0.1" max="5" />
       </div>
     </div>
-    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (blend error with horizontal bias scaled by vertical coverage; horiz weight scales the bias)</p>
+    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (pixel balance blend) &nbsp;|&nbsp; 4 = find heading (lateral + heading PID, FIND_LINE on loss)</p>
   </div>
 
   <!-- Line error: perception -->
@@ -366,6 +366,26 @@
       <div class="field">
         <div class="field-label-row"><label for="steer_out_limit">out_limit</label><button type="button" class="info-btn" data-help="steer_out_limit" aria-label="Help: steer_out_limit">i</button></div>
         <input type="number" id="steer_out_limit" step="0.01" min="0" max="1" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Heading PID -->
+  <div class="card">
+    <h2>Heading PID — line tangent vs robot direction (mode 4)</h2>
+    <p class="hint">Corrects the angle between the line's tangent and the robot's direction. Output is added to the lateral steering correction. Shares steer_out_limit as the output clamp.</p>
+    <div class="fields">
+      <div class="field">
+        <div class="field-label-row"><label for="heading_kp">kp</label><button type="button" class="info-btn" data-help="heading_kp" aria-label="Help: heading_kp">i</button></div>
+        <input type="number" id="heading_kp" step="0.01" min="0" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="heading_ki">ki</label><button type="button" class="info-btn" data-help="heading_ki" aria-label="Help: heading_ki">i</button></div>
+        <input type="number" id="heading_ki" step="0.001" min="0" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="heading_kd">kd</label><button type="button" class="info-btn" data-help="heading_kd" aria-label="Help: heading_kd">i</button></div>
+        <input type="number" id="heading_kd" step="0.01" min="0" />
       </div>
     </div>
   </div>
@@ -694,6 +714,7 @@
     // All keys match the JSON keys in config.yaml exactly.
     const KEYS = [
       "line_follow_mode", "simple_curv_thresh", "adaptive_curv_a", "curv_speed_bias",
+      "heading_kp", "heading_ki", "heading_kd",
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
@@ -724,6 +745,9 @@
 
     // [min, max, step] for each slider — drives both the range input and clamps the number input
     const SLIDER_RANGES = {
+      heading_kp:              [0,    5,      0.01  ],
+      heading_ki:              [0,    1,      0.001 ],
+      heading_kd:              [0,    2,      0.01  ],
       steer_kp:                [0,    5,      0.01  ],
       steer_ki:                [0,    1,      0.001 ],
       steer_kd:                [0,    2,      0.01  ],
@@ -1006,6 +1030,32 @@
         dec: "Detects darker blues; useful in dim environments.",
         whenInc: "Dark shadows in the blue hue range triggering false positives.",
         whenDec: "Blue target in shade is not being detected.",
+      },
+
+      // ── Heading PID ─────────────────────────────────────────────────
+      heading_kp: {
+        title: "heading_kp — Heading proportional gain",
+        what: "Proportional gain on the angle error between the line's local tangent (curve_heading) and the robot's forward direction. Output is added to the lateral steer PID output. Used only in mode 4.",
+        inc: "Stronger correction for misalignment; robot snaps to align with the line faster but may overshoot.",
+        dec: "Softer heading correction; robot drifts in angle longer before correcting.",
+        whenInc: "Robot approaches curves at a poor angle and takes too long to align with the new direction.",
+        whenDec: "Heading correction oscillates or adds too much turning on top of lateral correction.",
+      },
+      heading_ki: {
+        title: "heading_ki — Heading integral gain",
+        what: "Integral on accumulated heading error. Removes steady-state angular offset if the robot persistently points away from the line tangent.",
+        inc: "Eliminates constant angular bias faster; risk of windup overshoot.",
+        dec: "Less windup; may leave a small constant heading offset.",
+        whenInc: "Robot consistently tracks parallel to but angularly offset from the line.",
+        whenDec: "Heading oscillation that grows over time; slow hunting in angle.",
+      },
+      heading_kd: {
+        title: "heading_kd — Heading derivative gain",
+        what: "Derivative on heading error rate. Damps rapid changes in tangent angle — useful on smooth curves where the tangent changes continuously.",
+        inc: "More damping on heading change rate; reduces angular overshoot.",
+        dec: "Snappier angular response; may overshoot on fast-changing curves.",
+        whenInc: "Heading correction overshoots and oscillates when entering curves.",
+        whenDec: "Heading response is sluggish entering curves; robot trails the tangent direction.",
       },
 
       // ── Line follow mode ────────────────────────────────────────────
