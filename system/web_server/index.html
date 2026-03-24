@@ -310,7 +310,7 @@
       </div>
       <div class="field">
         <div class="field-label-row"><label for="adaptive_curv_a">adaptive curv a</label><button type="button" class="info-btn" data-help="adaptive_curv_a" aria-label="Help: adaptive_curv_a">i</button></div>
-        <input type="number" id="adaptive_curv_a" step="0.05" min="0" max="2" />
+        <input type="number" id="adaptive_curv_a" step="0.05" min="0" max="1" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="curv_speed_bias">curv speed bias</label><button type="button" class="info-btn" data-help="curv_speed_bias" aria-label="Help: curv_speed_bias">i</button></div>
@@ -742,7 +742,7 @@
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
       simple_curv_thresh:      [0.05, 5,      0.05  ],
-      adaptive_curv_a:         [0,    2,      0.05  ],
+      adaptive_curv_a:         [0,    1,      0.05  ],
       curv_speed_bias:         [0.1,  5,      0.1   ],
       find_line_turn_speed:    [0,    1,      0.01  ],
       corner_curvature_thresh: [0,    2,      0.05  ],
@@ -1026,12 +1026,12 @@
         whenDec: "Robot enters corners too fast and loses the line.",
       },
       adaptive_curv_a: {
-        title: "adaptive_curv_a — Adaptive mode gain",
-        what: "Single gain used in mode 3 (adaptive) for two coupled effects: (1) forward_speed = base_speed − a × |curvature|, (2) steering error += a × coverage_loss × horiz_bias. Higher a = slower on curves AND more lateral bias when coverage drops.",
-        inc: "Slows down more on curves and steers harder toward the side with more red when coverage drops.",
-        dec: "Closer to a straight-line follower; less curvature speed reduction, less lateral bias.",
-        whenInc: "Robot overshoots curves or loses the line at corners; coverage drops and robot doesn't react.",
-        whenDec: "Robot slows too much on gentle curves; excessive lateral bias on the straight.",
+        title: "adaptive_curv_a — Adaptive mode tradeoff [0–1]",
+        what: "Single 0–1 knob in mode 3. At 0: full forward speed (base_speed), steer on red_error only. At 1: forward=0 (spin in place), steer purely on horizontal bias × coverage_loss. In between it blends both. forward = base_speed × (1−a). error = (1−a)×red_error + a×coverage_loss×horiz_bias.",
+        inc: "Less forward speed, more lateral bias — robot turns harder toward the side with more red as the line fades.",
+        dec: "More forward speed, less bias — closer to normal line following.",
+        whenInc: "Robot drives past corners without turning; needs to slow and steer toward the line.",
+        whenDec: "Robot slows or spins too much on normal straight segments; reduce to restore forward drive.",
       },
       curv_speed_bias: {
         title: "curv_speed_bias — Curvature speed curve shape",
