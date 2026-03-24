@@ -43,9 +43,10 @@ class MissionStateMachine:
         self._t0               = time.time()
         self._enc0_left        = 0
         self._enc0_right       = 0
-        self._last_red_error   = 0.0
-        self._last_curvature   = 0.0
-        self._consecutive_lost = 0
+        self._last_red_error    = 0.0
+        self._last_curvature    = 0.0
+        self._find_line_turn_cw = True  # updated by line_follow_find when red is seen
+        self._consecutive_lost  = 0
 
         self._steer_pid = PID(
             Kp=self.cfg.steer_kp,
