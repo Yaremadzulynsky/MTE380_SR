@@ -610,8 +610,13 @@ class RobotBrain:
 
     def _on_heartbeat(self) -> None:
         """Send claw-open on every heartbeat so it reliably opens after Arduino reset.
-        Suppressed for 5 s after a manual send_claw call so web UI commands aren't overridden."""
+        Suppressed while a mission is running (state machine owns the claw) and for
+        5 s after a manual web UI command."""
         if time.monotonic() < self._manual_claw_until:
+            return
+        with self._lock:
+            mode = self._mode
+        if mode == "mission":
             return
         self.send_claw(_config_module.get().claw_open)
 
