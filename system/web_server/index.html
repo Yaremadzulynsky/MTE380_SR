@@ -280,19 +280,19 @@
     <p class="hint">H in [0–179], S and V in [0–255]. Red wraps at hue=0/179, so two hue bands are used.</p>
     <p class="hint" style="margin-top:0.25rem;">Red</p>
     <div class="fields">
-      <div class="field"><label for="red_h_lo1">H lo1</label><input type="number" id="red_h_lo1" step="1" min="0" max="30" /></div>
-      <div class="field"><label for="red_h_hi1">H hi1</label><input type="number" id="red_h_hi1" step="1" min="0" max="30" /></div>
-      <div class="field"><label for="red_h_lo2">H lo2</label><input type="number" id="red_h_lo2" step="1" min="150" max="179" /></div>
-      <div class="field"><label for="red_h_hi2">H hi2</label><input type="number" id="red_h_hi2" step="1" min="150" max="179" /></div>
-      <div class="field"><label for="red_s_min">S min</label><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
-      <div class="field"><label for="red_v_min">V min</label><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_h_lo1">H lo1</label><button type="button" class="info-btn" data-help="red_h_lo1" aria-label="Help: red_h_lo1">i</button></div><input type="number" id="red_h_lo1" step="1" min="0" max="30" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_h_hi1">H hi1</label><button type="button" class="info-btn" data-help="red_h_hi1" aria-label="Help: red_h_hi1">i</button></div><input type="number" id="red_h_hi1" step="1" min="0" max="30" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_h_lo2">H lo2</label><button type="button" class="info-btn" data-help="red_h_lo2" aria-label="Help: red_h_lo2">i</button></div><input type="number" id="red_h_lo2" step="1" min="150" max="179" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_h_hi2">H hi2</label><button type="button" class="info-btn" data-help="red_h_hi2" aria-label="Help: red_h_hi2">i</button></div><input type="number" id="red_h_hi2" step="1" min="150" max="179" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_s_min">S min</label><button type="button" class="info-btn" data-help="red_s_min" aria-label="Help: red_s_min">i</button></div><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_v_min">V min</label><button type="button" class="info-btn" data-help="red_v_min" aria-label="Help: red_v_min">i</button></div><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
     </div>
     <p class="hint" style="margin-top:0.6rem;">Blue</p>
     <div class="fields">
-      <div class="field"><label for="blue_h_lo">H low</label><input type="number" id="blue_h_lo" step="1" min="80" max="140" /></div>
-      <div class="field"><label for="blue_h_hi">H high</label><input type="number" id="blue_h_hi" step="1" min="80" max="140" /></div>
-      <div class="field"><label for="blue_s_min">S min</label><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
-      <div class="field"><label for="blue_v_min">V min</label><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
+      <div class="field"><div class="field-label-row"><label for="blue_h_lo">H low</label><button type="button" class="info-btn" data-help="blue_h_lo" aria-label="Help: blue_h_lo">i</button></div><input type="number" id="blue_h_lo" step="1" min="80" max="140" /></div>
+      <div class="field"><div class="field-label-row"><label for="blue_h_hi">H high</label><button type="button" class="info-btn" data-help="blue_h_hi" aria-label="Help: blue_h_hi">i</button></div><input type="number" id="blue_h_hi" step="1" min="80" max="140" /></div>
+      <div class="field"><div class="field-label-row"><label for="blue_s_min">S min</label><button type="button" class="info-btn" data-help="blue_s_min" aria-label="Help: blue_s_min">i</button></div><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
+      <div class="field"><div class="field-label-row"><label for="blue_v_min">V min</label><button type="button" class="info-btn" data-help="blue_v_min" aria-label="Help: blue_v_min">i</button></div><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
     </div>
   </div>
 
@@ -301,19 +301,19 @@
     <h2>Line Follow Mode</h2>
     <div class="fields">
       <div class="field">
-        <label for="line_follow_mode">mode (0/1/2/3)</label>
+        <div class="field-label-row"><label for="line_follow_mode">mode (0/1/2/3)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
         <input type="number" id="line_follow_mode" step="1" min="0" max="3" />
       </div>
       <div class="field">
-        <label for="simple_curv_thresh">simple curv thresh</label>
+        <div class="field-label-row"><label for="simple_curv_thresh">simple curv thresh</label><button type="button" class="info-btn" data-help="simple_curv_thresh" aria-label="Help: simple_curv_thresh">i</button></div>
         <input type="number" id="simple_curv_thresh" step="0.05" min="0.05" max="5" />
       </div>
       <div class="field">
-        <label for="adaptive_curv_a">adaptive curv a</label>
+        <div class="field-label-row"><label for="adaptive_curv_a">adaptive curv a</label><button type="button" class="info-btn" data-help="adaptive_curv_a" aria-label="Help: adaptive_curv_a">i</button></div>
         <input type="number" id="adaptive_curv_a" step="0.05" min="0" max="2" />
       </div>
       <div class="field">
-        <label for="curv_speed_bias">curv speed bias</label>
+        <div class="field-label-row"><label for="curv_speed_bias">curv speed bias</label><button type="button" class="info-btn" data-help="curv_speed_bias" aria-label="Help: curv_speed_bias">i</button></div>
         <input type="number" id="curv_speed_bias" step="0.1" min="0.1" max="5" />
       </div>
     </div>
@@ -329,19 +329,19 @@
         <input type="number" id="line_axle_extrap" step="0.1" min="0" max="5" />
       </div>
       <div class="field">
-        <label for="red_loss_debounce_frames">red miss frames</label>
+        <div class="field-label-row"><label for="red_loss_debounce_frames">red miss frames</label><button type="button" class="info-btn" data-help="red_loss_debounce_frames" aria-label="Help: red_loss_debounce_frames">i</button></div>
         <input type="number" id="red_loss_debounce_frames" step="1" min="1" />
       </div>
       <div class="field">
-        <label for="red_error_ema_alpha">red error EMA α</label>
+        <div class="field-label-row"><label for="red_error_ema_alpha">red error EMA α</label><button type="button" class="info-btn" data-help="red_error_ema_alpha" aria-label="Help: red_error_ema_alpha">i</button></div>
         <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
       </div>
       <div class="field">
-        <label for="error_heading_weight">heading weight</label>
+        <div class="field-label-row"><label for="error_heading_weight">heading weight</label><button type="button" class="info-btn" data-help="error_heading_weight" aria-label="Help: error_heading_weight">i</button></div>
         <input type="number" id="error_heading_weight" step="0.05" min="0" max="1" />
       </div>
       <div class="field">
-        <label for="error_curvature_weight">curvature weight</label>
+        <div class="field-label-row"><label for="error_curvature_weight">curvature weight</label><button type="button" class="info-btn" data-help="error_curvature_weight" aria-label="Help: error_curvature_weight">i</button></div>
         <input type="number" id="error_curvature_weight" step="0.05" min="0" max="1" />
       </div>
     </div>
@@ -428,7 +428,7 @@
     <h2>Find Line — spin to reacquire lost line</h2>
     <div class="fields">
       <div class="field">
-        <label for="find_line_turn_speed">turn speed</label>
+        <div class="field-label-row"><label for="find_line_turn_speed">turn speed</label><button type="button" class="info-btn" data-help="find_line_turn_speed" aria-label="Help: find_line_turn_speed">i</button></div>
         <input type="number" id="find_line_turn_speed" step="0.01" min="0" max="1" />
       </div>
     </div>
@@ -439,23 +439,23 @@
     <h2>Corner Turn — curvature-triggered 90° turn</h2>
     <div class="fields">
       <div class="field">
-        <label for="corner_curvature_thresh">curvature thresh</label>
+        <div class="field-label-row"><label for="corner_curvature_thresh">curvature thresh</label><button type="button" class="info-btn" data-help="corner_curvature_thresh" aria-label="Help: corner_curvature_thresh">i</button></div>
         <input type="number" id="corner_curvature_thresh" step="0.05" min="0" max="2" />
       </div>
       <div class="field">
-        <label for="corner_curve_conf_min">conf min (strips)</label>
+        <div class="field-label-row"><label for="corner_curve_conf_min">conf min (strips)</label><button type="button" class="info-btn" data-help="corner_curve_conf_min" aria-label="Help: corner_curve_conf_min">i</button></div>
         <input type="number" id="corner_curve_conf_min" step="0.1" min="0" max="1" />
       </div>
       <div class="field">
-        <label for="corner_forward_m">forward (m)</label>
+        <div class="field-label-row"><label for="corner_forward_m">forward (m)</label><button type="button" class="info-btn" data-help="corner_forward_m" aria-label="Help: corner_forward_m">i</button></div>
         <input type="number" id="corner_forward_m" step="0.01" min="0" max="2" />
       </div>
       <div class="field">
-        <label for="corner_forward_speed">forward speed</label>
+        <div class="field-label-row"><label for="corner_forward_speed">forward speed</label><button type="button" class="info-btn" data-help="corner_forward_speed" aria-label="Help: corner_forward_speed">i</button></div>
         <input type="number" id="corner_forward_speed" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
-        <label for="curve_n_strips">curve strips</label>
+        <div class="field-label-row"><label for="curve_n_strips">curve strips</label><button type="button" class="info-btn" data-help="curve_n_strips" aria-label="Help: curve_n_strips">i</button></div>
         <input type="number" id="curve_n_strips" step="1" min="2" max="20" />
       </div>
     </div>
@@ -466,11 +466,11 @@
     <h2>Wheel geometry</h2>
     <div class="fields">
       <div class="field">
-        <label for="wheel_diameter_m">wheel diameter (m)</label>
+        <div class="field-label-row"><label for="wheel_diameter_m">wheel diameter (m)</label><button type="button" class="info-btn" data-help="wheel_diameter_m" aria-label="Help: wheel_diameter_m">i</button></div>
         <input type="number" id="wheel_diameter_m" step="0.001" min="0.01" />
       </div>
       <div class="field">
-        <label for="wheelbase_m">wheelbase (m)</label>
+        <div class="field-label-row"><label for="wheelbase_m">wheelbase (m)</label><button type="button" class="info-btn" data-help="wheelbase_m" aria-label="Help: wheelbase_m">i</button></div>
         <input type="number" id="wheelbase_m" step="0.001" min="0.01" />
       </div>
     </div>
@@ -481,23 +481,23 @@
     <h2>Rotation PID</h2>
     <div class="fields">
       <div class="field">
-        <label for="rot_kp">kp</label>
+        <div class="field-label-row"><label for="rot_kp">kp</label><button type="button" class="info-btn" data-help="rot_kp" aria-label="Help: rot_kp">i</button></div>
         <input type="number" id="rot_kp" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_ki">ki</label>
+        <div class="field-label-row"><label for="rot_ki">ki</label><button type="button" class="info-btn" data-help="rot_ki" aria-label="Help: rot_ki">i</button></div>
         <input type="number" id="rot_ki" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_kd">kd</label>
+        <div class="field-label-row"><label for="rot_kd">kd</label><button type="button" class="info-btn" data-help="rot_kd" aria-label="Help: rot_kd">i</button></div>
         <input type="number" id="rot_kd" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="rot_tolerance">tolerance (degrees)</label>
+        <div class="field-label-row"><label for="rot_tolerance">tolerance (degrees)</label><button type="button" class="info-btn" data-help="rot_tolerance" aria-label="Help: rot_tolerance">i</button></div>
         <input type="number" id="rot_tolerance" step="0.5" min="0.1" />
       </div>
       <div class="field">
-        <label for="rot_motor_deadband">motor deadband</label>
+        <div class="field-label-row"><label for="rot_motor_deadband">motor deadband</label><button type="button" class="info-btn" data-help="rot_motor_deadband" aria-label="Help: rot_motor_deadband">i</button></div>
         <input type="number" id="rot_motor_deadband" step="0.01" min="0" max="1" />
       </div>
     </div>
@@ -508,23 +508,23 @@
     <h2>Position PID</h2>
     <div class="fields">
       <div class="field">
-        <label for="pos_kp">kp</label>
+        <div class="field-label-row"><label for="pos_kp">kp</label><button type="button" class="info-btn" data-help="pos_kp" aria-label="Help: pos_kp">i</button></div>
         <input type="number" id="pos_kp" step="0.01" min="0" />
       </div>
       <div class="field">
-        <label for="pos_ki">ki</label>
+        <div class="field-label-row"><label for="pos_ki">ki</label><button type="button" class="info-btn" data-help="pos_ki" aria-label="Help: pos_ki">i</button></div>
         <input type="number" id="pos_ki" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="pos_kd">kd</label>
+        <div class="field-label-row"><label for="pos_kd">kd</label><button type="button" class="info-btn" data-help="pos_kd" aria-label="Help: pos_kd">i</button></div>
         <input type="number" id="pos_kd" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="pos_tolerance_m">tolerance (m)</label>
+        <div class="field-label-row"><label for="pos_tolerance_m">tolerance (m)</label><button type="button" class="info-btn" data-help="pos_tolerance_m" aria-label="Help: pos_tolerance_m">i</button></div>
         <input type="number" id="pos_tolerance_m" step="0.001" min="0" />
       </div>
       <div class="field">
-        <label for="pos_motor_deadband">motor deadband</label>
+        <div class="field-label-row"><label for="pos_motor_deadband">motor deadband</label><button type="button" class="info-btn" data-help="pos_motor_deadband" aria-label="Help: pos_motor_deadband">i</button></div>
         <input type="number" id="pos_motor_deadband" step="0.01" min="0" max="1" />
       </div>
     </div>
@@ -924,6 +924,310 @@
         dec: "Closer to raw blob-bottom; less predictive but more stable on straight segments.",
         whenInc: "Robot cuts corners or reacts too late to curves.",
         whenDec: "Steering is jittery or oversteers because the extrapolated point swings too far.",
+      },
+
+      // ── HSV colour detection ────────────────────────────────────────
+      red_h_lo1: {
+        title: "red_h_lo1 — Red hue band 1 lower bound",
+        what: "OpenCV hue is 0–179. Red wraps at 0, so band 1 covers hues near 0 (e.g. 0–10). This is the lower edge of that band.",
+        inc: "Includes slightly less of the near-zero reds in the mask.",
+        dec: "Captures hues closer to pure red / magenta at the zero end.",
+        whenInc: "Non-red objects near hue 0 bleed into the mask.",
+        whenDec: "True red tape near hue=0 is not being detected.",
+      },
+      red_h_hi1: {
+        title: "red_h_hi1 — Red hue band 1 upper bound",
+        what: "Upper edge of the first red hue band (hues near 0). Typical range 5–15.",
+        inc: "Captures more orange-ish reds in band 1.",
+        dec: "Tighter band; excludes orange but may miss true red under varying lighting.",
+        whenInc: "Red tape looks orange under warm light and is missed.",
+        whenDec: "Orange objects falsely detected as red.",
+      },
+      red_h_lo2: {
+        title: "red_h_lo2 — Red hue band 2 lower bound",
+        what: "Lower edge of the second red hue band (hues near 179, the other side of red's wrap). Typical range 160–170.",
+        inc: "Narrower band near 179; excludes some magenta.",
+        dec: "Captures more magenta / deep pink reds.",
+        whenInc: "Magenta or purple objects triggering false positives.",
+        whenDec: "Deep red or crimson tape on the high-hue side is missed.",
+      },
+      red_h_hi2: {
+        title: "red_h_hi2 — Red hue band 2 upper bound",
+        what: "Upper edge of the second red hue band (must be ≤179). Set to 179 to include everything up to the hue wrap.",
+        inc: "No practical effect once at 179.",
+        dec: "Cuts off the highest hues; may miss some reds under cool lighting.",
+        whenInc: "True red is being missed at the high end of the hue scale.",
+        whenDec: "Very-high-hue non-red objects are triggering the detector.",
+      },
+      red_s_min: {
+        title: "red_s_min — Red minimum saturation",
+        what: "Minimum HSV saturation [0–255] a pixel must have to be counted as red. Rejects washed-out / grey pixels.",
+        inc: "Only highly saturated (vivid) red passes; more robust against pale or white surfaces.",
+        dec: "Accepts less saturated reds; catches faded tape but more false positives on grey.",
+        whenInc: "White or grey floor tiles showing up in the red mask.",
+        whenDec: "Red tape in bright/overexposed areas is being missed.",
+      },
+      red_v_min: {
+        title: "red_v_min — Red minimum value (brightness)",
+        what: "Minimum HSV value [0–255] for red detection. Rejects very dark pixels even if hue is correct.",
+        inc: "Ignores darker red pixels; reduces shadow false positives.",
+        dec: "Detects darker reds; useful in dim lighting or shadows over the tape.",
+        whenInc: "Shadows on the floor show up as red in the mask.",
+        whenDec: "Red tape in shaded areas is invisible to the detector.",
+      },
+      blue_h_lo: {
+        title: "blue_h_lo — Blue hue lower bound",
+        what: "Lower hue bound for the blue target marker [0–179]. Typical blue is around 100–130.",
+        inc: "Starts accepting blue at a higher hue; may miss cyan-ish blues.",
+        dec: "Catches greener-blue; risk of detecting teal or cyan objects.",
+        whenInc: "Cyan or teal objects triggering the blue detector.",
+        whenDec: "Blue target is slightly cyan (e.g. under different lighting) and being missed.",
+      },
+      blue_h_hi: {
+        title: "blue_h_hi — Blue hue upper bound",
+        what: "Upper hue bound for the blue target marker. Typical blue tops out around 130–140.",
+        inc: "Includes more violet-blue at the top end.",
+        dec: "Tighter range; excludes purple/violet but may miss some blues.",
+        whenInc: "Blue target appears purple-tinted under cool light and is missed.",
+        whenDec: "Purple objects false-triggering the blue detector.",
+      },
+      blue_s_min: {
+        title: "blue_s_min — Blue minimum saturation",
+        what: "Minimum saturation for blue detection. Rejects pale, grey, or white pixels that happen to be in the hue range.",
+        inc: "Only vivid blue passes; more robust against sky-blue backgrounds or reflections.",
+        dec: "Accepts paler blue; useful if the target is a faded or pastel color.",
+        whenInc: "Floor or background triggering false blue detections.",
+        whenDec: "The actual blue target is too faint and being missed.",
+      },
+      blue_v_min: {
+        title: "blue_v_min — Blue minimum value (brightness)",
+        what: "Minimum brightness for blue detection. Prevents very dark blue pixels from triggering.",
+        inc: "Ignores dark blues; helps in low-contrast scenes.",
+        dec: "Detects darker blues; useful in dim environments.",
+        whenInc: "Dark shadows in the blue hue range triggering false positives.",
+        whenDec: "Blue target in shade is not being detected.",
+      },
+
+      // ── Line follow mode ────────────────────────────────────────────
+      line_follow_mode: {
+        title: "line_follow_mode",
+        what: "Selects the active line-follow behaviour: 0 = simple (stops when line lost), 1 = find_line (spins to recover when lost), 2 = pid_turn (triggers 90° PID turn on sharp curvature), 3 = adaptive (blends error with horizontal bias based on vertical coverage).",
+        inc: "Switches to the next mode (higher number).",
+        dec: "Switches to a simpler / earlier mode.",
+        whenInc: "Simple mode is too passive and the robot loses the line at corners — try 1 or 3.",
+        whenDec: "Advanced mode is causing erratic behaviour; revert to simple for baseline tuning.",
+      },
+      simple_curv_thresh: {
+        title: "simple_curv_thresh",
+        what: "Curvature magnitude at which mode 0 (simple) reduces forward speed all the way to min_speed. Below this threshold speed scales linearly. Only used in mode 0.",
+        inc: "Robot reaches min_speed only at sharper curves; stays faster on moderate bends.",
+        dec: "Slows earlier on mild curves; more conservative cornering.",
+        whenInc: "Robot slows too much on gentle curves where it doesn't need to.",
+        whenDec: "Robot enters corners too fast and loses the line.",
+      },
+      adaptive_curv_a: {
+        title: "adaptive_curv_a — Adaptive mode gain",
+        what: "Single gain used in mode 3 (adaptive) for two coupled effects: (1) forward_speed = base_speed − a × |curvature|, (2) steering error += a × coverage_loss × horiz_bias. Higher a = slower on curves AND more lateral bias when coverage drops.",
+        inc: "Slows down more on curves and steers harder toward the side with more red when coverage drops.",
+        dec: "Closer to a straight-line follower; less curvature speed reduction, less lateral bias.",
+        whenInc: "Robot overshoots curves or loses the line at corners; coverage drops and robot doesn't react.",
+        whenDec: "Robot slows too much on gentle curves; excessive lateral bias on the straight.",
+      },
+      curv_speed_bias: {
+        title: "curv_speed_bias — Curvature speed curve shape",
+        what: "Power exponent applied to the normalised curvature before speed scaling (modes 0–2). 1 = linear. >1 = speed drops faster at lower curvature (more aggressive). <1 = speed stays high until near the threshold, then drops sharply.",
+        inc: "Speed starts dropping sooner, even on mild bends.",
+        dec: "Keeps speed higher for longer, only slowing near the threshold.",
+        whenInc: "Robot enters moderate curves too fast despite a reasonable threshold.",
+        whenDec: "Robot brakes too early on every gentle turn; you want it to stay fast until corners are sharp.",
+      },
+
+      // ── Line error perception ───────────────────────────────────────
+      red_loss_debounce_frames: {
+        title: "red_loss_debounce_frames",
+        what: "Number of consecutive frames where red is not detected before red_found is set to False. During the holdoff the last valid error is used. Prevents flicker from brief occlusions.",
+        inc: "More resilient to momentary glitches or shadows; slower to react to a genuine line loss.",
+        dec: "Reacts faster to genuine loss; but a single missed frame triggers the lost state.",
+        whenInc: "Robot enters FIND_LINE repeatedly due to single-frame noise or flicker.",
+        whenDec: "Robot takes too long to recognise the line is truly gone and keeps going straight.",
+      },
+      red_error_ema_alpha: {
+        title: "red_error_ema_alpha — Error EMA smoothing",
+        what: "Exponential moving average on red_error when the line is visible. 0 = no smoothing (raw); 1 = fully frozen. Typical 0.1–0.4.",
+        inc: "More smoothing; reduces jitter but adds lag — slower reaction to rapid line movements.",
+        dec: "Less smoothing; more responsive but noisier error signal into the steering PID.",
+        whenInc: "Steering oscillates with high-frequency noise even with kd tuned.",
+        whenDec: "Steering reacts sluggishly to fast line changes; lag visible on sharp curves.",
+      },
+      error_heading_weight: {
+        title: "error_heading_weight",
+        what: "Fraction of the local line tangent (curve_heading from polynomial fit) added to red_error. Makes steering anticipate the line's direction ahead, not just its lateral offset.",
+        inc: "More feed-forward from line direction; helps enter curves earlier but can overcorrect.",
+        dec: "Relies more on lateral error alone; simpler but may lag on curves.",
+        whenInc: "Robot consistently undershoots curves, only reacting after it has drifted laterally.",
+        whenDec: "Overcorrection at the start of curves; tangent term is fighting the lateral error.",
+      },
+      error_curvature_weight: {
+        title: "error_curvature_weight",
+        what: "Fraction of curvature (polynomial coefficient a) added to red_error. Provides additional feed-forward proportional to how sharply the line bends ahead.",
+        inc: "More turn command for the same curvature; proactive on tight curves.",
+        dec: "Less curvature feed-forward; more reactive, relies on PID to catch up.",
+        whenInc: "Robot runs wide on sharp corners even with heading weight tuned.",
+        whenDec: "Overcorrection on moderately curved segments due to excessive curvature term.",
+      },
+
+      // ── Find line ───────────────────────────────────────────────────
+      find_line_turn_speed: {
+        title: "find_line_turn_speed",
+        what: "Speed fraction (via the speed PID) commanded to each wheel during in-place spin in the FIND_LINE state. One wheel gets +v, the other −v depending on which side had more red.",
+        inc: "Faster spin; recovers line quicker but risks spinning past it.",
+        dec: "Slower spin; more controlled but may not overcome static friction without the integral term.",
+        whenInc: "Robot is slow to turn and consistently misses the line on the return swing.",
+        whenDec: "Robot spins past the line every time; slow it down so it catches the edge.",
+      },
+
+      // ── Corner turn ─────────────────────────────────────────────────
+      corner_curvature_thresh: {
+        title: "corner_curvature_thresh",
+        what: "Curvature magnitude that triggers a PID_TURN in mode 2, and the denominator for speed scaling in modes 1 and 2. Curvature is the polynomial a-coefficient from the N-strip fit.",
+        inc: "Requires a sharper bend before triggering a corner turn; more of the path followed as line-follow.",
+        dec: "Triggers earlier on gentler curves; may cause spurious turns on mild bends.",
+        whenInc: "Robot turns at corners that aren't really 90° (false triggers).",
+        whenDec: "Robot misses sharp corners and runs off the track instead of turning.",
+      },
+      corner_curve_conf_min: {
+        title: "corner_curve_conf_min",
+        what: "Minimum fraction of strips [0–1] that must have valid red data before a corner trigger is accepted. Guards against triggering on a single noisy strip.",
+        inc: "Requires more strips to agree; fewer false triggers but may miss corners with partial occlusion.",
+        dec: "Triggers with fewer valid strips; quicker response but noisier.",
+        whenInc: "Spurious corner turns from noise when only 1–2 strips see red.",
+        whenDec: "Corner is not triggering because too many strips are occluded at the critical moment.",
+      },
+      corner_forward_m: {
+        title: "corner_forward_m",
+        what: "Distance (metres) to drive straight forward before beginning the rotation phase of a PID turn. Positions the robot's axle at the corner pivot point.",
+        inc: "Drives further past the corner before rotating; useful if axle is well behind the camera.",
+        dec: "Rotates sooner; may pivot short of the corner.",
+        whenInc: "Robot rotates with the corner still in front of it, ending up inside the turn.",
+        whenDec: "Robot has driven too far past the corner before turning, ending up outside.",
+      },
+      corner_forward_speed: {
+        title: "corner_forward_speed",
+        what: "Motor speed fraction during the short forward drive at the start of a PID turn (before rotation begins).",
+        inc: "Faster approach to pivot point; shorter time but harder to stop accurately.",
+        dec: "Slower, more controlled advance to the pivot.",
+        whenInc: "Forward phase takes too long; general pace feels slow.",
+        whenDec: "Overshoots the intended pivot distance.",
+      },
+      curve_n_strips: {
+        title: "curve_n_strips",
+        what: "Number of horizontal strips the ROI is divided into for the curvature polynomial fit. More strips = finer fit but each strip has fewer pixels.",
+        inc: "Finer spatial resolution; better curvature estimate on long straight lines but noisier on short ones.",
+        dec: "Coarser fit; more robust with few pixels (e.g. near distance) but misses fine bends.",
+        whenInc: "Curvature estimate is quantised or jumpy; course has long gradual bends.",
+        whenDec: "Many strips have no data (low curve_conf); reduce until most strips see the line.",
+      },
+
+      // ── Wheel geometry ──────────────────────────────────────────────
+      wheel_diameter_m: {
+        title: "wheel_diameter_m",
+        what: "Physical outer diameter of the drive wheels in metres. Used to convert encoder ticks to linear distance (circumference = π × diameter).",
+        inc: "Computed distance per tick increases; forward_ticks and position PID distances scale.",
+        dec: "Smaller computed distance; robot thinks it has traveled less for the same ticks.",
+        whenInc: "Measured distance is consistently shorter than expected (odometry underestimates).",
+        whenDec: "Odometry overestimates distance; robot stops short of targets.",
+      },
+      wheelbase_m: {
+        title: "wheelbase_m",
+        what: "Centre-to-centre lateral distance between the two drive wheels in metres. Used to convert differential wheel speed to angular rotation rate.",
+        inc: "Computed turn radius increases; rotation PID thinks it needs more differential to turn.",
+        dec: "Smaller computed radius; less differential commanded per degree of turn.",
+        whenInc: "Rotation test consistently under-rotates (turns less than commanded degrees).",
+        whenDec: "Rotation test over-rotates; robot spins too far per degree commanded.",
+      },
+
+      // ── Rotation PID ────────────────────────────────────────────────
+      rot_kp: {
+        title: "rot_kp — Rotation proportional gain",
+        what: "Proportional gain on heading error (degrees) in the rotation PID controller. Scales motor differential directly with angle remaining.",
+        inc: "Turns faster for a given angular error; may overshoot and oscillate.",
+        dec: "Slower, smoother approach to target angle; may leave steady-state error.",
+        whenInc: "Rotation is slow and takes many seconds to converge.",
+        whenDec: "Overshoots target heading; oscillates back and forth around the setpoint.",
+      },
+      rot_ki: {
+        title: "rot_ki — Rotation integral gain",
+        what: "Integral gain on accumulated heading error. Helps overcome friction that prevents reaching the exact target angle.",
+        inc: "Removes residual angular offset faster; risk of windup overshoot.",
+        dec: "Less windup risk; may leave a small constant heading error.",
+        whenInc: "Robot consistently stops a few degrees short of the commanded angle.",
+        whenDec: "Slow oscillation that grows over time; overshoot after the turn.",
+      },
+      rot_kd: {
+        title: "rot_kd — Rotation derivative gain",
+        what: "Derivative on heading error rate. Damps the approach, reducing overshoot near the target.",
+        inc: "Less overshoot; can slow final approach significantly if too high.",
+        dec: "Snappier final approach; may ring around the setpoint.",
+        whenInc: "Rotation consistently overshoots and corrects back; add damping.",
+        whenDec: "Rotation is overdamped (creeps to target very slowly near the end).",
+      },
+      rot_tolerance: {
+        title: "rot_tolerance",
+        what: "Angular deadband in degrees. Rotation is declared done when |heading error| < tolerance.",
+        inc: "Finishes the rotation sooner; accepts a larger residual error.",
+        dec: "Requires finer accuracy before moving on; longer settle time.",
+        whenInc: "Rotation never converges (motor dither keeps it just outside tight tolerance).",
+        whenDec: "Rotation finishes with too much residual angle; subsequent path is offset.",
+      },
+      rot_motor_deadband: {
+        title: "rot_motor_deadband",
+        what: "Minimum motor voltage fraction during rotation. Prevents the PID output from going so low that wheels stall due to static friction.",
+        inc: "Motors always run at least this fast; reduces stall risk but adds positional jitter near target.",
+        dec: "Allows lower commands; finer slow-approach but may stall near zero.",
+        whenInc: "Motors stall and the rotation freezes just short of the target angle.",
+        whenDec: "Motors jitter or buzz constantly around the target because minimum command is too large.",
+      },
+
+      // ── Position PID ────────────────────────────────────────────────
+      pos_kp: {
+        title: "pos_kp — Position proportional gain",
+        what: "Proportional gain on distance error (metres) in the position PID. Directly scales motor voltage with distance remaining.",
+        inc: "Moves faster for a given distance error; may overshoot the target.",
+        dec: "Approaches slowly; more precise stop but takes longer.",
+        whenInc: "Drive-to-distance takes too long to converge.",
+        whenDec: "Overshoots target position; coasts past the intended stop point.",
+      },
+      pos_ki: {
+        title: "pos_ki — Position integral gain",
+        what: "Integral on position error. Compensates for friction that prevents reaching the exact target distance.",
+        inc: "Drives out remaining distance error; risk of overshoot and windup.",
+        dec: "Less overshoot; may leave a small distance error.",
+        whenInc: "Robot consistently stops a few centimetres short of the target.",
+        whenDec: "Robot overshoots target due to accumulated integral.",
+      },
+      pos_kd: {
+        title: "pos_kd — Position derivative gain",
+        what: "Derivative on distance error. Smooths the deceleration, reducing overshoot as the robot approaches the target.",
+        inc: "Gentler stop; reduces final overshoot.",
+        dec: "Snappier approach but may overshoot.",
+        whenInc: "Robot coasts past the target before stopping.",
+        whenDec: "Robot creeps to a stop very slowly (overdamped).",
+      },
+      pos_tolerance_m: {
+        title: "pos_tolerance_m",
+        what: "Distance deadband in metres. Position move is declared done when |distance remaining| < tolerance.",
+        inc: "Accepts a larger residual distance; finishes sooner.",
+        dec: "Requires tighter precision; longer settle time.",
+        whenInc: "Position never converges due to floor vibration or encoder noise.",
+        whenDec: "Too much residual distance error at the end of each drive segment.",
+      },
+      pos_motor_deadband: {
+        title: "pos_motor_deadband",
+        what: "Minimum motor voltage fraction during position moves. Prevents stall when PID output is very small near the target.",
+        inc: "Motors always apply at least this voltage; helps avoid stall but adds overshoot near target.",
+        dec: "Finer control near zero speed; risk of stalling just short of the target.",
+        whenInc: "Robot stalls and stops a fixed distance short of every target.",
+        whenDec: "Dithering or buzzing around the target because the deadband floor is too high.",
       },
     };
 
