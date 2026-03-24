@@ -208,6 +208,7 @@ def test_stop():
 def servo():
     """Send a one-shot servo angle command (degrees 0–180)."""
     if _runner is None:
+        print("[servo] ERROR: no runner attached", flush=True)
         return jsonify({"error": "No runner attached."}), 503
     data = request.get_json(silent=True) or {}
     try:
@@ -215,7 +216,11 @@ def servo():
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "angle must be a number"}), 400
     angle = max(0.0, min(180.0, angle))
+    dry = getattr(_runner, "dry_run", "?")
+    bridge = getattr(_runner, "bridge", "?")
+    print(f"[servo] angle={angle}  dry_run={dry}  bridge={bridge}", flush=True)
     _runner.send_claw(angle)
+    print(f"[servo] send_claw done", flush=True)
     return jsonify({"ok": True, "angle": angle})
 
 
