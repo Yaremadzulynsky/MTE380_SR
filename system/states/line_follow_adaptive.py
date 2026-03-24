@@ -22,7 +22,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     if not det.red_found:
-        return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
+        return ControlOutput(left=sm._adaptive_last_left, right=sm._adaptive_last_right, claw=None, state=sm.state)
 
     sm._last_curvature = det.curvature
 
@@ -47,4 +47,6 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     left  = _clamp(fwd + turn, -1.0, 1.0)
     right = _clamp(fwd - turn, -1.0, 1.0)
     left, right = scale_pair_to_max_speed(sm, left, right)
+    sm._adaptive_last_left  = left
+    sm._adaptive_last_right = right
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)
