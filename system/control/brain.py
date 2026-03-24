@@ -90,6 +90,8 @@ class RobotBrain:
         self._frame_n    = 0
         self._t_start    = time.monotonic()
         self._last_idle_telem = 0.0
+        self._cam_fps     = 0.0
+        self._last_frame_t = 0.0
 
         # ── Loop display / telemetry settings (populated by start_loop) ───────
         self._no_display    = True
@@ -392,6 +394,7 @@ class RobotBrain:
             "motor_telem": self._speed_ctrl.telemetry_line(),
             "lateral_turn": lateral_turn,
             "heading_turn": heading_turn,
+            "cam_fps":     round(self._cam_fps, 1),
         }
 
     # ── Main loop ─────────────────────────────────────────────────────────────
@@ -488,6 +491,7 @@ class RobotBrain:
                 self._mode = "idle"
             return
 
+        self._update_cam_fps()
         det          = self._perception.detect(frame)
         enc_l, enc_r = self.encoder_ticks
 
@@ -564,12 +568,23 @@ class RobotBrain:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
+    def _update_cam_fps(self) -> None:
+        """EMA update of camera FPS — call once per frame read."""
+        now = time.monotonic()
+        if self._last_frame_t > 0.0:
+            dt = now - self._last_frame_t
+            if dt > 0.0:
+                instant = 1.0 / dt
+                self._cam_fps = 0.1 * instant + 0.9 * self._cam_fps if self._cam_fps > 0.0 else instant
+        self._last_frame_t = now
+
     def _idle_camera_tick(self) -> None:
         """Read one frame and run detection so web streams stay live outside mission mode."""
         if self._perception is None:
             return
         frame = self._perception.read_frame()
         if frame is not None:
+            self._update_cam_fps()
             det = self._perception.detect(frame)
             with self._lock:
                 self._last_det = det

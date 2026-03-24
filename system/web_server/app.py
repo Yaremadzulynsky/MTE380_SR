@@ -161,6 +161,7 @@ def get_status():
         "green_found":  det.green_found if det else False,
         "lateral_turn": snap["lateral_turn"],
         "heading_turn": snap["heading_turn"],
+        "cam_fps":      snap["cam_fps"],
     })
 
 
