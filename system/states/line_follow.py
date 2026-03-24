@@ -1,33 +1,21 @@
+"""
+LINE_FOLLOW dispatcher — selects behaviour based on cfg.line_follow_mode:
+  0  simple     steer + slow on curvature + stop when lost
+  1  find_line  steer + slow on curvature + FIND_LINE when lost
+  2  pid_turn   steer + slow on curvature + PID_TURN on sharp corner
+"""
 from __future__ import annotations
 
-from states import ControlOutput, State, steer, _clamp
-import states.corner_turn as _corner_turn
+from states import ControlOutput
+import states.line_follow_simple   as _simple
+import states.line_follow_find     as _find
+import states.line_follow_pid_turn as _pid_turn
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
-    # Corner detected → drive forward then turn 90°
-    # if (det.red_found
-    #         and abs(det.curvature) >= sm.cfg.corner_curvature_thresh
-    #         and det.curve_conf >= sm.cfg.corner_curve_conf_min):
-    #     _corner_turn.on_enter(sm, det, left_ticks, right_ticks)
-    #     sm._enter(State.CORNER_TURN, left_ticks, right_ticks)
-    #     return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-
-    # Blue target visible → stop steering and drive straight to pickup point
-    if det.blue_found:
-        sm._enter(State.DRIVE_FORWARD, left_ticks, right_ticks)
-        return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-
-    # No line — stop and wait
-    if not det.red_found:
-        return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-
-    # Line found — store curvature for FIND_LINE recovery, then steer
-    sm._last_curvature = det.curvature
-
-    # Reduce base speed as curvature grows: min_speed at corner_curvature_thresh, base_speed at 0
-    curv_scale = _clamp(1.0 - abs(det.curvature) / sm.cfg.corner_curvature_thresh, 0.0, 1.0)
-    adj_base = sm.cfg.min_speed + (sm.cfg.base_speed - sm.cfg.min_speed) * curv_scale
-
-    left, right = steer(sm, det.red_error, base_speed=adj_base)
-    return ControlOutput(left=left, right=right, claw=None, state=sm.state)
+    mode = sm.cfg.line_follow_mode
+    if mode == 1:
+        return _find.step(sm, det, left_ticks, right_ticks)
+    if mode == 2:
+        return _pid_turn.step(sm, det, left_ticks, right_ticks)
+    return _simple.step(sm, det, left_ticks, right_ticks)

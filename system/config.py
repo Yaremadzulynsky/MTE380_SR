@@ -27,6 +27,10 @@ _CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 @dataclass
 class Config:
+    # ── Line follow mode ──────────────────────────────────────────────────────
+    line_follow_mode: int = 0        # 0=simple  1=find_line  2=pid_turn
+    simple_curv_thresh: float = 0.5  # curvature at which simple mode reaches min_speed
+
     # ── Steering PID ─────────────────────────────────────────────────────────
     steer_kp:        float = 0.65
     steer_ki:        float = 0.04
@@ -111,6 +115,9 @@ class Config:
 # ── YAML serialisation ────────────────────────────────────────────────────────
 
 _SECTIONS: list[tuple[str, list[str]]] = [
+    ("Line follow mode", [
+        "line_follow_mode", "simple_curv_thresh",
+    ]),
     ("Steering PID", [
         "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
     ]),

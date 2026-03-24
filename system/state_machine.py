@@ -25,7 +25,7 @@ from states import ControlOutput, State
 
 import states.line_follow   as _line_follow
 import states.find_line     as _find_line
-import states.corner_turn   as _corner_turn
+import states.pid_turn      as _pid_turn
 import states.drive_forward as _drive_forward
 import states.pickup        as _pickup
 import states.turn_180      as _turn_180
@@ -61,8 +61,8 @@ class MissionStateMachine:
             return _line_follow.step(self, det, left_ticks, right_ticks)
         if self.state == State.FIND_LINE:
             return _find_line.step(self, det, left_ticks, right_ticks)
-        if self.state == State.CORNER_TURN:
-            return _corner_turn.step(self, det, left_ticks, right_ticks)
+        if self.state == State.PID_TURN:
+            return _pid_turn.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return _drive_forward.step(self, left_ticks, right_ticks)
         if self.state == State.PICKUP:
