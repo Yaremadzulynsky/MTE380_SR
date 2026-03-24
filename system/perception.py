@@ -313,8 +313,7 @@ class Perception:
         """Background thread: capture frames continuously so the camera never waits on processing."""
         while not self._capture_stop.is_set():
             raw = self._cam.capture_array("main")
-            # Camera is mounted upside-down; rotate 180° to correct orientation.
-            frame = cv2.rotate(raw, cv2.ROTATE_180)
+            frame = np.ascontiguousarray(raw)
             if self._camera_rotation_deg != 0.0:
                 h, w = frame.shape[:2]
                 M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -self._camera_rotation_deg, 1.0)
