@@ -51,6 +51,9 @@ class FrameDetection:
     curve_heading: float = 0.0  # local heading slope at robot position (+ve = angled right)
     curve_conf: float = 0.0   # fraction of strips that had valid data [0, 1]
     curve_pts: list | None = None  # full-frame (x, y) of each strip centroid
+    # Horizontal red pixel balance: (right_px - left_px) / total_px  in [-1, 1]
+    # +1 = all red on right half, -1 = all red on left half, 0 = balanced / not found
+    red_horiz_balance: float = 0.0
 
 
 class Perception:
@@ -172,9 +175,17 @@ class Perception:
                 + self._error_curvature_weight * curvature,
                 -1.0, 1.0,
             )
+            # Horizontal red pixel balance: (right - left) / total  in [-1, 1]
+            mask = self._last_red_mask
+            half = mask.shape[1] // 2
+            left_px  = int(np.count_nonzero(mask[:, :half]))
+            right_px = int(np.count_nonzero(mask[:, half:]))
+            total_px = left_px + right_px
+            red_horiz_balance = (right_px - left_px) / total_px if total_px > 0 else 0.0
         else:
             curvature = curve_heading = curve_conf = 0.0
             curve_pts = []
+            red_horiz_balance = 0.0
 
         return FrameDetection(
             red_found=red_found,
@@ -189,6 +200,7 @@ class Perception:
             curve_heading=curve_heading,
             curve_conf=curve_conf,
             curve_pts=curve_pts if curve_pts else None,
+            red_horiz_balance=red_horiz_balance,
         )
 
     def get_red_mask_frame(self) -> np.ndarray | None:

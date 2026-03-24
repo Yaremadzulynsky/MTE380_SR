@@ -1,14 +1,15 @@
-"""LINE_FOLLOW mode 3 — adaptive blend between line error and horizontal bias.
+"""LINE_FOLLOW mode 3 — adaptive blend between line error and horizontal pixel balance.
 
 adaptive_curv_a is a 0–1 tradeoff between forward driving and lateral recovery:
   a=0  full forward at base_speed, steer purely on red_error
-  a=1  forward=0, steer purely on coverage_loss * horiz_bias (spin toward more-red side)
+  a=1  forward=0, steer purely on red_horiz_balance (pixel count left vs right)
 
   forward   = base_speed * (1 - a)
-  steer_err = (1-a) * red_error  +  a * coverage_loss * horiz_bias
+  steer_err = (1-a) * red_error  +  a * red_horiz_balance
 
-coverage_loss = 1 - curve_conf  (0 = all strips see red, 1 = no strips see red)
-horiz_bias    = +1 if tape centroid is right of frame centre, -1 if left
+red_horiz_balance = (right_px - left_px) / total_px  in [-1, 1]
+  +1 = all red on right half of frame → steer right
+  -1 = all red on left half           → steer left
 """
 from __future__ import annotations
 
@@ -28,20 +29,11 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if det.tape_cx_px is not None:
         sm._find_line_turn_cw = det.tape_cx_px > sm.cfg.camera_width / 2.0
 
-    # coverage_loss: 0 = full vertical coverage, 1 = no strips detected
-    coverage_loss = 1.0 - _clamp(det.curve_conf, 0.0, 1.0)
-
-    # horiz_bias: +1 right, -1 left
-    if det.tape_cx_px is not None:
-        horiz_bias = 1.0 if det.tape_cx_px > sm.cfg.camera_width / 2.0 else -1.0
-    else:
-        horiz_bias = 0.0
-
     a = _clamp(sm.cfg.adaptive_curv_a, 0.0, 1.0)
 
-    # Blend error: red_error at a=0, horizontal bias at a=1
+    # Blend: red_error at a=0, pixel balance at a=1
     blended = _clamp(
-        (1.0 - a) * det.red_error + a * coverage_loss * horiz_bias,
+        (1.0 - a) * det.red_error + a * det.red_horiz_balance,
         -1.0, 1.0,
     )
 
