@@ -155,6 +155,7 @@ class RobotBrain:
                 sm.state = State(initial_state)
             except ValueError:
                 print(f"[go] unknown initial_state {initial_state!r} — using LINE_FOLLOW", flush=True)
+        self.send_claw(fresh.claw_open)
         with self._lock:
             self._sm   = sm
             self._mode = "mission"
