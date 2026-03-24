@@ -28,12 +28,13 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
 
     # ── Phase 2: align in place with line heading ─────────────────────────────
     if sm._fwd_phase == "align":
-        if not det.red_found or abs(det.curve_heading) < sm.cfg.forward_align_thresh:
-            sm._fwd_phase = "drive"
-            sm._fwd_drive_until = time.monotonic() + sm.cfg.forward_drive_s
-        else:
-            turn = _clamp(sm._heading_pid(-det.curve_heading), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
-            return ControlOutput(left=turn, right=-turn, claw=None, state=sm.state)
+        sm._fwd_phase = "drive"
+        # if not det.red_found or abs(det.curve_heading) < sm.cfg.forward_align_thresh:
+        #     sm._fwd_phase = "drive"
+        #     sm._fwd_drive_until = time.monotonic() + sm.cfg.forward_drive_s
+        # else:
+        #     turn = _clamp(sm._heading_pid(-det.curve_heading), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
+        #     return ControlOutput(left=turn, right=-turn, claw=None, state=sm.state)
 
     # ── Phase 3: timed drive ──────────────────────────────────────────────────
     if time.monotonic() >= sm._fwd_drive_until:
