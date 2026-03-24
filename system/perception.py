@@ -39,9 +39,9 @@ _GREEN_MIN_AREA = 1500.0
 class FrameDetection:
     red_found:   bool       # red line detected in ROI
     red_error:   float      # [-1, 1], positive = line is right of centre
-    blue_found:    bool       # blue target marker visible
-    blue_cx_norm:  float | None = None  # blue centroid x in [-1, 1], +ve = right; None if not found
+    blue_found:  bool       # blue target marker visible
     green_found: bool       # green stop marker visible
+    blue_cx_norm: float | None = None  # blue centroid x in [-1, 1], +ve = right; None if not found
     # Full-frame pixels for overlays (None when red not found / not yet tracked)
     tape_cx_px: float | None = None   # horizontal centre of tape (mask centroid)
     tape_cy_px: float | None = None   # vertical centre of mask centroid
