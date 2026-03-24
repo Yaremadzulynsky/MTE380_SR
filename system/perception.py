@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import threading
 
 import cv2
 import numpy as np
@@ -90,6 +91,7 @@ class Perception:
         self._curve_n_strips = max(2, int(c.curve_n_strips))
         self._error_heading_weight   = float(c.error_heading_weight)
         self._error_curvature_weight = float(c.error_curvature_weight)
+        self._camera_rotation_deg    = float(c.camera_rotation_deg)
 
         # Raw-red debounce + EMA (see _stabilize_red)
         self._red_miss_streak = 0
@@ -107,6 +109,12 @@ class Perception:
         self._last_blue_mask:   np.ndarray | None = None
         self.mask_channel: str = "red"   # "red" | "green" | "blue"
 
+        # Background capture — camera runs continuously; _capture_buf holds latest frame.
+        self._capture_buf:  np.ndarray | None = None
+        self._capture_lock  = threading.Lock()
+        self._capture_event = threading.Event()
+        self._capture_stop  = threading.Event()
+
         self._cam = Picamera2()
         frame_us = int(1_000_000 / max(c.fps, 1.0))
         cam_cfg = self._cam.create_video_configuration(
@@ -117,6 +125,11 @@ class Perception:
         self._cam.configure(cam_cfg)
         self._cam.start()
 
+        self._capture_thread = threading.Thread(
+            target=self._capture_loop, daemon=True, name="cam-capture"
+        )
+        self._capture_thread.start()
+
     def reconfigure(self, cfg: Config) -> None:
         """Apply updated config values without reopening the camera."""
         self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
@@ -125,6 +138,7 @@ class Perception:
         self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
         self._error_heading_weight    = float(cfg.error_heading_weight)
         self._error_curvature_weight  = float(cfg.error_curvature_weight)
+        self._camera_rotation_deg     = float(cfg.camera_rotation_deg)
         self._update_hsv_ranges(cfg)
 
     def _update_hsv_ranges(self, cfg: Config) -> None:
@@ -142,11 +156,11 @@ class Perception:
     # ── Public ────────────────────────────────────────────────────────────────
 
     def read_frame(self) -> np.ndarray | None:
-        raw = self._cam.capture_array("main")
-        # Picamera2 labels the stream "RGB888" but on Pi the buffer is typically BGR.
-        # Do NOT convert — treat the raw bytes as BGR directly (matches OpenCV convention).
-        # Camera is mounted upside-down; rotate 180° to correct orientation.
-        frame = np.ascontiguousarray(np.rot90(raw, 2))
+        """Block until a new frame is available from the background capture thread."""
+        self._capture_event.wait()
+        self._capture_event.clear()
+        with self._capture_lock:
+            frame = self._capture_buf
         self._last_frame = frame
         return frame
 
@@ -225,6 +239,8 @@ class Perception:
         return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
 
     def release(self) -> None:
+        self._capture_stop.set()
+        self._capture_thread.join(timeout=2.0)
         self._cam.stop()
         self._cam.close()
 
@@ -291,6 +307,20 @@ class Perception:
         return out
 
     # ── Internals ─────────────────────────────────────────────────────────────
+
+    def _capture_loop(self) -> None:
+        """Background thread: capture frames continuously so the camera never waits on processing."""
+        while not self._capture_stop.is_set():
+            raw = self._cam.capture_array("main")
+            # Camera is mounted upside-down; rotate 180° to correct orientation.
+            frame = cv2.rotate(raw, cv2.ROTATE_180)
+            if self._camera_rotation_deg != 0.0:
+                h, w = frame.shape[:2]
+                M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -self._camera_rotation_deg, 1.0)
+                frame = cv2.warpAffine(frame, M, (w, h))
+            with self._capture_lock:
+                self._capture_buf = frame
+            self._capture_event.set()
 
     def _stabilize_red(
         self,
