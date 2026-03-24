@@ -143,7 +143,8 @@ class Perception:
         raw = self._cam.capture_array("main")
         # Picamera2 labels the stream "RGB888" but on Pi the buffer is typically BGR.
         # Do NOT convert — treat the raw bytes as BGR directly (matches OpenCV convention).
-        frame = np.ascontiguousarray(raw)
+        # Camera is mounted upside-down; rotate 180° to correct orientation.
+        frame = np.ascontiguousarray(np.rot90(raw, 2))
         self._last_frame = frame
         return frame
 
