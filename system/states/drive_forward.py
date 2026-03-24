@@ -37,7 +37,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if det.red_found:
         steer = _clamp(sm._heading_pid(-det.curve_heading), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
 
-    fwd = sm.cfg.base_speed
+    fwd = sm.cfg.forward_drive_speed
     left  = _clamp(fwd + steer, -1.0, 1.0)
     right = _clamp(fwd - steer, -1.0, 1.0)
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)

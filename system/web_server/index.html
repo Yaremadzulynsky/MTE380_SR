@@ -444,6 +444,10 @@
         <div class="field-label-row"><label for="forward_drive_s">drive time (s)</label><button type="button" class="info-btn" data-help="forward_drive_s" aria-label="Help: forward_drive_s">i</button></div>
         <input type="number" id="forward_drive_s" step="0.1" min="0" max="30" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="forward_drive_speed">drive speed</label><button type="button" class="info-btn" data-help="forward_drive_speed" aria-label="Help: forward_drive_speed">i</button></div>
+        <input type="number" id="forward_drive_speed" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -722,7 +726,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "error_heading_weight", "error_curvature_weight",
-      "forward_drive_s",
+      "forward_drive_s", "forward_drive_speed",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed",
       "corner_curvature_thresh", "curve_n_strips",
@@ -768,6 +772,7 @@
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
       forward_drive_s:         [0,    30,     0.1   ],
+      forward_drive_speed:     [0,    1,      0.01  ],
       green_delay_s:           [0,    30,     0.1   ],
       dropoff_distance_m:      [0,    5,      0.01  ],
       find_line_turn_speed:    [0,    1,      0.01  ],
