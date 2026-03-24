@@ -16,10 +16,6 @@ from states import ControlOutput, State, scale_pair_to_max_speed, _clamp
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
-    if det.blue_found:
-        sm._enter(State.DRIVE_FORWARD, left_ticks, right_ticks)
-        return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-
     if not det.red_found:
         sm._enter(State.FIND_LINE, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)

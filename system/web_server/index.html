@@ -301,23 +301,11 @@
     <h2>Line Follow Mode</h2>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="line_follow_mode">mode (0–5)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
-        <input type="number" id="line_follow_mode" step="1" min="0" max="5" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="simple_curv_thresh">simple curv thresh</label><button type="button" class="info-btn" data-help="simple_curv_thresh" aria-label="Help: simple_curv_thresh">i</button></div>
-        <input type="number" id="simple_curv_thresh" step="0.05" min="0.05" max="5" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="adaptive_curv_a">adaptive curv a</label><button type="button" class="info-btn" data-help="adaptive_curv_a" aria-label="Help: adaptive_curv_a">i</button></div>
-        <input type="number" id="adaptive_curv_a" step="0.05" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="curv_speed_bias">curv speed bias</label><button type="button" class="info-btn" data-help="curv_speed_bias" aria-label="Help: curv_speed_bias">i</button></div>
-        <input type="number" id="curv_speed_bias" step="0.1" min="0.1" max="5" />
+        <div class="field-label-row"><label for="line_follow_mode">mode (1 or 4)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
+        <input type="number" id="line_follow_mode" step="1" min="1" max="4" />
       </div>
     </div>
-    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (pixel balance blend) &nbsp;|&nbsp; 4 = find heading (lateral + heading PID, FIND_LINE on loss) &nbsp;|&nbsp; 5 = slow down (find line + time-based speed ramp)</p>
+    <p class="hint">1 = find line (steer + slow on curvature, spin to recover when lost) &nbsp;|&nbsp; 4 = find heading (lateral PID + heading PID, FIND_LINE on loss)</p>
   </div>
 
   <!-- Line error: perception -->
@@ -454,41 +442,13 @@
     </div>
   </div>
 
-  <!-- Slow Down (mode 5) -->
-  <div class="card">
-    <h2>Slow Down — time-based speed ramp (mode 5)</h2>
-    <div class="fields">
-      <div class="field">
-        <div class="field-label-row"><label for="slow_down_after_s">start after (s)</label><button type="button" class="info-btn" data-help="slow_down_after_s" aria-label="Help: slow_down_after_s">i</button></div>
-        <input type="number" id="slow_down_after_s" step="0.5" min="0" max="60" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="slow_down_ramp_s">ramp duration (s)</label><button type="button" class="info-btn" data-help="slow_down_ramp_s" aria-label="Help: slow_down_ramp_s">i</button></div>
-        <input type="number" id="slow_down_ramp_s" step="0.5" min="0.5" max="30" />
-      </div>
-    </div>
-    <p class="hint">After <em>start after</em> seconds in LINE_FOLLOW, base speed linearly ramps from base_speed → min_speed over <em>ramp duration</em> seconds.</p>
-  </div>
-
   <!-- Corner Turn -->
   <div class="card">
-    <h2>Corner Turn — curvature-triggered 90° turn</h2>
+    <h2>Corner Turn — curvature threshold</h2>
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="corner_curvature_thresh">curvature thresh</label><button type="button" class="info-btn" data-help="corner_curvature_thresh" aria-label="Help: corner_curvature_thresh">i</button></div>
         <input type="number" id="corner_curvature_thresh" step="0.05" min="0" max="2" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="corner_curve_conf_min">conf min (strips)</label><button type="button" class="info-btn" data-help="corner_curve_conf_min" aria-label="Help: corner_curve_conf_min">i</button></div>
-        <input type="number" id="corner_curve_conf_min" step="0.1" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="corner_forward_m">forward (m)</label><button type="button" class="info-btn" data-help="corner_forward_m" aria-label="Help: corner_forward_m">i</button></div>
-        <input type="number" id="corner_forward_m" step="0.01" min="0" max="2" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="corner_forward_speed">forward speed</label><button type="button" class="info-btn" data-help="corner_forward_speed" aria-label="Help: corner_forward_speed">i</button></div>
-        <input type="number" id="corner_forward_speed" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="curve_n_strips">curve strips</label><button type="button" class="info-btn" data-help="curve_n_strips" aria-label="Help: curve_n_strips">i</button></div>
@@ -729,7 +689,7 @@
   <script>
     // All keys match the JSON keys in config.yaml exactly.
     const KEYS = [
-      "line_follow_mode", "simple_curv_thresh", "adaptive_curv_a", "curv_speed_bias",
+      "line_follow_mode",
       "heading_kp", "heading_ki", "heading_kd",
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
@@ -737,9 +697,7 @@
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "error_heading_weight", "error_curvature_weight",
       "forward_ticks", "forward_speed",
       "find_line_turn_speed",
-      "slow_down_after_s", "slow_down_ramp_s",
-      "corner_curvature_thresh", "corner_curve_conf_min",
-      "corner_forward_m", "corner_forward_speed", "curve_n_strips",
+      "corner_curvature_thresh", "curve_n_strips",
       "turn_speed", "turn_duration_s",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
@@ -782,16 +740,8 @@
       error_curvature_weight:  [0,    1,      0.05  ],
       forward_ticks:           [0,    3000,   10    ],
       forward_speed:           [0,    1,      0.01  ],
-      simple_curv_thresh:      [0.05, 5,      0.05  ],
-      adaptive_curv_a:         [0,    1,      0.05  ],
-      curv_speed_bias:         [0.1,  5,      0.1   ],
       find_line_turn_speed:    [0,    1,      0.01  ],
-      slow_down_after_s:       [0,    60,     0.5   ],
-      slow_down_ramp_s:        [0.5,  30,     0.5   ],
       corner_curvature_thresh: [0,    2,      0.05  ],
-      corner_curve_conf_min:   [0,    1,      0.1   ],
-      corner_forward_m:        [0,    2,      0.01  ],
-      corner_forward_speed:    [0,    1,      0.01  ],
       curve_n_strips:          [2,    20,     1     ],
       turn_speed:              [0,    1,      0.01  ],
       turn_duration_s:         [0,    6,      0.05  ],
@@ -1080,35 +1030,11 @@
       // ── Line follow mode ────────────────────────────────────────────
       line_follow_mode: {
         title: "line_follow_mode",
-        what: "Selects the active line-follow behaviour: 0 = simple (stops when line lost), 1 = find_line (spins to recover when lost), 2 = pid_turn (triggers 90° PID turn on sharp curvature), 3 = adaptive (blends error with horizontal bias based on vertical coverage), 4 = find_heading (lateral + heading PID, FIND_LINE on loss), 5 = slow_down (like find_line but ramps base speed from base_speed to min_speed after slow_down_after_s seconds).",
-        inc: "Switches to the next mode (higher number).",
-        dec: "Switches to a simpler / earlier mode.",
-        whenInc: "Simple mode is too passive and the robot loses the line at corners — try 1 or 3.",
-        whenDec: "Advanced mode is causing erratic behaviour; revert to simple for baseline tuning.",
-      },
-      simple_curv_thresh: {
-        title: "simple_curv_thresh",
-        what: "Curvature magnitude at which mode 0 (simple) reduces forward speed all the way to min_speed. Below this threshold speed scales linearly. Only used in mode 0.",
-        inc: "Robot reaches min_speed only at sharper curves; stays faster on moderate bends.",
-        dec: "Slows earlier on mild curves; more conservative cornering.",
-        whenInc: "Robot slows too much on gentle curves where it doesn't need to.",
-        whenDec: "Robot enters corners too fast and loses the line.",
-      },
-      adaptive_curv_a: {
-        title: "adaptive_curv_a — Adaptive mode tradeoff [0–1]",
-        what: "Single 0–1 knob in mode 3. At 0: full forward speed (base_speed), steer on red_error only. At 1: forward=0 (spin in place), steer purely on horizontal bias × coverage_loss. In between it blends both. forward = base_speed × (1−a). error = (1−a)×red_error + a×coverage_loss×horiz_bias.",
-        inc: "Less forward speed, more lateral bias — robot turns harder toward the side with more red as the line fades.",
-        dec: "More forward speed, less bias — closer to normal line following.",
-        whenInc: "Robot drives past corners without turning; needs to slow and steer toward the line.",
-        whenDec: "Robot slows or spins too much on normal straight segments; reduce to restore forward drive.",
-      },
-      curv_speed_bias: {
-        title: "curv_speed_bias — Curvature speed curve shape",
-        what: "Power exponent applied to the normalised curvature before speed scaling (modes 0–2). 1 = linear. >1 = speed drops faster at lower curvature (more aggressive). <1 = speed stays high until near the threshold, then drops sharply.",
-        inc: "Speed starts dropping sooner, even on mild bends.",
-        dec: "Keeps speed higher for longer, only slowing near the threshold.",
-        whenInc: "Robot enters moderate curves too fast despite a reasonable threshold.",
-        whenDec: "Robot brakes too early on every gentle turn; you want it to stay fast until corners are sharp.",
+        what: "Selects the active line-follow behaviour: 1 = find_line (steer + slow on curvature, spins to recover when lost), 4 = find_heading (lateral PID + heading PID, FIND_LINE on loss).",
+        inc: "Switches to mode 4 (find_heading).",
+        dec: "Switches to mode 1 (find_line).",
+        whenInc: "Mode 1 cannot stay on the line around curves; try mode 4 for heading correction.",
+        whenDec: "Mode 4 heading PID is causing oscillation; revert to mode 1 for baseline tuning.",
       },
 
       // ── Line error perception ───────────────────────────────────────
@@ -1155,56 +1081,14 @@
         whenDec: "Robot spins past the line every time; slow it down so it catches the edge.",
       },
 
-      // ── Slow down ───────────────────────────────────────────────────
-      slow_down_after_s: {
-        title: "slow_down_after_s",
-        what: "Seconds spent in LINE_FOLLOW before the speed ramp begins (mode 5 only). Before this threshold the robot follows at base_speed; after it, speed ramps linearly down to min_speed.",
-        inc: "Stays at full speed longer before slowing; useful if the slow section starts later on the course.",
-        dec: "Begins slowing sooner after the state is entered.",
-        whenInc: "Robot reaches the slow section still decelerating — start the ramp later.",
-        whenDec: "Robot is still at full speed when it should already be slowing — bring the threshold forward.",
-      },
-      slow_down_ramp_s: {
-        title: "slow_down_ramp_s",
-        what: "Duration in seconds over which base speed linearly ramps from base_speed down to min_speed once slow_down_after_s has elapsed (mode 5 only).",
-        inc: "Gentler, more gradual deceleration over a longer stretch.",
-        dec: "Faster drop to min_speed; abrupt if very short.",
-        whenInc: "Speed drop feels harsh or causes the robot to lose the line due to sudden deceleration.",
-        whenDec: "Robot needs to reach min_speed quickly within a short window.",
-      },
-
       // ── Corner turn ─────────────────────────────────────────────────
       corner_curvature_thresh: {
         title: "corner_curvature_thresh",
-        what: "Curvature magnitude that triggers a PID_TURN in mode 2, and the denominator for speed scaling in modes 1 and 2. Curvature is the polynomial a-coefficient from the N-strip fit.",
-        inc: "Requires a sharper bend before triggering a corner turn; more of the path followed as line-follow.",
-        dec: "Triggers earlier on gentler curves; may cause spurious turns on mild bends.",
-        whenInc: "Robot turns at corners that aren't really 90° (false triggers).",
-        whenDec: "Robot misses sharp corners and runs off the track instead of turning.",
-      },
-      corner_curve_conf_min: {
-        title: "corner_curve_conf_min",
-        what: "Minimum fraction of strips [0–1] that must have valid red data before a corner trigger is accepted. Guards against triggering on a single noisy strip.",
-        inc: "Requires more strips to agree; fewer false triggers but may miss corners with partial occlusion.",
-        dec: "Triggers with fewer valid strips; quicker response but noisier.",
-        whenInc: "Spurious corner turns from noise when only 1–2 strips see red.",
-        whenDec: "Corner is not triggering because too many strips are occluded at the critical moment.",
-      },
-      corner_forward_m: {
-        title: "corner_forward_m",
-        what: "Distance (metres) to drive straight forward before beginning the rotation phase of a PID turn. Positions the robot's axle at the corner pivot point.",
-        inc: "Drives further past the corner before rotating; useful if axle is well behind the camera.",
-        dec: "Rotates sooner; may pivot short of the corner.",
-        whenInc: "Robot rotates with the corner still in front of it, ending up inside the turn.",
-        whenDec: "Robot has driven too far past the corner before turning, ending up outside.",
-      },
-      corner_forward_speed: {
-        title: "corner_forward_speed",
-        what: "Motor speed fraction during the short forward drive at the start of a PID turn (before rotation begins).",
-        inc: "Faster approach to pivot point; shorter time but harder to stop accurately.",
-        dec: "Slower, more controlled advance to the pivot.",
-        whenInc: "Forward phase takes too long; general pace feels slow.",
-        whenDec: "Overshoots the intended pivot distance.",
+        what: "Curvature magnitude used as the denominator for speed scaling in line-follow modes. Higher curvature readings slow the robot toward min_speed. Curvature is the polynomial a-coefficient from the N-strip fit.",
+        inc: "Requires a sharper bend before slowing; robot stays faster on moderate curves.",
+        dec: "Slows earlier on gentler curves; more conservative cornering.",
+        whenInc: "Robot slows too much on mild bends where full speed is fine.",
+        whenDec: "Robot enters sharp corners too fast and loses the line.",
       },
       curve_n_strips: {
         title: "curve_n_strips",

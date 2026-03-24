@@ -1,0 +1,92 @@
+# Line follow mode
+line_follow_mode: 4
+simple_curv_thresh: 0.8
+adaptive_curv_a: 0.85
+curv_speed_bias: 0.1
+
+# Steering PID
+steer_kp: 0.15
+steer_ki: 0.0
+steer_kd: 0.03
+steer_out_limit: 1.0
+
+# Heading PID
+heading_kp: 0.2
+heading_ki: 0.0
+heading_kd: 0.0
+
+# Motor PID
+motor_kp: 0.004
+motor_ki: 0.01
+motor_kd: 0.0001
+
+# Speed
+base_speed: 0.3
+min_speed: 0.15
+max_speed: 0.6
+
+# Drive-forward
+forward_ticks: 800
+forward_speed: 0.25
+
+# 180-degree turn
+turn_speed: 0.3
+turn_duration_s: 2.2
+
+# Controllers
+wheel_diameter_m: 0.08
+wheelbase_m: 0.188
+rot_kp: 0.3
+rot_ki: 0.05
+rot_kd: 0.0
+rot_tolerance: 1.0
+rot_motor_deadband: 0.35
+pos_kp: 0.05
+pos_ki: 0.0
+pos_kd: 0.0
+pos_tolerance_m: 0.01
+pos_motor_deadband: 0.3
+
+# Claw / servo
+claw_open: 0.0
+claw_closed: 90.0
+pickup_hold_s: 0.8
+
+# Find line
+find_line_turn_speed: 0.2
+
+# Slow down
+slow_down_after_s: 10.0
+slow_down_ramp_s: 5.0
+
+# Corner turn
+corner_curvature_thresh: 0.3
+corner_curve_conf_min: 0.6
+corner_forward_m: 0.25
+corner_forward_speed: 0.5
+
+# Vision / perception
+red_loss_debounce_frames: 2
+red_error_ema_alpha: 0.35
+line_axle_extrap: 1.0
+curve_n_strips: 8
+error_heading_weight: 0.0
+error_curvature_weight: 0.0
+
+# Line detection HSV
+red_h_lo1: 0
+red_h_hi1: 10
+red_h_lo2: 161
+red_h_hi2: 179
+red_s_min: 162
+red_v_min: 84
+blue_h_lo: 95
+blue_h_hi: 135
+blue_s_min: 120
+blue_v_min: 70
+
+# Camera / runtime
+camera_width: 640
+camera_height: 480
+fps: 30.0
+roi_top_ratio: 0.0

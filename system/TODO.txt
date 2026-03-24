@@ -1,1 +1,3 @@
 - run speed pid while running pos pid to ensure that wheels are running at same speed so robot drives straight
+
+- calculate target heading over an average of a few frames to smooth it out

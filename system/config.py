@@ -28,10 +28,7 @@ _CONFIG_PATH = Path(__file__).parent / "config.yaml"
 @dataclass
 class Config:
     # ── Line follow mode ──────────────────────────────────────────────────────
-    line_follow_mode: int = 0        # 0=simple  1=find_line  2=pid_turn  3=adaptive
-    simple_curv_thresh: float = 0.5  # curvature at which simple mode reaches min_speed
-    adaptive_curv_a: float = 0.3        # adaptive mode: single gain for speed reduction and horizontal bias
-    curv_speed_bias: float = 1.0    # power applied to normalised curvature before speed scaling (1=linear, >1=faster drop)
+    line_follow_mode: int = 1        # 1=find_line  4=find_heading
 
     # ── Steering PID ─────────────────────────────────────────────────────────
     steer_kp:        float = 0.65
@@ -86,15 +83,8 @@ class Config:
     # ── Find line ─────────────────────────────────────────────────────────────
     find_line_turn_speed: float = 0.20  # in-place spin voltage while searching
 
-    # ── Slow down (line_follow_mode 5) ────────────────────────────────────────
-    slow_down_after_s: float = 10.0   # seconds before speed ramp begins
-    slow_down_ramp_s:  float = 5.0    # seconds to ramp from base_speed to min_speed
-
     # ── Corner turn ───────────────────────────────────────────────────────────
-    corner_curvature_thresh: float = 0.3   # |curvature| above this triggers CORNER_TURN
-    corner_curve_conf_min:   float = 0.6   # minimum curve_conf required (fraction of strips)
-    corner_forward_m:        float = 0.2   # metres to drive forward before rotating
-    corner_forward_speed:    float = 0.25  # speed during forward drive phase
+    corner_curvature_thresh: float = 0.3   # denominator for curvature-based speed scaling
 
     # ── Vision / perception ───────────────────────────────────────────────────
     red_loss_debounce_frames: int   = 4
@@ -127,7 +117,7 @@ class Config:
 
 _SECTIONS: list[tuple[str, list[str]]] = [
     ("Line follow mode", [
-        "line_follow_mode", "simple_curv_thresh", "adaptive_curv_a", "curv_speed_bias",
+        "line_follow_mode",
     ]),
     ("Steering PID", [
         "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
@@ -158,12 +148,8 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Find line", [
         "find_line_turn_speed",
     ]),
-    ("Slow down", [
-        "slow_down_after_s", "slow_down_ramp_s",
-    ]),
     ("Corner turn", [
-        "corner_curvature_thresh", "corner_curve_conf_min",
-        "corner_forward_m", "corner_forward_speed",
+        "corner_curvature_thresh",
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha",
