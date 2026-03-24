@@ -37,6 +37,8 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     heading_turn = sm._heading_pid(-det.curve_heading)
     heading_turn = _clamp(heading_turn, -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
 
+    sm._heading_lateral_turn = lateral_turn
+    sm._heading_heading_turn = heading_turn
     turn = _clamp(lateral_turn + heading_turn, -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
 
     curv_scale = _clamp(1.0 - abs(det.curvature) / sm.cfg.corner_curvature_thresh, 0.0, 1.0)

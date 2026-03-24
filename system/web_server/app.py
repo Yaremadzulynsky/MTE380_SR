@@ -155,10 +155,12 @@ def get_status():
         "enc_r":     snap["enc_r"],
         "rpm_l":     snap["rpm_l"],
         "rpm_r":     snap["rpm_r"],
-        "red_found": det.red_found  if det else False,
-        "red_error": det.red_error  if det else 0.0,
-        "blue_found":det.blue_found if det else False,
-        "t_junction":det.t_junction if det else False,
+        "red_found":    det.red_found  if det else False,
+        "red_error":    det.red_error  if det else 0.0,
+        "blue_found":   det.blue_found if det else False,
+        "t_junction":   det.t_junction if det else False,
+        "lateral_turn": snap["lateral_turn"],
+        "heading_turn": snap["heading_turn"],
     })
 
 

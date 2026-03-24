@@ -48,6 +48,8 @@ class MissionStateMachine:
         self._find_line_turn_cw    = True   # updated by line_follow_find when red is seen
         self._adaptive_last_left   = 0.0    # last wheel outputs from adaptive mode
         self._adaptive_last_right  = 0.0
+        self._heading_lateral_turn = 0.0   # last lateral PID output (mode 4)
+        self._heading_heading_turn = 0.0   # last heading PID output (mode 4)
         self._consecutive_lost  = 0
 
         self._steer_pid = PID(

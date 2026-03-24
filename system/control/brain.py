@@ -359,6 +359,8 @@ class RobotBrain:
             output   = self._last_output
             sm_state = self._sm.state.value if self._sm else "N/A"
             running  = self._mode == "mission"
+            lateral_turn = self._sm._heading_lateral_turn if self._sm else 0.0
+            heading_turn = self._sm._heading_heading_turn if self._sm else 0.0
         enc_l, enc_r = self.encoder_ticks
         rpm_l, rpm_r = self.measured_rpm
         return {
@@ -369,6 +371,8 @@ class RobotBrain:
             "det":         det,
             "output":      output,
             "motor_telem": self._speed_ctrl.telemetry_line(),
+            "lateral_turn": lateral_turn,
+            "heading_turn": heading_turn,
         }
 
     # ── Main loop ─────────────────────────────────────────────────────────────

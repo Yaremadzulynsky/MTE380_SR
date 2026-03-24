@@ -301,8 +301,8 @@
     <h2>Line Follow Mode</h2>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="line_follow_mode">mode (0/1/2/3)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
-        <input type="number" id="line_follow_mode" step="1" min="0" max="4" />
+        <div class="field-label-row"><label for="line_follow_mode">mode (0–5)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
+        <input type="number" id="line_follow_mode" step="1" min="0" max="5" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="simple_curv_thresh">simple curv thresh</label><button type="button" class="info-btn" data-help="simple_curv_thresh" aria-label="Help: simple_curv_thresh">i</button></div>
@@ -317,7 +317,7 @@
         <input type="number" id="curv_speed_bias" step="0.1" min="0.1" max="5" />
       </div>
     </div>
-    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (pixel balance blend) &nbsp;|&nbsp; 4 = find heading (lateral + heading PID, FIND_LINE on loss)</p>
+    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (pixel balance blend) &nbsp;|&nbsp; 4 = find heading (lateral + heading PID, FIND_LINE on loss) &nbsp;|&nbsp; 5 = slow down (find line + time-based speed ramp)</p>
   </div>
 
   <!-- Line error: perception -->
@@ -452,6 +452,22 @@
         <input type="number" id="find_line_turn_speed" step="0.01" min="0" max="1" />
       </div>
     </div>
+  </div>
+
+  <!-- Slow Down (mode 5) -->
+  <div class="card">
+    <h2>Slow Down — time-based speed ramp (mode 5)</h2>
+    <div class="fields">
+      <div class="field">
+        <div class="field-label-row"><label for="slow_down_after_s">start after (s)</label><button type="button" class="info-btn" data-help="slow_down_after_s" aria-label="Help: slow_down_after_s">i</button></div>
+        <input type="number" id="slow_down_after_s" step="0.5" min="0" max="60" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="slow_down_ramp_s">ramp duration (s)</label><button type="button" class="info-btn" data-help="slow_down_ramp_s" aria-label="Help: slow_down_ramp_s">i</button></div>
+        <input type="number" id="slow_down_ramp_s" step="0.5" min="0.5" max="30" />
+      </div>
+    </div>
+    <p class="hint">After <em>start after</em> seconds in LINE_FOLLOW, base speed linearly ramps from base_speed → min_speed over <em>ramp duration</em> seconds.</p>
   </div>
 
   <!-- Corner Turn -->
@@ -721,6 +737,7 @@
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "error_heading_weight", "error_curvature_weight",
       "forward_ticks", "forward_speed",
       "find_line_turn_speed",
+      "slow_down_after_s", "slow_down_ramp_s",
       "corner_curvature_thresh", "corner_curve_conf_min",
       "corner_forward_m", "corner_forward_speed", "curve_n_strips",
       "turn_speed", "turn_duration_s",
@@ -769,6 +786,8 @@
       adaptive_curv_a:         [0,    1,      0.05  ],
       curv_speed_bias:         [0.1,  5,      0.1   ],
       find_line_turn_speed:    [0,    1,      0.01  ],
+      slow_down_after_s:       [0,    60,     0.5   ],
+      slow_down_ramp_s:        [0.5,  30,     0.5   ],
       corner_curvature_thresh: [0,    2,      0.05  ],
       corner_curve_conf_min:   [0,    1,      0.1   ],
       corner_forward_m:        [0,    2,      0.01  ],
@@ -1061,7 +1080,7 @@
       // ── Line follow mode ────────────────────────────────────────────
       line_follow_mode: {
         title: "line_follow_mode",
-        what: "Selects the active line-follow behaviour: 0 = simple (stops when line lost), 1 = find_line (spins to recover when lost), 2 = pid_turn (triggers 90° PID turn on sharp curvature), 3 = adaptive (blends error with horizontal bias based on vertical coverage).",
+        what: "Selects the active line-follow behaviour: 0 = simple (stops when line lost), 1 = find_line (spins to recover when lost), 2 = pid_turn (triggers 90° PID turn on sharp curvature), 3 = adaptive (blends error with horizontal bias based on vertical coverage), 4 = find_heading (lateral + heading PID, FIND_LINE on loss), 5 = slow_down (like find_line but ramps base speed from base_speed to min_speed after slow_down_after_s seconds).",
         inc: "Switches to the next mode (higher number).",
         dec: "Switches to a simpler / earlier mode.",
         whenInc: "Simple mode is too passive and the robot loses the line at corners — try 1 or 3.",
@@ -1134,6 +1153,24 @@
         dec: "Slower spin; more controlled but may not overcome static friction without the integral term.",
         whenInc: "Robot is slow to turn and consistently misses the line on the return swing.",
         whenDec: "Robot spins past the line every time; slow it down so it catches the edge.",
+      },
+
+      // ── Slow down ───────────────────────────────────────────────────
+      slow_down_after_s: {
+        title: "slow_down_after_s",
+        what: "Seconds spent in LINE_FOLLOW before the speed ramp begins (mode 5 only). Before this threshold the robot follows at base_speed; after it, speed ramps linearly down to min_speed.",
+        inc: "Stays at full speed longer before slowing; useful if the slow section starts later on the course.",
+        dec: "Begins slowing sooner after the state is entered.",
+        whenInc: "Robot reaches the slow section still decelerating — start the ramp later.",
+        whenDec: "Robot is still at full speed when it should already be slowing — bring the threshold forward.",
+      },
+      slow_down_ramp_s: {
+        title: "slow_down_ramp_s",
+        what: "Duration in seconds over which base speed linearly ramps from base_speed down to min_speed once slow_down_after_s has elapsed (mode 5 only).",
+        inc: "Gentler, more gradual deceleration over a longer stretch.",
+        dec: "Faster drop to min_speed; abrupt if very short.",
+        whenInc: "Speed drop feels harsh or causes the robot to lose the line due to sudden deceleration.",
+        whenDec: "Robot needs to reach min_speed quickly within a short window.",
       },
 
       // ── Corner turn ─────────────────────────────────────────────────
@@ -1592,7 +1629,8 @@
           `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
           `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
           `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
-          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}`;
+          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}  |  ` +
+          `lateral=${s.lateral_turn?.toFixed(3)}  heading=${s.heading_turn?.toFixed(3)}`;
         // Speed PID telemetry
         const spidEl = document.getElementById("spid-telem");
         if (spidEl) {
