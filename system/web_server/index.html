@@ -798,7 +798,7 @@
         title: "steer_kd",
         what: "Derivative gain: damps rapid changes in error — resists zig-zagging when the error changes quickly.",
         inc: "More damping; can calm oscillations but too much adds noise sensitivity and sluggish response.",
-        dec: "Snappier response to error changes; can help if steering feels “mushy,” but may increase oscillation.",
+        dec: “Snappier response to error changes; can help if steering feels sluggish, but may increase oscillation.”,
         whenInc: "Visible weaving or high-frequency wobble on the line; overshoot after corrections.",
         whenDec: "Steering feels overdamped or slow to react when error spikes; kd was raised too far.",
       },
@@ -807,7 +807,7 @@
         what: "Maximum magnitude of the steering PID output (caps how hard the robot can command differential turn).",
         inc: "Allows tighter / sharper turns at the cost of possible saturation and harsher motion.",
         dec: "Softer maximum steering; smoother but may not correct enough on sharp turns or large errors.",
-        whenInc: "Understeering on tight corners when error is large; robot never “turns hard enough.”",
+        whenInc: “Understeering on tight corners when error is large; robot never turns hard enough.”,
         whenDec: "Harsh jerks, wheel commands pegged, or instability when error is large.",
       },
       motor_kp: {
@@ -860,7 +860,7 @@
       },
       forward_distance_m: {
         title: “forward_distance_m”,
-        what: “Distance in metres to drive forward during the drive-to-pickup phase using the position PID (pos_kp/ki/kd). Speed is controlled by the PID output and the pos_motor_deadband.”,
+        what: “Distance in metres to drive forward during the drive-to-pickup phase using the position PID (pos_kp/ki/kd). Speed is controlled by the PID output and pos_motor_deadband.”,
         inc: “Longer forward segment; stops farther along the path.”,
         dec: “Shorter segment; stops earlier.”,
         whenInc: “Robot stops short of the pickup target.”,
@@ -887,7 +887,7 @@
         what: "Servo angle (degrees) for the fully open claw — release / clear to drive.",
         inc: "Opens wider if your servo range allows; needed if mechanism binds before fully open.",
         dec: "Less open; use if open position is too wide and hits structure.",
-        whenInc: "Object doesn’t release or claw snags when “open.”",
+        whenInc: “Object does not release or claw snags when open.”,
         whenDec: "Open position collides with frame or over-stresses servo.",
       },
       claw_closed: {
