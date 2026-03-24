@@ -6,11 +6,8 @@ from enum import Enum
 
 
 class State(Enum):
-    LINE_FOLLOW          = "LINE_FOLLOW"
-    FIND_LINE            = "FIND_LINE"
-    LINE_FOLLOW_REVERSED = "LINE_FOLLOW_REVERSED"
-    FIND_LINE_REVERSED   = "FIND_LINE_REVERSED"
-    PID_TURN      = "PID_TURN"
+    LINE_FOLLOW   = "LINE_FOLLOW"
+    FIND_LINE     = "FIND_LINE"
     DRIVE_FORWARD = "DRIVE_FORWARD"
     PICKUP        = "PICKUP"
     TURN_180      = "TURN_180"

@@ -3,11 +3,14 @@ Mission state machine.
 
 State sequence
 ──────────────
+LINE_FOLLOW   → FIND_LINE when red line lost
 LINE_FOLLOW   → DRIVE_FORWARD when blue target is seen
+FIND_LINE     → LINE_FOLLOW when red line reacquired
 DRIVE_FORWARD → PICKUP when encoder distance reached
 PICKUP        → TURN_180 when hold timer expires
 TURN_180      → LINE_FOLLOW (is_returning=True)
-LINE_FOLLOW   → DONE when T-junction detected (is_returning=True)
+LINE_FOLLOW   → DROP_OFF when green seen for >= green_delay_s (is_returning=True)
+DROP_OFF      → DONE
 DONE          : motors off
 
 Each state's logic lives in states/<state_name>.py.
@@ -23,12 +26,9 @@ from config import Config
 from perception import FrameDetection
 from states import ControlOutput, State
 
-import states.line_follow          as _line_follow
-import states.find_line            as _find_line
-import states.line_follow_reversed as _line_follow_reversed
-import states.find_line_reversed   as _find_line_reversed
-import states.pid_turn             as _pid_turn
-import states.drive_forward        as _drive_forward
+import states.line_follow   as _line_follow
+import states.find_line     as _find_line
+import states.drive_forward as _drive_forward
 import states.pickup               as _pickup
 import states.turn_180             as _turn_180
 import states.drop_off             as _drop_off
@@ -77,12 +77,6 @@ class MissionStateMachine:
             return _line_follow.step(self, det, left_ticks, right_ticks)
         if self.state == State.FIND_LINE:
             return _find_line.step(self, det, left_ticks, right_ticks)
-        if self.state == State.LINE_FOLLOW_REVERSED:
-            return _line_follow_reversed.step(self, det, left_ticks, right_ticks)
-        if self.state == State.FIND_LINE_REVERSED:
-            return _find_line_reversed.step(self, det, left_ticks, right_ticks)
-        if self.state == State.PID_TURN:
-            return _pid_turn.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return _drive_forward.step(self, det, left_ticks, right_ticks)
         if self.state == State.PICKUP:

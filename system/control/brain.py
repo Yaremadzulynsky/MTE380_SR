@@ -138,7 +138,7 @@ class RobotBrain:
     def go(self, initial_state: str | None = None) -> None:
         """Reload config.yaml and start the mission (mode → mission).
 
-        initial_state: optional State enum value name, e.g. "LINE_FOLLOW_REVERSED".
+        initial_state: optional State enum value name, e.g. "DRIVE_FORWARD".
                        Defaults to LINE_FOLLOW.
         """
         fresh = _config_module.reload()
