@@ -35,6 +35,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         #     turn = _clamp(sm._heading_pid(-det.curve_heading), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
         #     return ControlOutput(left=turn, right=-turn, claw=None, state=sm.state)
         sm._fwd_phase       = "drive"
+        sm._fwd_drive_until = time.monotonic() + sm.cfg.forward_drive_s
 
     # ── Phase 3: timed drive ──────────────────────────────────────────────────
     if time.monotonic() >= sm._fwd_drive_until:
