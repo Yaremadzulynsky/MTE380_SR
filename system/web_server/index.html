@@ -255,12 +255,12 @@
       </div>
       <div>
         <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
-          <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em;" id="mask-label">Red mask</div>
-          <div style="display:flex; gap:0.3rem;">
-            <button type="button" onclick="setMaskChannel('red')"   id="mask-btn-red"   style="font-size:0.65rem; padding:1px 6px;">Red</button>
-            <button type="button" onclick="setMaskChannel('green')" id="mask-btn-green" style="font-size:0.65rem; padding:1px 6px;">Green</button>
-            <button type="button" onclick="setMaskChannel('blue')"  id="mask-btn-blue"  style="font-size:0.65rem; padding:1px 6px;">Blue</button>
-          </div>
+          <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em;">Mask</div>
+          <select id="mask-channel-select" onchange="setMaskChannel(this.value)" style="font-size:0.75rem;">
+            <option value="red">Red</option>
+            <option value="green">Green</option>
+            <option value="blue">Blue</option>
+          </select>
         </div>
         <img id="cam-mask" src="/stream/mask" alt="mask"
              style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
@@ -1410,11 +1410,6 @@
         await fetch("/api/mask/channel", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ channel }),
-        });
-        document.getElementById("mask-label").textContent = channel.charAt(0).toUpperCase() + channel.slice(1) + " mask";
-        ["red", "green", "blue"].forEach(c => {
-          const btn = document.getElementById("mask-btn-" + c);
-          if (btn) btn.style.fontWeight = c === channel ? "bold" : "";
         });
       } catch (_) {}
     }
