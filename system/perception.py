@@ -423,7 +423,16 @@ class Perception:
         # scale as the polynomial convention (curvature = a, coefficient of t²).
         curvature = float(np.mean(curv_samples)) / 2.0 if curv_samples else 0.0
 
-        return curvature, float(b), conf, pts
+        # Heading: slope of the segment whose midpoint t is closest to 0.5 (centre of frame).
+        # Falls back to polynomial b if no segments are available.
+        if slopes:
+            seg_mids = [(t_s[i] + t_s[i + 1]) / 2.0 for i in range(len(slopes))]
+            best = min(range(len(slopes)), key=lambda i: abs(seg_mids[i] - 0.5))
+            heading = slopes[best]
+        else:
+            heading = float(b)
+
+        return curvature, heading, conf, pts
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
