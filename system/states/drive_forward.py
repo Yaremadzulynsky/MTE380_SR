@@ -10,7 +10,7 @@ import time
 
 from states import ControlOutput, State, _clamp
 
-_STOP_DURATION_S = 5.0
+_STOP_DURATION_S = 1
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
