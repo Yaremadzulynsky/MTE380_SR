@@ -301,15 +301,15 @@
     <h2>Line Follow Mode</h2>
     <div class="fields">
       <div class="field">
-        <label for="line_follow_mode">mode (0/1/2)</label>
-        <input type="number" id="line_follow_mode" step="1" min="0" max="2" />
+        <label for="line_follow_mode">mode (0/1/2/3)</label>
+        <input type="number" id="line_follow_mode" step="1" min="0" max="3" />
       </div>
       <div class="field">
         <label for="simple_curv_thresh">simple curv thresh</label>
         <input type="number" id="simple_curv_thresh" step="0.05" min="0.05" max="5" />
       </div>
     </div>
-    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner)</p>
+    <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (blend error with horizontal bias by vertical coverage)</p>
   </div>
 
   <!-- Line error: perception -->
