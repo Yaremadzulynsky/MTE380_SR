@@ -30,7 +30,7 @@ class Config:
     # ── Line follow mode ──────────────────────────────────────────────────────
     line_follow_mode: int = 0        # 0=simple  1=find_line  2=pid_turn  3=adaptive
     simple_curv_thresh: float = 0.5  # curvature at which simple mode reaches min_speed
-    adaptive_horiz_weight: float = 1.0  # scale [0,1] for horizontal bias in adaptive mode
+    adaptive_curv_a: float = 0.3        # adaptive mode: single gain for speed reduction and horizontal bias
     curv_speed_bias: float = 1.0    # power applied to normalised curvature before speed scaling (1=linear, >1=faster drop)
 
     # ── Steering PID ─────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ class Config:
 
 _SECTIONS: list[tuple[str, list[str]]] = [
     ("Line follow mode", [
-        "line_follow_mode", "simple_curv_thresh", "adaptive_horiz_weight", "curv_speed_bias",
+        "line_follow_mode", "simple_curv_thresh", "adaptive_curv_a", "curv_speed_bias",
     ]),
     ("Steering PID", [
         "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",

@@ -1,13 +1,11 @@
 """LINE_FOLLOW mode 3 — adaptive blend between line error and horizontal bias.
 
-As vertical red coverage drops (fewer strips with red → curve_conf decreases)
-the error blends from the normal centroid-based red_error toward a hard bias
-that steers toward whichever horizontal side of the frame has more red.
+adaptive_curv_a is a single gain that controls both:
+  forward_speed = base_speed - a * |curvature|       (clamped to [min_speed, base_speed])
+  blended_error = red_error + a * coverage_loss * horiz_bias
 
-  blended = curve_conf * red_error + (1 - curve_conf) * horiz_bias
-
-where horiz_bias = +1 if tape centroid is right of frame centre, -1 if left
-(same logic as FIND_LINE).  Speed is reduced on curvature as in line_follow_find.
+where coverage_loss = 1 - curve_conf (fraction of vertical strips without red).
+horiz_bias = +1 if tape centroid is right of centre, -1 if left.
 """
 from __future__ import annotations
 
@@ -28,8 +26,8 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if det.tape_cx_px is not None:
         sm._find_line_turn_cw = det.tape_cx_px > sm.cfg.camera_width / 2.0
 
-    # Vertical coverage: fraction of strips that had red (0 = none, 1 = all)
-    vert_frac = _clamp(det.curve_conf, 0.0, 1.0)
+    # Vertical coverage loss: 0 = full coverage, 1 = no strips detected
+    coverage_loss = 1.0 - _clamp(det.curve_conf, 0.0, 1.0)
 
     # Horizontal bias: +1 right, -1 left (same side decision as FIND_LINE)
     if det.tape_cx_px is not None:
@@ -37,14 +35,13 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     else:
         horiz_bias = 0.0
 
-    # Blend: full red_error when line fills frame, full bias when line is thin/fading
-    blended = _clamp(
-        vert_frac * det.red_error + (1.0 - vert_frac) * sm.cfg.adaptive_horiz_weight * horiz_bias,
-        -1.0, 1.0,
-    )
+    a = sm.cfg.adaptive_curv_a
 
-    curv_t     = _clamp(abs(det.curvature) / sm.cfg.corner_curvature_thresh, 0.0, 1.0)
-    curv_scale = (1.0 - curv_t) ** sm.cfg.curv_speed_bias
-    adj_base   = sm.cfg.min_speed + (sm.cfg.base_speed - sm.cfg.min_speed) * curv_scale
+    # Steering: red_error + a * coverage_loss * horiz_bias
+    blended = _clamp(det.red_error + a * coverage_loss * horiz_bias, -1.0, 1.0)
+
+    # Speed: forward_speed = base_speed - a * |curvature|
+    adj_base = _clamp(sm.cfg.base_speed - a * abs(det.curvature), sm.cfg.min_speed, sm.cfg.base_speed)
+
     left, right = steer(sm, blended, base_speed=adj_base)
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)
