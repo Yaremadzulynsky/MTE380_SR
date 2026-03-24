@@ -92,6 +92,7 @@ class RobotBrain:
         self._last_idle_telem = 0.0
         self._cam_fps     = 0.0
         self._last_frame_t = 0.0
+        self._manual_claw_until = 0.0  # suppress heartbeat claw until this monotonic time
 
         # ── Loop display / telemetry settings (populated by start_loop) ───────
         self._no_display    = True
@@ -291,7 +292,9 @@ class RobotBrain:
         assert self.bridge is not None
         self.bridge.send_drive(left, right)
 
-    def send_claw(self, angle: float) -> None:
+    def send_claw(self, angle: float, manual: bool = False) -> None:
+        if manual:
+            self._manual_claw_until = time.monotonic() + 5.0
         if self.dry_run:
             print(f"[dry-run]  claw  angle={angle:.1f}°", flush=True)
             return
@@ -606,7 +609,10 @@ class RobotBrain:
             self.bridge = None
 
     def _on_heartbeat(self) -> None:
-        """Send claw-open on every heartbeat so it reliably opens after Arduino reset."""
+        """Send claw-open on every heartbeat so it reliably opens after Arduino reset.
+        Suppressed for 5 s after a manual send_claw call so web UI commands aren't overridden."""
+        if time.monotonic() < self._manual_claw_until:
+            return
         self.send_claw(_config_module.get().claw_open)
 
     def _on_encoders(self, left: int, right: int) -> None:

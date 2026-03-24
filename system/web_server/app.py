@@ -222,7 +222,7 @@ def servo():
     dry = getattr(_runner, "dry_run", "?")
     bridge = getattr(_runner, "bridge", "?")
     print(f"[servo] angle={angle}  dry_run={dry}  bridge={bridge}", flush=True)
-    _runner.send_claw(angle)
+    _runner.send_claw(angle, manual=True)
     print(f"[servo] send_claw done", flush=True)
     return jsonify({"ok": True, "angle": angle})
 
