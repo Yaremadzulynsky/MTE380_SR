@@ -39,7 +39,8 @@ _GREEN_MIN_AREA = 1500.0
 class FrameDetection:
     red_found:   bool       # red line detected in ROI
     red_error:   float      # [-1, 1], positive = line is right of centre
-    blue_found:  bool       # blue target marker visible
+    blue_found:    bool       # blue target marker visible
+    blue_cx_norm:  float | None = None  # blue centroid x in [-1, 1], +ve = right; None if not found
     green_found: bool       # green stop marker visible
     # Full-frame pixels for overlays (None when red not found / not yet tracked)
     tape_cx_px: float | None = None   # horizontal centre of tape (mask centroid)
@@ -165,7 +166,7 @@ class Perception:
             track_x_px,
             track_y_px,
         ) = self._stabilize_red(raw_found, raw_err, tcx, tcy, trx, try_)
-        blue_found  = self._detect_blue(hsv)
+        blue_found, blue_cx_norm = self._detect_blue(hsv)
         green_found = self._detect_green(hsv)
 
         if raw_found and self._last_red_mask is not None:
@@ -195,6 +196,7 @@ class Perception:
             red_found=red_found,
             red_error=red_error,
             blue_found=blue_found,
+            blue_cx_norm=blue_cx_norm,
             green_found=green_found,
             tape_cx_px=tape_cx_px,
             tape_cy_px=tape_cy_px,
@@ -485,12 +487,24 @@ class Perception:
         err = _clamp((u_steer - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
         return True, err, tape_cx, tape_cy, float(u_steer), float(v_target)
 
-    def _detect_blue(self, hsv: np.ndarray) -> bool:
-        """Returns True when a blue marker of sufficient area is visible."""
+    def _detect_blue(self, hsv: np.ndarray) -> tuple[bool, float | None]:
+        """Returns (found, cx_norm) for the largest qualifying blue contour.
+
+        cx_norm is the centroid x normalised to [-1, 1] (positive = right of centre).
+        cx_norm is None when no qualifying contour exists.
+        """
         mask = cv2.inRange(hsv, self._BLUE_LO, self._BLUE_HI)
         self._last_blue_mask = mask
+        w = hsv.shape[1]
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return any(cv2.contourArea(c) >= _BLUE_MIN_AREA for c in contours)
+        valid = [c for c in contours if cv2.contourArea(c) >= _BLUE_MIN_AREA]
+        if not valid:
+            return False, None
+        M = cv2.moments(max(valid, key=cv2.contourArea))
+        if M["m00"] == 0:
+            return True, None
+        cx_norm = _clamp((M["m10"] / M["m00"] - w / 2.0) / (w / 2.0), -1.0, 1.0)
+        return True, cx_norm
 
     def _detect_green(self, hsv: np.ndarray) -> bool:
         """Returns True when a green marker of sufficient area is visible."""

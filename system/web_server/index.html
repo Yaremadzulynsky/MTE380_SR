@@ -434,10 +434,15 @@
   <!-- Drive forward -->
   <div class="card">
     <h2>Drive Forward — to pickup point</h2>
+    <p class="hint">Steers to keep the blue target centred while driving forward.</p>
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="forward_distance_m">distance (m)</label><button type="button" class="info-btn" data-help="forward_distance_m" aria-label="Help: forward_distance_m">i</button></div>
         <input type="number" id="forward_distance_m" step="0.01" min="0" max="5" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="align_kp">align kp</label></div>
+        <input type="number" id="align_kp" step="0.01" min="0" max="2" />
       </div>
     </div>
   </div>
@@ -717,7 +722,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "error_heading_weight", "error_curvature_weight",
-      "forward_distance_m",
+      "forward_distance_m", "align_kp",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed",
       "corner_curvature_thresh", "curve_n_strips",
@@ -762,6 +767,7 @@
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
       forward_distance_m:      [0,    5,      0.01  ],
+      align_kp:                [0,    2,      0.01  ],
       green_delay_s:           [0,    30,     0.1   ],
       dropoff_distance_m:      [0,    5,      0.01  ],
       find_line_turn_speed:    [0,    1,      0.01  ],

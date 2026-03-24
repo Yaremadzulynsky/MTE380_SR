@@ -55,8 +55,13 @@ class PositionController:
         from control.rotation_controller import _DiscretePID
         self._pid = _DiscretePID(c.pos_kp, c.pos_ki, c.pos_kd)
 
-    def step(self) -> None:
-        """Integrate displacement, run PID, send equal voltage to both wheels."""
+    def step(self, steer: float = 0.0) -> None:
+        """Integrate displacement, run PID, send voltage to both wheels.
+
+        steer: optional lateral correction [-1, 1] added differentially:
+               left = fwd + steer, right = fwd - steer.
+               Positive steer turns the robot right.
+        """
         if self.done:
             return
 
@@ -76,7 +81,7 @@ class PositionController:
 
         output = self._pid.update(error, 0.0)
         output = self._apply_deadband(output, self._motor_deadband)
-        self._brain.send_voltage(output, output)
+        self._brain.send_voltage(output + steer, output - steer)
 
     def progress(self) -> tuple[float, float]:
         """Returns (abs_metres_traveled, abs_metres_target)."""

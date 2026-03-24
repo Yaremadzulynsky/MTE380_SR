@@ -84,7 +84,7 @@ class MissionStateMachine:
         if self.state == State.PID_TURN:
             return _pid_turn.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
-            return _drive_forward.step(self, left_ticks, right_ticks)
+            return _drive_forward.step(self, det, left_ticks, right_ticks)
         if self.state == State.PICKUP:
             return _pickup.step(self)
         if self.state == State.TURN_180:
