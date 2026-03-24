@@ -429,12 +429,13 @@ class Perception:
         # scale as the polynomial convention (curvature = a, coefficient of t²).
         curvature = float(np.mean(curv_samples)) / 2.0 if curv_samples else 0.0
 
-        # Heading: slope of the segment whose midpoint t is closest to 0.5 (centre of frame).
-        # Falls back to polynomial b if no segments are available.
+        # Heading: Gaussian-weighted average of all segment slopes.
+        # Weight peaks at t=0.5 (frame centre) and falls off with σ=0.3.
         if slopes:
             seg_mids = [(t_s[i] + t_s[i + 1]) / 2.0 for i in range(len(slopes))]
-            best = min(range(len(slopes)), key=lambda i: abs(seg_mids[i] - 0.5))
-            heading = slopes[best]
+            weights  = [np.exp(-((m - 0.5) ** 2) / (2 * 0.3 ** 2)) for m in seg_mids]
+            total_w  = sum(weights)
+            heading  = sum(w * s for w, s in zip(weights, slopes)) / total_w
         else:
             heading = float(b)
 
