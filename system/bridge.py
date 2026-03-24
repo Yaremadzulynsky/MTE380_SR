@@ -36,6 +36,7 @@ class SerialBridge:
         self._ser:    serial.Serial | None = None
         self._thread: threading.Thread | None = None
         self._running = False
+        self._write_lock = threading.Lock()
 
         self.on_heartbeat = None   # callback()
         self.on_encoders  = None   # callback(left_ticks: int, right_ticks: int)
@@ -72,7 +73,8 @@ class SerialBridge:
         crc = (0xFF - ((msg_type + len(payload) + sum(payload)) % 256)) & 0xFF
         packet = bytes([SYNC, msg_type, len(payload)]) + payload + bytes([crc])
         try:
-            self._ser.write(packet)
+            with self._write_lock:
+                self._ser.write(packet)
         except serial.SerialException as e:
             log.error('Write error: %s', e)
 
