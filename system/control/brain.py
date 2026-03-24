@@ -133,6 +133,7 @@ class RobotBrain:
         self._telem_every  = max(1, telemetry_every)
         self._telem_idle_s = telemetry_idle_s
         self._thread.start()
+        self.send_claw(_config_module.get().claw_open)
 
     def go(self, initial_state: str | None = None) -> None:
         """Reload config.yaml and start the mission (mode → mission).
