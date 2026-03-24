@@ -109,7 +109,8 @@ class RobotBrain:
         self.bridge: SerialBridge | None = None
         if not dry_run:
             self.bridge = SerialBridge(serial_port, baud)
-            self.bridge.on_encoders = self._on_encoders
+            self.bridge.on_encoders  = self._on_encoders
+            self.bridge.on_heartbeat = self._on_heartbeat
             self.bridge.start()
 
         self._thread = threading.Thread(
@@ -133,7 +134,6 @@ class RobotBrain:
         self._telem_every  = max(1, telemetry_every)
         self._telem_idle_s = telemetry_idle_s
         self._thread.start()
-        self.send_claw(_config_module.get().claw_open)
 
     def go(self, initial_state: str | None = None) -> None:
         """Reload config.yaml and start the mission (mode → mission).
@@ -587,6 +587,10 @@ class RobotBrain:
         if self.bridge is not None:
             self.bridge.stop()
             self.bridge = None
+
+    def _on_heartbeat(self) -> None:
+        """Send claw-open on every heartbeat so it reliably opens after Arduino reset."""
+        self.send_claw(_config_module.get().claw_open)
 
     def _on_encoders(self, left: int, right: int) -> None:
         now = time.monotonic()

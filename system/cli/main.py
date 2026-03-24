@@ -177,7 +177,6 @@ def cmd_run(args: argparse.Namespace) -> None:
         telemetry_idle_s = args.telemetry_idle_s,
     )
     log.info("Mission loop started (camera live). Type 'start' to begin.")
-    brain.send_claw(cfg.claw_open)
 
     signal.signal(signal.SIGTERM, lambda *_: (brain.shutdown(), sys.exit(0)))
 
@@ -211,7 +210,6 @@ def cmd_serve(args: argparse.Namespace) -> None:
     cfg   = _config_module.get()
     brain = RobotBrain(args.serial_port, args.baud, args.dry_run, cfg)
     brain.start_loop(no_display=True, no_telemetry=True)
-    brain.send_claw(cfg.claw_open)
 
     _server.set_runner(brain)
 
