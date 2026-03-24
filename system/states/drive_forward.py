@@ -1,11 +1,9 @@
 """
-DRIVE_FORWARD — drives forward_distance_m while steering to keep the blue
-target centred in the frame.
+DRIVE_FORWARD — aligns with the red line using the heading PID then drives
+forward_distance_m using the position controller.
 
-The PositionController handles distance tracking and forward speed via its PID.
-A proportional correction (align_kp * blue_cx_norm) is passed as the steer
-argument each tick: left = fwd + steer, right = fwd - steer.
-If blue is not visible the robot still drives straight (steer = 0).
+The heading PID (curve_heading) steers the robot to stay aligned with the
+line tangent while driving.  If red is not visible the robot drives straight.
 """
 from __future__ import annotations
 
@@ -17,8 +15,10 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if not hasattr(sm, "_fwd_ctrl") or sm._fwd_ctrl is None:
         sm._fwd_ctrl = PositionController(sm._brain, sm.cfg.forward_distance_m)
 
-    cx = det.blue_cx_norm  # None or float in [-1, 1], positive = blue is right
-    steer = _clamp(sm.cfg.align_kp * cx, -1.0, 1.0) if cx is not None else 0.0
+    if det.red_found:
+        steer = _clamp(sm._heading_pid(-det.curve_heading), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
+    else:
+        steer = 0.0
 
     sm._fwd_ctrl.step(steer=steer)
 
