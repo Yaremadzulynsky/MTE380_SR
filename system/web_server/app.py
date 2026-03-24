@@ -155,10 +155,10 @@ def get_status():
         "enc_r":     snap["enc_r"],
         "rpm_l":     snap["rpm_l"],
         "rpm_r":     snap["rpm_r"],
-        "red_found":    det.red_found  if det else False,
-        "red_error":    det.red_error  if det else 0.0,
-        "blue_found":   det.blue_found if det else False,
-        "t_junction":   det.t_junction if det else False,
+        "red_found":    det.red_found   if det else False,
+        "red_error":    det.red_error   if det else 0.0,
+        "blue_found":   det.blue_found  if det else False,
+        "green_found":  det.green_found if det else False,
         "lateral_turn": snap["lateral_turn"],
         "heading_turn": snap["heading_turn"],
     })
@@ -222,6 +222,19 @@ def servo():
     _runner.send_claw(angle)
     print(f"[servo] send_claw done", flush=True)
     return jsonify({"ok": True, "angle": angle})
+
+
+@app.post("/api/mask/channel")
+def mask_channel():
+    """Switch the /stream/mask overlay: body = {"channel": "red"|"green"|"blue"}."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    data = request.get_json(silent=True) or {}
+    channel = data.get("channel", "red")
+    if channel not in ("red", "green", "blue"):
+        return jsonify({"error": "channel must be red, green, or blue"}), 400
+    _runner.set_mask_channel(channel)
+    return jsonify({"ok": True, "channel": channel})
 
 
 @app.post("/api/drive")

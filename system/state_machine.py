@@ -6,8 +6,8 @@ State sequence
 LINE_FOLLOW   → DRIVE_FORWARD when blue target is seen
 DRIVE_FORWARD → PICKUP when encoder distance reached
 PICKUP        → TURN_180 when hold timer expires
-TURN_180      → RETURN when spin timer expires
-RETURN        → DONE when T-junction detected
+TURN_180      → LINE_FOLLOW (is_returning=True)
+LINE_FOLLOW   → DONE when T-junction detected (is_returning=True)
 DONE          : motors off
 
 Each state's logic lives in states/<state_name>.py.
@@ -29,7 +29,6 @@ import states.pid_turn      as _pid_turn
 import states.drive_forward as _drive_forward
 import states.pickup        as _pickup
 import states.turn_180      as _turn_180
-import states.return_follow as _return_follow
 
 
 class MissionStateMachine:
@@ -46,6 +45,7 @@ class MissionStateMachine:
         self._last_red_error    = 0.0
         self._last_curvature    = 0.0
         self._find_line_turn_cw    = True   # updated by line_follow_find when red is seen
+        self.is_returning          = False  # set True by turn_180 after 180° turn
         self._heading_lateral_turn = 0.0   # last lateral PID output (mode 4)
         self._heading_heading_turn = 0.0   # last heading PID output (mode 4)
         self._consecutive_lost  = 0
@@ -81,8 +81,6 @@ class MissionStateMachine:
             return _pickup.step(self)
         if self.state == State.TURN_180:
             return _turn_180.step(self)
-        if self.state == State.RETURN:
-            return _return_follow.step(self, det)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
 
     def _enter(self, new_state: State, left_ticks: int = 0, right_ticks: int = 0) -> None:

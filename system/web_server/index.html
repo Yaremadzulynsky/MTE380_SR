@@ -254,7 +254,14 @@
              style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
       </div>
       <div>
-        <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Red mask</div>
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
+          <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em;" id="mask-label">Red mask</div>
+          <div style="display:flex; gap:0.3rem;">
+            <button type="button" onclick="setMaskChannel('red')"   id="mask-btn-red"   style="font-size:0.65rem; padding:1px 6px;">Red</button>
+            <button type="button" onclick="setMaskChannel('green')" id="mask-btn-green" style="font-size:0.65rem; padding:1px 6px;">Green</button>
+            <button type="button" onclick="setMaskChannel('blue')"  id="mask-btn-blue"  style="font-size:0.65rem; padding:1px 6px;">Blue</button>
+          </div>
+        </div>
         <img id="cam-mask" src="/stream/mask" alt="mask"
              style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
       </div>
@@ -293,6 +300,13 @@
       <div class="field"><div class="field-label-row"><label for="blue_h_hi">H high</label><button type="button" class="info-btn" data-help="blue_h_hi" aria-label="Help: blue_h_hi">i</button></div><input type="number" id="blue_h_hi" step="1" min="80" max="140" /></div>
       <div class="field"><div class="field-label-row"><label for="blue_s_min">S min</label><button type="button" class="info-btn" data-help="blue_s_min" aria-label="Help: blue_s_min">i</button></div><input type="number" id="blue_s_min" step="1" min="0" max="255" /></div>
       <div class="field"><div class="field-label-row"><label for="blue_v_min">V min</label><button type="button" class="info-btn" data-help="blue_v_min" aria-label="Help: blue_v_min">i</button></div><input type="number" id="blue_v_min" step="1" min="0" max="255" /></div>
+    </div>
+    <p class="hint" style="margin-top:0.6rem;">Green</p>
+    <div class="fields">
+      <div class="field"><div class="field-label-row"><label for="green_h_lo">H low</label></div><input type="number" id="green_h_lo" step="1" min="0" max="179" /></div>
+      <div class="field"><div class="field-label-row"><label for="green_h_hi">H high</label></div><input type="number" id="green_h_hi" step="1" min="0" max="179" /></div>
+      <div class="field"><div class="field-label-row"><label for="green_s_min">S min</label></div><input type="number" id="green_s_min" step="1" min="0" max="255" /></div>
+      <div class="field"><div class="field-label-row"><label for="green_v_min">V min</label></div><input type="number" id="green_v_min" step="1" min="0" max="255" /></div>
     </div>
   </div>
 
@@ -522,21 +536,6 @@
     </div>
   </div>
 
-  <!-- 180 turn -->
-  <div class="card">
-    <h2>180° Turn</h2>
-    <div class="fields">
-      <div class="field">
-        <div class="field-label-row"><label for="turn_speed">speed (fraction)</label><button type="button" class="info-btn" data-help="turn_speed" aria-label="Help: turn_speed">i</button></div>
-        <input type="number" id="turn_speed" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="turn_duration_s">duration (seconds)</label><button type="button" class="info-btn" data-help="turn_duration_s" aria-label="Help: turn_duration_s">i</button></div>
-        <input type="number" id="turn_duration_s" step="0.05" min="0" />
-      </div>
-    </div>
-  </div>
-
   <!-- Claw -->
   <div class="card">
     <h2>Claw / Servo</h2>
@@ -704,7 +703,6 @@
       "forward_distance_m",
       "find_line_turn_speed",
       "corner_curvature_thresh", "curve_n_strips",
-      "turn_speed", "turn_duration_s",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
@@ -712,6 +710,7 @@
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
+      "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
     ];
     const INT_KEYS = new Set([
       "line_follow_mode",
@@ -720,6 +719,7 @@
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
+      "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
     ]);
     const BOOL_KEYS = new Set([]);
 
@@ -747,8 +747,6 @@
       find_line_turn_speed:    [0,    1,      0.01  ],
       corner_curvature_thresh: [0,    2,      0.05  ],
       curve_n_strips:          [2,    20,     1     ],
-      turn_speed:              [0,    1,      0.01  ],
-      turn_duration_s:         [0,    6,      0.05  ],
       wheel_diameter_m:        [0.01, 0.20,   0.001 ],
       wheelbase_m:             [0.05, 0.50,   0.001 ],
       rot_kp:                  [0,    5,      0.001 ],
@@ -774,6 +772,10 @@
       blue_h_hi:               [80,   140,    1     ],
       blue_s_min:              [0,    255,    1     ],
       blue_v_min:              [0,    255,    1     ],
+      green_h_lo:              [0,    179,    1     ],
+      green_h_hi:              [0,    179,    1     ],
+      green_s_min:             [0,    255,    1     ],
+      green_v_min:             [0,    255,    1     ],
     };
 
     /** Rich help for each config key — shown in the (i) dialog */
@@ -865,22 +867,6 @@
         dec: "Shorter segment; stops earlier.",
         whenInc: "Robot stops short of the pickup target.",
         whenDec: "Overshoots the pickup point.",
-      },
-      turn_speed: {
-        title: "turn_speed",
-        what: "Wheel speed fraction used during the scripted 180° (or similar) turn state.",
-        inc: "Faster rotation; shorter turn time but more slip and harder to match duration.",
-        dec: "Slower, more controlled rotation; easier to tune with duration.",
-        whenInc: "Turn completes too slowly; duration is already at a practical minimum.",
-        whenDec: "Wheel slip, inconsistent heading after turn, or instability.",
-      },
-      turn_duration_s: {
-        title: "turn_duration_s",
-        what: "How long the turn behavior runs at turn_speed (open-loop timing; pair with speed for total angle).",
-        inc: "Longer turn → more rotation if speed fixed; use to fix under-rotation.",
-        dec: "Shorter turn → less rotation; use if robot overturns.",
-        whenInc: "Robot consistently ends up short of 180° (or target heading).",
-        whenDec: "Robot passes the desired heading or spins too far.",
       },
       claw_open: {
         title: "claw_open",
@@ -1419,6 +1405,20 @@
       } catch (e) { el.textContent = "Error: " + e.message; }
     }
 
+    async function setMaskChannel(channel) {
+      try {
+        await fetch("/api/mask/channel", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel }),
+        });
+        document.getElementById("mask-label").textContent = channel.charAt(0).toUpperCase() + channel.slice(1) + " mask";
+        ["red", "green", "blue"].forEach(c => {
+          const btn = document.getElementById("mask-btn-" + c);
+          if (btn) btn.style.fontWeight = c === channel ? "bold" : "";
+        });
+      } catch (_) {}
+    }
+
     async function testPosition() {
       const meters = parseFloat(document.getElementById("test-pos-meters").value);
       const el = document.getElementById("test-pos-status");
@@ -1524,7 +1524,7 @@
           `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
           `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
           `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
-          `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}  |  ` +
+          `blue=${s.blue_found ? "Y" : "N"}  green=${s.green_found ? "Y" : "N"}  |  ` +
           `lateral=${s.lateral_turn?.toFixed(3)}  heading=${s.heading_turn?.toFixed(3)}`;
         // Speed PID telemetry
         const spidEl = document.getElementById("spid-telem");

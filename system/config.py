@@ -54,10 +54,6 @@ class Config:
     # ── Drive-forward ─────────────────────────────────────────────────────────
     forward_distance_m: float = 0.4   # metres to drive before PICKUP
 
-    # ── 180-degree turn ───────────────────────────────────────────────────────
-    turn_speed:      float = 0.30
-    turn_duration_s: float = 2.2
-
     # ── Controllers (rotation) ────────────────────────────────────────────────
     wheel_diameter_m: float = 0.065  # wheel outer diameter (metres)
     wheelbase_m:      float = 0.155  # centre-to-centre track width (metres)
@@ -104,6 +100,10 @@ class Config:
     blue_h_hi:  int = 135
     blue_s_min: int = 120
     blue_v_min: int = 70
+    green_h_lo:  int = 40
+    green_h_hi:  int = 80
+    green_s_min: int = 60
+    green_v_min: int = 60
 
     # ── Camera / runtime ──────────────────────────────────────────────────────
     camera_width:  int   = 640
@@ -133,9 +133,6 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Drive-forward", [
         "forward_distance_m",
     ]),
-    ("180-degree turn", [
-        "turn_speed", "turn_duration_s",
-    ]),
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",
         "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
@@ -158,6 +155,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
         "red_s_min", "red_v_min",
         "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
+        "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
     ]),
     ("Camera / runtime", [
         "camera_width", "camera_height", "fps", "roi_top_ratio",

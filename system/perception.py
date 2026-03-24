@@ -1,4 +1,4 @@
-"""Camera perception: red line, blue target, and T-junction detection."""
+"""Camera perception: red line, blue target, and green stop-marker detection."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,17 +30,17 @@ def _u_on_line_at_v(
 
 
 # Fixed detection constants (not exposed in config).
-_RED_MIN_AREA = 80.0
-_BLUE_MIN_AREA = 1500.0
-_T_JUNCTION_WIDTH_RATIO = 0.5
+_RED_MIN_AREA   = 80.0
+_BLUE_MIN_AREA  = 1500.0
+_GREEN_MIN_AREA = 1500.0
 
 
 @dataclass
 class FrameDetection:
-    red_found:  bool        # red line detected in ROI
-    red_error:  float       # [-1, 1], positive = line is right of centre
-    blue_found: bool        # blue target marker visible
-    t_junction: bool        # wide red stripe = end T-junction
+    red_found:   bool       # red line detected in ROI
+    red_error:   float      # [-1, 1], positive = line is right of centre
+    blue_found:  bool       # blue target marker visible
+    green_found: bool       # green stop marker visible
     # Full-frame pixels for overlays (None when red not found / not yet tracked)
     tape_cx_px: float | None = None   # horizontal centre of tape (mask centroid)
     tape_cy_px: float | None = None   # vertical centre of mask centroid
@@ -60,9 +60,9 @@ class Perception:
     """
     Reads one camera frame and returns a FrameDetection.
 
-    Red line : HSV mask → largest contour → lateral error in image space
+    Red line    : HSV mask → largest contour → lateral error in image space
     Blue target : HSV mask → any contour above min area
-    T-junction  : red bounding-rect width > half the frame = horizontal end bar
+    Green stop  : HSV mask → any contour above min area
 
     Lateral error uses the blob **bottom** as the near-wheel anchor. The mask **centroid**
     and bottom define a line in the image; ``line_axle_extrap`` extends that line downward
@@ -95,14 +95,16 @@ class Perception:
         self._tracking_line = False
         self._red_error_ema = 0.0
         self._red_ema_seeded = False
-        self._last_t_junction = False
         self._last_tape_cx: float | None = None
         self._last_tape_cy: float | None = None
         self._last_track_x: float | None = None
         self._last_track_y: float | None = None
 
-        self._last_frame: np.ndarray | None = None
-        self._last_red_mask: np.ndarray | None = None
+        self._last_frame:       np.ndarray | None = None
+        self._last_red_mask:    np.ndarray | None = None
+        self._last_green_mask:  np.ndarray | None = None
+        self._last_blue_mask:   np.ndarray | None = None
+        self.mask_channel: str = "red"   # "red" | "green" | "blue"
 
         self._cam = Picamera2()
         cam_cfg = self._cam.create_preview_configuration(
@@ -128,8 +130,10 @@ class Perception:
         self._RED_HI1 = np.array([cfg.red_h_hi1, 255,           255          ], np.uint8)
         self._RED_LO2 = np.array([cfg.red_h_lo2, cfg.red_s_min, cfg.red_v_min], np.uint8)
         self._RED_HI2 = np.array([cfg.red_h_hi2, 255,           255          ], np.uint8)
-        self._BLUE_LO = np.array([cfg.blue_h_lo, cfg.blue_s_min, cfg.blue_v_min], np.uint8)
-        self._BLUE_HI = np.array([cfg.blue_h_hi, 255,            255          ], np.uint8)
+        self._BLUE_LO  = np.array([cfg.blue_h_lo,  cfg.blue_s_min,  cfg.blue_v_min ], np.uint8)
+        self._BLUE_HI  = np.array([cfg.blue_h_hi,  255,             255            ], np.uint8)
+        self._GREEN_LO = np.array([cfg.green_h_lo, cfg.green_s_min, cfg.green_v_min], np.uint8)
+        self._GREEN_HI = np.array([cfg.green_h_hi, 255,             255            ], np.uint8)
         self.line_axle_extrap = max(0.0, float(cfg.line_axle_extrap))
 
     # ── Public ────────────────────────────────────────────────────────────────
@@ -152,17 +156,17 @@ class Perception:
         roi   = frame[roi_y:, :]
         hsv   = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        raw_found, raw_err, raw_tj, tcx, tcy, trx, try_ = self._detect_red(hsv, w, roi_y)
+        raw_found, raw_err, tcx, tcy, trx, try_ = self._detect_red(hsv, w, roi_y)
         (
             red_found,
             red_error,
-            t_junction,
             tape_cx_px,
             tape_cy_px,
             track_x_px,
             track_y_px,
-        ) = self._stabilize_red(raw_found, raw_err, raw_tj, tcx, tcy, trx, try_)
-        blue_found = self._detect_blue(hsv)
+        ) = self._stabilize_red(raw_found, raw_err, tcx, tcy, trx, try_)
+        blue_found  = self._detect_blue(hsv)
+        green_found = self._detect_green(hsv)
 
         if raw_found and self._last_red_mask is not None:
             curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
@@ -191,7 +195,7 @@ class Perception:
             red_found=red_found,
             red_error=red_error,
             blue_found=blue_found,
-            t_junction=t_junction,
+            green_found=green_found,
             tape_cx_px=tape_cx_px,
             tape_cy_px=tape_cy_px,
             track_x_px=track_x_px,
@@ -203,9 +207,14 @@ class Perception:
             red_horiz_balance=red_horiz_balance,
         )
 
-    def get_red_mask_frame(self) -> np.ndarray | None:
-        """Return the most recent red HSV mask as a BGR image for web streaming."""
-        mask = self._last_red_mask
+    def get_mask_frame(self) -> np.ndarray | None:
+        """Return the most recent HSV mask for the active channel as a BGR image."""
+        if self.mask_channel == "green":
+            mask = self._last_green_mask
+        elif self.mask_channel == "blue":
+            mask = self._last_blue_mask
+        else:
+            mask = self._last_red_mask
         if mask is None:
             return None
         return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
@@ -246,8 +255,7 @@ class Perception:
 
         tags = [
             f"red={'Y' if det.red_found else 'N'}  err={det.red_error:+.2f}",
-            f"blue={'Y' if det.blue_found else 'N'}",
-            f"T={'Y' if det.t_junction else 'N'}",
+            f"blue={'Y' if det.blue_found else 'N'}  green={'Y' if det.green_found else 'N'}",
             f"curv={det.curvature:+.2f}  conf={det.curve_conf:.0%}",
         ]
         for i, tag in enumerate(tags):
@@ -283,12 +291,11 @@ class Perception:
         self,
         raw_found: bool,
         raw_err: float,
-        raw_t_junction: bool,
         tape_cx: float | None,
         tape_cy: float | None,
         track_x: float | None,
         track_y: float | None,
-    ) -> tuple[bool, float, bool, float | None, float | None, float | None, float | None]:
+    ) -> tuple[bool, float, float | None, float | None, float | None, float | None]:
         """
         Debounce loss: brief raw misses keep red_found True and hold last smoothed error.
 
@@ -316,21 +323,18 @@ class Perception:
                 smooth = a * raw_err + (1.0 - a) * self._red_error_ema
 
             self._red_error_ema = smooth
-            self._last_t_junction = raw_t_junction
-            return True, smooth, raw_t_junction, tape_cx, tape_cy, track_x, track_y
+            return True, smooth, tape_cx, tape_cy, track_x, track_y
 
         # Raw miss
         if not self._tracking_line:
             self._red_miss_streak = 0
-            return False, 0.0, False, None, None, None, None
+            return False, 0.0, None, None, None, None
 
         self._red_miss_streak += 1
         if self._red_miss_streak < self.red_loss_debounce_frames:
-            # Hold line-follow semantics so the state machine does not enter search
             return (
                 True,
                 self._red_error_ema,
-                self._last_t_junction,
                 self._last_tape_cx,
                 self._last_tape_cy,
                 self._last_track_x,
@@ -342,12 +346,11 @@ class Perception:
         self._red_miss_streak = 0
         self._red_ema_seeded = False
         self._red_error_ema = 0.0
-        self._last_t_junction = False
         self._last_tape_cx = None
         self._last_tape_cy = None
         self._last_track_x = None
         self._last_track_y = None
-        return False, 0.0, False, None, None, None, None
+        return False, 0.0, None, None, None, None
 
     def _build_red_mask(self, hsv: np.ndarray) -> np.ndarray:
         """Binary mask after inRange + morphology — shared by _detect_red and get_red_mask_frame."""
@@ -436,12 +439,12 @@ class Perception:
 
     def _detect_red(
         self, hsv: np.ndarray, frame_w: int, roi_y: int
-    ) -> tuple[bool, float, bool, float | None, float | None, float | None, float | None]:
+    ) -> tuple[bool, float, float | None, float | None, float | None, float | None]:
         """
-        Returns (found, error, t_junction, tape_cx, tape_cy, track_x, track_y)
+        Returns (found, error, tape_cx, tape_cy, track_x, track_y)
         with tape/track in full-frame pixel coordinates.
         """
-        nz = (False, 0.0, False, None, None, None, None)
+        nz = (False, 0.0, None, None, None, None)
 
         mask = self._build_red_mask(hsv)
         self._last_red_mask = mask
@@ -455,13 +458,11 @@ class Perception:
             return nz
 
         bx, by, bw, bh = cv2.boundingRect(largest)
-        t_junction = (bw / frame_w) > _T_JUNCTION_WIDTH_RATIO
-
         moments = cv2.moments(largest)
         if moments["m00"] <= 1e-6:
             tape_cx = float(bx + bw * 0.5)
             tape_cy = float(roi_y + by + bh * 0.5)
-            return True, 0.0, t_junction, tape_cx, tape_cy, tape_cx, tape_cy
+            return True, 0.0, tape_cx, tape_cy, tape_cx, tape_cy
 
         cx_roi = moments["m10"] / moments["m00"]
         cy_roi = moments["m01"] / moments["m00"]
@@ -482,10 +483,18 @@ class Perception:
         v_target = _clamp(v_target, 0.0, float(self.height - 1))
         u_steer = _u_on_line_at_v(u_c, v_c, u_pix, v_pix, v_target)
         err = _clamp((u_steer - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
-        return True, err, t_junction, tape_cx, tape_cy, float(u_steer), float(v_target)
+        return True, err, tape_cx, tape_cy, float(u_steer), float(v_target)
 
     def _detect_blue(self, hsv: np.ndarray) -> bool:
         """Returns True when a blue marker of sufficient area is visible."""
-        mask      = cv2.inRange(hsv, self._BLUE_LO, self._BLUE_HI)
+        mask = cv2.inRange(hsv, self._BLUE_LO, self._BLUE_HI)
+        self._last_blue_mask = mask
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return any(cv2.contourArea(c) >= _BLUE_MIN_AREA for c in contours)
+
+    def _detect_green(self, hsv: np.ndarray) -> bool:
+        """Returns True when a green marker of sufficient area is visible."""
+        mask = cv2.inRange(hsv, self._GREEN_LO, self._GREEN_HI)
+        self._last_green_mask = mask
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return any(cv2.contourArea(c) >= _GREEN_MIN_AREA for c in contours)

@@ -12,7 +12,6 @@ class State(Enum):
     DRIVE_FORWARD = "DRIVE_FORWARD"
     PICKUP        = "PICKUP"
     TURN_180      = "TURN_180"
-    RETURN        = "RETURN"
     DONE          = "DONE"
 
 

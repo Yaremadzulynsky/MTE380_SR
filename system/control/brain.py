@@ -343,7 +343,12 @@ class RobotBrain:
         return self._perception.draw_debug(frame, det) if det is not None else frame
 
     def get_mask_frame(self):
-        return self._perception.get_red_mask_frame() if self._perception else None
+        return self._perception.get_mask_frame() if self._perception else None
+
+    def set_mask_channel(self, channel: str) -> None:
+        """Switch which HSV mask the /stream/mask endpoint shows ('red'|'green'|'blue')."""
+        if self._perception is not None:
+            self._perception.mask_channel = channel
 
     def telemetry_history(self) -> dict:
         rows = list(self._telem_history)
@@ -529,7 +534,7 @@ class RobotBrain:
             print(
                 f"{t_run:8.3f}s  {output.state.value:12s}  "
                 f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
-                f"blue={'Y' if det.blue_found else 'N'} T={'Y' if det.t_junction else 'N'}  "
+                f"blue={'Y' if det.blue_found else 'N'} green={'Y' if det.green_found else 'N'}  "
                 f"claw={claw_s}  enc_L={enc_l:6d} enc_R={enc_r:6d}  "
                 f"{self._speed_ctrl.telemetry_line()}",
                 flush=True,
@@ -539,7 +544,7 @@ class RobotBrain:
             print(
                 f"{t_run:8.3f}s  IDLE  "
                 f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
-                f"blue={'Y' if det.blue_found else 'N'} T={'Y' if det.t_junction else 'N'}",
+                f"blue={'Y' if det.blue_found else 'N'} green={'Y' if det.green_found else 'N'}",
                 flush=True,
             )
 
