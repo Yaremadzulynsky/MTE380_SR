@@ -219,13 +219,6 @@ def load(path: Path = _CONFIG_PATH) -> Config:
 
     result = Config(**kwargs)
 
-    # Safety: reject all-zero steering PID (e.g. bad save from web UI)
-    if result.steer_kp == result.steer_ki == result.steer_kd == 0:
-        print("[config] steer PID all zero — restoring built-in defaults.", flush=True)
-        result.steer_kp        = defaults.steer_kp
-        result.steer_ki        = defaults.steer_ki
-        result.steer_kd        = defaults.steer_kd
-        result.steer_out_limit = defaults.steer_out_limit
 
     if result.motor_kp == 0:
         print("[config] motor_kp is zero — restoring built-in defaults.", flush=True)
