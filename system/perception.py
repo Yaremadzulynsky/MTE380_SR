@@ -31,7 +31,6 @@ def _u_on_line_at_v(
 
 
 # Fixed detection constants (not exposed in config).
-_RED_MIN_AREA   = 80.0
 _BLUE_MIN_AREA  = 1500.0
 _GREEN_MIN_AREA = 1500.0
 
@@ -88,6 +87,7 @@ class Perception:
 
         self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
+        self._red_min_area       = max(1, int(c.red_min_area_px))
         self._curve_n_strips = max(2, int(c.curve_n_strips))
         self._error_heading_weight   = float(c.error_heading_weight)
         self._error_curvature_weight = float(c.error_curvature_weight)
@@ -134,6 +134,7 @@ class Perception:
         """Apply updated config values without reopening the camera."""
         self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
         self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
+        self._red_min_area            = max(1, int(cfg.red_min_area_px))
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
         self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
         self._error_heading_weight    = float(cfg.error_heading_weight)
@@ -490,7 +491,7 @@ class Perception:
             return nz
 
         largest = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest) < _RED_MIN_AREA:
+        if cv2.contourArea(largest) < self._red_min_area:
             return nz
 
         bx, by, bw, bh = cv2.boundingRect(largest)

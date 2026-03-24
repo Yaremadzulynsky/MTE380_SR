@@ -89,6 +89,7 @@ class Config:
     # ── Vision / perception ───────────────────────────────────────────────────
     red_loss_debounce_frames: int   = 4
     red_error_ema_alpha:      float = 0.35
+    red_min_area_px:          int   = 80   # minimum red blob area in pixels to count as line
     line_axle_extrap:         float = 0.0
     curve_n_strips:           int   = 5   # horizontal slices for curvature fit
     error_heading_weight:     float = 0.3  # how much local tangent contributes to red_error
@@ -157,7 +158,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "corner_curvature_thresh",
     ]),
     ("Vision / perception", [
-        "red_loss_debounce_frames", "red_error_ema_alpha",
+        "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px",
         "line_axle_extrap", "curve_n_strips", "error_heading_weight", "error_curvature_weight",
     ]),
     ("Line detection HSV", [

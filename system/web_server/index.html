@@ -340,6 +340,10 @@
         <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
       </div>
       <div class="field">
+        <div class="field-label-row"><label for="red_min_area_px">min blob (px²)</label><button type="button" class="info-btn" data-help="red_min_area_px" aria-label="Help: red_min_area_px">i</button></div>
+        <input type="number" id="red_min_area_px" step="10" min="1" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="error_heading_weight">heading weight</label><button type="button" class="info-btn" data-help="error_heading_weight" aria-label="Help: error_heading_weight">i</button></div>
         <input type="number" id="error_heading_weight" step="0.05" min="0" max="1" />
       </div>
@@ -721,7 +725,7 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
-      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "error_heading_weight", "error_curvature_weight",
+      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "error_heading_weight", "error_curvature_weight",
       "forward_distance_m", "align_kp",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed",
@@ -738,7 +742,7 @@
     const INT_KEYS = new Set([
       "line_follow_mode",
       "curve_n_strips",
-      "red_loss_debounce_frames",
+      "red_loss_debounce_frames", "red_min_area_px",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
@@ -764,6 +768,7 @@
       line_axle_extrap:        [0,    5,      0.1   ],
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
+      red_min_area_px:         [1,    5000,   10    ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
       forward_distance_m:      [0,    5,      0.01  ],
@@ -1053,6 +1058,14 @@
         dec: "Reacts faster to genuine loss; but a single missed frame triggers the lost state.",
         whenInc: "Robot enters FIND_LINE repeatedly due to single-frame noise or flicker.",
         whenDec: "Robot takes too long to recognise the line is truly gone and keeps going straight.",
+      },
+      red_min_area_px: {
+        title: "red_min_area_px",
+        what: "Minimum contour area in pixels² for a red blob to be counted as the line. Blobs smaller than this are ignored as noise.",
+        inc: "Filters out more small noise blobs; may miss the line when it's thin or partially visible.",
+        dec: "Detects smaller blobs; more sensitive but may lock onto glare or colour noise.",
+        whenInc: "Robot chases small red reflections or noise specks on the floor.",
+        whenDec: "Robot loses the line when it's thin or only partially in the ROI.",
       },
       red_error_ema_alpha: {
         title: "red_error_ema_alpha — Error EMA smoothing",
