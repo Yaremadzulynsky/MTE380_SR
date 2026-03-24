@@ -108,9 +108,11 @@ class Perception:
         self.mask_channel: str = "red"   # "red" | "green" | "blue"
 
         self._cam = Picamera2()
-        cam_cfg = self._cam.create_preview_configuration(
+        frame_us = int(1_000_000 / max(c.fps, 1.0))
+        cam_cfg = self._cam.create_video_configuration(
             main={"size": (self.width, self.height), "format": "RGB888"},
-            buffer_count=2,
+            buffer_count=4,
+            controls={"FrameDurationLimits": (frame_us, frame_us)},
         )
         self._cam.configure(cam_cfg)
         self._cam.start()
