@@ -54,6 +54,10 @@ class Config:
     # ── Drive-forward ─────────────────────────────────────────────────────────
     forward_distance_m: float = 0.4   # metres to drive before PICKUP
 
+    # ── Drop-off ──────────────────────────────────────────────────────────────
+    green_delay_s:      float = 2.0   # seconds to keep line-following after green is seen
+    dropoff_distance_m: float = 0.3   # metres to drive forward during drop-off
+
     # ── Controllers (rotation) ────────────────────────────────────────────────
     wheel_diameter_m: float = 0.065  # wheel outer diameter (metres)
     wheelbase_m:      float = 0.155  # centre-to-centre track width (metres)
@@ -132,6 +136,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Drive-forward", [
         "forward_distance_m",
+    ]),
+    ("Drop-off", [
+        "green_delay_s", "dropoff_distance_m",
     ]),
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",

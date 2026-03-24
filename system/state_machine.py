@@ -31,6 +31,7 @@ import states.pid_turn             as _pid_turn
 import states.drive_forward        as _drive_forward
 import states.pickup               as _pickup
 import states.turn_180             as _turn_180
+import states.drop_off             as _drop_off
 
 
 class MissionStateMachine:
@@ -48,6 +49,7 @@ class MissionStateMachine:
         self._last_curvature    = 0.0
         self._find_line_turn_cw    = True   # updated by line_follow_find when red is seen
         self.is_returning          = False  # set True by turn_180 after 180° turn
+        self._green_seen_t         = None   # wall-clock time green was first seen (returning leg)
         self._heading_lateral_turn = 0.0   # last lateral PID output (mode 4)
         self._heading_heading_turn = 0.0   # last heading PID output (mode 4)
         self._consecutive_lost  = 0
@@ -87,6 +89,8 @@ class MissionStateMachine:
             return _pickup.step(self)
         if self.state == State.TURN_180:
             return _turn_180.step(self)
+        if self.state == State.DROP_OFF:
+            return _drop_off.step(self)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
 
     def _enter(self, new_state: State, left_ticks: int = 0, right_ticks: int = 0) -> None:
