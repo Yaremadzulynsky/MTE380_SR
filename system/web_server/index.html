@@ -312,6 +312,10 @@
         <label for="adaptive_horiz_weight">adaptive horiz weight</label>
         <input type="number" id="adaptive_horiz_weight" step="0.05" min="0" max="1" />
       </div>
+      <div class="field">
+        <label for="curv_speed_bias">curv speed bias</label>
+        <input type="number" id="curv_speed_bias" step="0.1" min="0.1" max="5" />
+      </div>
     </div>
     <p class="hint">0 = simple (stop when lost) &nbsp;|&nbsp; 1 = find line (spin to recover) &nbsp;|&nbsp; 2 = pid turn (90° corner) &nbsp;|&nbsp; 3 = adaptive (blend error with horizontal bias scaled by vertical coverage; horiz weight scales the bias)</p>
   </div>
@@ -689,7 +693,7 @@
   <script>
     // All keys match the JSON keys in config.yaml exactly.
     const KEYS = [
-      "line_follow_mode", "simple_curv_thresh", "adaptive_horiz_weight",
+      "line_follow_mode", "simple_curv_thresh", "adaptive_horiz_weight", "curv_speed_bias",
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
@@ -739,6 +743,7 @@
       forward_speed:           [0,    1,      0.01  ],
       simple_curv_thresh:      [0.05, 5,      0.05  ],
       adaptive_horiz_weight:   [0,    1,      0.05  ],
+      curv_speed_bias:         [0.1,  5,      0.1   ],
       find_line_turn_speed:    [0,    1,      0.01  ],
       corner_curvature_thresh: [0,    2,      0.05  ],
       corner_curve_conf_min:   [0,    1,      0.1   ],

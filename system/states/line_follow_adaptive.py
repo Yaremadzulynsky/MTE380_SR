@@ -43,7 +43,8 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         -1.0, 1.0,
     )
 
-    curv_scale = _clamp(1.0 - abs(det.curvature) / sm.cfg.corner_curvature_thresh, 0.0, 1.0)
+    curv_t     = _clamp(abs(det.curvature) / sm.cfg.corner_curvature_thresh, 0.0, 1.0)
+    curv_scale = (1.0 - curv_t) ** sm.cfg.curv_speed_bias
     adj_base   = sm.cfg.min_speed + (sm.cfg.base_speed - sm.cfg.min_speed) * curv_scale
     left, right = steer(sm, blended, base_speed=adj_base)
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)
