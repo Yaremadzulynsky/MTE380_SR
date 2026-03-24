@@ -505,21 +505,8 @@ class Perception:
         tape_cx = float(cx_roi)
         tape_cy = float(roi_y + cy_roi)
 
-        # Bottom of blob → ground point nearer the wheels than the centroid
-        pts = largest.reshape(-1, 2)
-        v_max = float(np.max(pts[:, 1]))
-        row = pts[pts[:, 1] >= v_max - 1.0]
-        u_pix = float(np.mean(row[:, 0])) if len(row) > 0 else cx_roi
-        v_pix = float(roi_y + v_max)
-
-        u_c = float(cx_roi)
-        v_c = float(roi_y + cy_roi)
-        v_span = v_pix - v_c
-        v_target = v_pix + self.line_axle_extrap * v_span
-        v_target = _clamp(v_target, 0.0, float(self.height - 1))
-        u_steer = _u_on_line_at_v(u_c, v_c, u_pix, v_pix, v_target)
-        err = _clamp((u_steer - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
-        return True, err, tape_cx, tape_cy, float(u_steer), float(v_target)
+        err = _clamp((cx_roi - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
+        return True, err, tape_cx, tape_cy, tape_cx, tape_cy
 
     def _detect_blue(self, hsv: np.ndarray) -> tuple[bool, float | None]:
         """Returns (found, cx_norm) for the largest qualifying blue contour.
