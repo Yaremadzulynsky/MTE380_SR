@@ -204,6 +204,21 @@ def test_stop():
     return jsonify({"ok": True})
 
 
+@app.post("/api/servo")
+def servo():
+    """Send a one-shot servo angle command (degrees 0–180)."""
+    if _runner is None:
+        return jsonify({"error": "No runner attached."}), 503
+    data = request.get_json(silent=True) or {}
+    try:
+        angle = float(data["angle"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({"error": "angle must be a number"}), 400
+    angle = max(0.0, min(180.0, angle))
+    _runner._brain.send_claw(angle)
+    return jsonify({"ok": True, "angle": angle})
+
+
 @app.post("/api/drive")
 def drive():
     """Continuously send direct voltage to motors until /api/drive/stop."""

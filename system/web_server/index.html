@@ -421,12 +421,8 @@
     <h2>Drive Forward — to pickup point</h2>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="forward_ticks">ticks (encoder counts)</label><button type="button" class="info-btn" data-help="forward_ticks" aria-label="Help: forward_ticks">i</button></div>
-        <input type="number" id="forward_ticks" step="10" min="0" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="forward_speed">speed (fraction)</label><button type="button" class="info-btn" data-help="forward_speed" aria-label="Help: forward_speed">i</button></div>
-        <input type="number" id="forward_speed" step="0.01" min="0" max="1" />
+        <div class="field-label-row"><label for="forward_distance_m">distance (m)</label><button type="button" class="info-btn" data-help="forward_distance_m" aria-label="Help: forward_distance_m">i</button></div>
+        <input type="number" id="forward_distance_m" step="0.01" min="0" max="5" />
       </div>
     </div>
   </div>
@@ -558,6 +554,16 @@
         <input type="number" id="pickup_hold_s" step="0.1" min="0" />
       </div>
     </div>
+    <div class="fields" style="align-items:flex-end; margin-top:0.8rem;">
+      <div class="field">
+        <label for="servo-angle">angle (°)</label>
+        <input type="number" id="servo-angle" value="90" step="1" min="0" max="180" />
+      </div>
+      <div class="field">
+        <button onclick="moveServo()" style="margin-top:1.2rem;">Move</button>
+      </div>
+    </div>
+    <p id="servo-status" class="hint" style="margin-top:0.4rem;"></p>
   </div>
 
   <!-- Position test -->
@@ -695,7 +701,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "error_heading_weight", "error_curvature_weight",
-      "forward_ticks", "forward_speed",
+      "forward_distance_m",
       "find_line_turn_speed",
       "corner_curvature_thresh", "curve_n_strips",
       "turn_speed", "turn_duration_s",
@@ -709,7 +715,6 @@
     ];
     const INT_KEYS = new Set([
       "line_follow_mode",
-      "forward_ticks",
       "curve_n_strips",
       "red_loss_debounce_frames",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
@@ -738,8 +743,7 @@
       red_error_ema_alpha:     [0,    1,      0.05  ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
-      forward_ticks:           [0,    3000,   10    ],
-      forward_speed:           [0,    1,      0.01  ],
+      forward_distance_m:      [0,    5,      0.01  ],
       find_line_turn_speed:    [0,    1,      0.01  ],
       corner_curvature_thresh: [0,    2,      0.05  ],
       curve_n_strips:          [2,    20,     1     ],
@@ -854,21 +858,13 @@
         whenInc: "You raised base_speed or need more headroom; course is open and control is solid.",
         whenDec: "Overspeed on straights, instability, or hardware limits (current, vibration).",
       },
-      forward_ticks: {
-        title: "forward_ticks",
-        what: "Encoder count to drive forward during the “drive to pickup” phase (distance scales with wheel circumference and gearing).",
-        inc: "Longer forward segment; stops farther along the path.",
-        dec: "Shorter segment; stops earlier.",
-        whenInc: "Robot stops short of the pickup target; increase until reach is consistent.",
-        whenDec: "Overshoots the pickup point or hits obstacles; reduce until stop position is correct.",
-      },
-      forward_speed: {
-        title: "forward_speed",
-        what: "Motor speed fraction during that forward drive segment (not the same as base line-follow speed).",
-        inc: "Faster approach; less time but harder to stop accurately.",
-        dec: "Slower approach; easier precision, longer segment time.",
-        whenInc: "Approach is reliable but slow; you need shorter mission time.",
-        whenDec: "Overshoots or slip at the end; reduce for repeatable stopping.",
+      forward_distance_m: {
+        title: “forward_distance_m”,
+        what: “Distance in metres to drive forward during the “drive to pickup” phase using the position PID (pos_kp/ki/kd). Speed is controlled by the PID output and the pos_motor_deadband.”,
+        inc: “Longer forward segment; stops farther along the path.”,
+        dec: “Shorter segment; stops earlier.”,
+        whenInc: “Robot stops short of the pickup target.”,
+        whenDec: “Overshoots the pickup point.”,
       },
       turn_speed: {
         title: "turn_speed",
@@ -1103,7 +1099,7 @@
       wheel_diameter_m: {
         title: "wheel_diameter_m",
         what: "Physical outer diameter of the drive wheels in metres. Used to convert encoder ticks to linear distance (circumference = π × diameter).",
-        inc: "Computed distance per tick increases; forward_ticks and position PID distances scale.",
+        inc: "Computed distance per tick increases; position PID distances and forward_distance_m scale.",
         dec: "Smaller computed distance; robot thinks it has traveled less for the same ticks.",
         whenInc: "Measured distance is consistently shorter than expected (odometry underestimates).",
         whenDec: "Odometry overestimates distance; robot stops short of targets.",
@@ -1406,6 +1402,21 @@
       } catch (e) {
         document.getElementById("mission-status").textContent = "Error: " + e.message;
       }
+    }
+
+    async function moveServo() {
+      const angle = parseFloat(document.getElementById("servo-angle").value);
+      const el = document.getElementById("servo-status");
+      if (isNaN(angle)) { el.textContent = "Enter a valid angle."; return; }
+      try {
+        const res = await fetch("/api/servo", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ angle }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        el.textContent = `Moved to ${data.angle.toFixed(0)}°`;
+      } catch (e) { el.textContent = "Error: " + e.message; }
     }
 
     async function testPosition() {

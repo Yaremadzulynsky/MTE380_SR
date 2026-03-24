@@ -52,8 +52,7 @@ class Config:
     max_speed:  float = 0.45
 
     # ── Drive-forward ─────────────────────────────────────────────────────────
-    forward_ticks: int   = 800
-    forward_speed: float = 0.25
+    forward_distance_m: float = 0.4   # metres to drive before PICKUP
 
     # ── 180-degree turn ───────────────────────────────────────────────────────
     turn_speed:      float = 0.30
@@ -132,7 +131,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "base_speed", "min_speed", "max_speed",
     ]),
     ("Drive-forward", [
-        "forward_ticks", "forward_speed",
+        "forward_distance_m",
     ]),
     ("180-degree turn", [
         "turn_speed", "turn_duration_s",

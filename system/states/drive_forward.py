@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+from control.position_controller import PositionController
 from states import ControlOutput, State
 
 
 def step(sm, left_ticks: int, right_ticks: int) -> ControlOutput:
-    avg_delta = ((left_ticks - sm._enc0_left) + (right_ticks - sm._enc0_right)) // 2
-    if abs(avg_delta) >= sm.cfg.forward_ticks:
+    # Initialise controller on first tick after entering this state
+    if not hasattr(sm, "_fwd_ctrl") or sm._fwd_ctrl is None:
+        sm._fwd_ctrl = PositionController(sm._brain, sm.cfg.forward_distance_m)
+
+    ctrl = sm._fwd_ctrl
+    ctrl.step()
+
+    if ctrl.done:
+        sm._fwd_ctrl = None
         sm._enter(State.PICKUP)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-    spd = min(sm.cfg.forward_speed, sm.cfg.max_speed)
-    return ControlOutput(left=spd, right=spd, claw=None, state=sm.state)
+
+    return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
