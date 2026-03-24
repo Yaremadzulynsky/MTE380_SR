@@ -19,12 +19,13 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         sm._enter(State.LINE_FOLLOW, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
-    # Spin toward the side that last had more red
+    # Spin toward the side that last had more red.
+    # Use the speed controller PID so the integral term ramps voltage up if
+    # the wheels stall against static friction.
     v = sm.cfg.find_line_turn_speed
     if sm._find_line_turn_cw:
-        left, right = v, -v   # CW
+        sm._brain._speed_ctrl.set_target(v, -v)   # CW
     else:
-        left, right = -v, v   # CCW
-
-    sm._brain.send_voltage(left, right)
+        sm._brain._speed_ctrl.set_target(-v, v)   # CCW
+    sm._brain._speed_ctrl.step()
     return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
