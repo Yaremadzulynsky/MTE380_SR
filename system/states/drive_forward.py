@@ -14,7 +14,7 @@ from states import ControlOutput, State, _clamp
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
-    if sm._fwd_ctrl is None:
+    if not hasattr(sm, "_fwd_ctrl") or sm._fwd_ctrl is None:
         sm._fwd_ctrl = PositionController(sm._brain, sm.cfg.forward_distance_m)
 
     cx = det.blue_cx_norm  # None or float in [-1, 1], positive = blue is right
