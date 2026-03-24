@@ -645,6 +645,30 @@
     <p id="drive-status" class="hint" style="margin-top:0.5rem;"></p>
   </div>
 
+  <!-- Speed PID test -->
+  <div class="card">
+    <h2>Speed PID test</h2>
+    <p class="hint">Drive both motors via the RPM speed controller. Enter speed as a fraction of max speed (−1 to 1). Target RPM = fraction × 320. Actual RPM from encoders is shown below.</p>
+    <div class="fields" style="align-items:flex-end;">
+      <div class="field">
+        <label for="spid-left">left</label>
+        <input type="number" id="spid-left" value="0.3" step="0.05" min="-1" max="1" />
+      </div>
+      <div class="field">
+        <label for="spid-right">right</label>
+        <input type="number" id="spid-right" value="0.3" step="0.05" min="-1" max="1" />
+      </div>
+      <div class="field">
+        <button onclick="speedPidStart()" style="margin-top:1.2rem;">Drive</button>
+      </div>
+      <div class="field">
+        <button onclick="speedPidStop()" style="margin-top:1.2rem; background:#7f1d1d; color:#fca5a5;">Stop</button>
+      </div>
+    </div>
+    <p id="spid-status" class="hint" style="margin-top:0.5rem;"></p>
+    <div id="spid-telem" style="font-size:0.78rem; color:#94a3b8; margin-top:0.35rem; line-height:1.6;"></div>
+  </div>
+
   <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">
     <div class="help-dialog-inner">
       <button type="button" class="help-close" aria-label="Close help">&times;</button>
@@ -1153,6 +1177,34 @@
       } catch (_) {}
     }
 
+    const MAX_RPM = 320;
+    let _spidTarget = { left: 0, right: 0 };
+
+    async function speedPidStart() {
+      const left  = parseFloat(document.getElementById("spid-left").value);
+      const right = parseFloat(document.getElementById("spid-right").value);
+      const el = document.getElementById("spid-status");
+      _spidTarget = { left, right };
+      try {
+        const res = await fetch("/api/drive", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ left, right }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        el.textContent = `Running — target L=${(left * MAX_RPM).toFixed(0)} RPM  R=${(right * MAX_RPM).toFixed(0)} RPM`;
+      } catch (e) { el.textContent = "Error: " + e.message; }
+    }
+
+    async function speedPidStop() {
+      _spidTarget = { left: 0, right: 0 };
+      try {
+        await fetch("/api/drive/stop", { method: "POST" });
+        document.getElementById("spid-status").textContent = "Stopped.";
+        document.getElementById("spid-telem").textContent = "";
+      } catch (_) {}
+    }
+
     async function testStop() {
       try {
         await fetch("/api/test/stop", { method: "POST" });
@@ -1176,6 +1228,15 @@
           `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
           `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
           `blue=${s.blue_found ? "Y" : "N"}  T=${s.t_junction ? "Y" : "N"}`;
+        // Speed PID telemetry
+        const spidEl = document.getElementById("spid-telem");
+        if (spidEl) {
+          const tL = (_spidTarget.left  * MAX_RPM).toFixed(0);
+          const tR = (_spidTarget.right * MAX_RPM).toFixed(0);
+          const aL = s.rpm_l != null ? s.rpm_l.toFixed(1) : "—";
+          const aR = s.rpm_r != null ? s.rpm_r.toFixed(1) : "—";
+          spidEl.textContent = `target L=${tL} RPM  R=${tR} RPM  |  actual L=${aL} RPM  R=${aR} RPM`;
+        }
         btnStart.disabled = s.running;
         btnStop.disabled  = !s.running;
         btnStart.style.opacity = s.running ? "0.45" : "1";
