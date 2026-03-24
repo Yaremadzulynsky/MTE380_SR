@@ -199,6 +199,8 @@ class RobotBrain:
                 self._sm.cfg = cfg
                 self._sm._steer_pid.tunings = (cfg.steer_kp, cfg.steer_ki, cfg.steer_kd)
                 self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
+                self._sm._heading_pid.tunings = (cfg.heading_kp, cfg.heading_ki, cfg.heading_kd)
+                self._sm._heading_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
 
     # ── Motion commands ───────────────────────────────────────────────────────
 
