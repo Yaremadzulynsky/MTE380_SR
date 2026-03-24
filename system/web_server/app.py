@@ -215,7 +215,7 @@ def servo():
     except (KeyError, TypeError, ValueError):
         return jsonify({"error": "angle must be a number"}), 400
     angle = max(0.0, min(180.0, angle))
-    _runner._brain.send_claw(angle)
+    _runner.send_claw(angle)
     return jsonify({"ok": True, "angle": angle})
 
 
