@@ -150,10 +150,8 @@ class Perception:
 
     def _update_hsv_ranges(self, cfg: Config) -> None:
         """Rebuild HSV mask arrays from config."""
-        self._RED_LO1 = np.array([cfg.red_h_lo1, cfg.red_s_min, cfg.red_v_min], np.uint8)
-        self._RED_HI1 = np.array([cfg.red_h_hi1, 255,           255          ], np.uint8)
-        self._RED_LO2 = np.array([cfg.red_h_lo2, cfg.red_s_min, cfg.red_v_min], np.uint8)
-        self._RED_HI2 = np.array([cfg.red_h_hi2, 255,           255          ], np.uint8)
+        self._RED_LO = np.array([cfg.red_h_lo, cfg.red_s_min, cfg.red_v_min], np.uint8)
+        self._RED_HI = np.array([cfg.red_h_hi, 255,          255          ], np.uint8)
         self._BLUE_LO  = np.array([cfg.blue_h_lo,  cfg.blue_s_min,  cfg.blue_v_min ], np.uint8)
         self._BLUE_HI  = np.array([cfg.blue_h_hi,  255,             255            ], np.uint8)
         self._GREEN_LO = np.array([cfg.green_h_lo, cfg.green_s_min, cfg.green_v_min], np.uint8)
@@ -403,10 +401,7 @@ class Perception:
 
     def _build_red_mask(self, hsv: np.ndarray) -> np.ndarray:
         """Binary mask after inRange + morphology — shared by _detect_red and get_red_mask_frame."""
-        mask = cv2.bitwise_or(
-            cv2.inRange(hsv, self._RED_LO1, self._RED_HI1),
-            cv2.inRange(hsv, self._RED_LO2, self._RED_HI2),
-        )
+        mask = cv2.inRange(hsv, self._RED_LO, self._RED_HI)
         # Light open removes salt noise; 5×5 close fills tape gaps.
         k3 = np.ones((3, 3), np.uint8)
         k5 = np.ones((5, 5), np.uint8)

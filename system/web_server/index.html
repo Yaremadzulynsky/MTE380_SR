@@ -285,13 +285,11 @@
   <!-- Line detection HSV (near camera for quick colour tuning) -->
   <div class="card">
     <h2>Line Detection — HSV</h2>
-    <p class="hint">H in [0–179], S and V in [0–255]. Red wraps at hue=0/179, so two hue bands are used.</p>
+    <p class="hint">H in [0–179], S and V in [0–255].</p>
     <p class="hint" style="margin-top:0.25rem;">Red</p>
     <div class="fields">
-      <div class="field"><div class="field-label-row"><label for="red_h_lo1">H lo1</label><button type="button" class="info-btn" data-help="red_h_lo1" aria-label="Help: red_h_lo1">i</button></div><input type="number" id="red_h_lo1" step="1" min="0" max="30" /></div>
-      <div class="field"><div class="field-label-row"><label for="red_h_hi1">H hi1</label><button type="button" class="info-btn" data-help="red_h_hi1" aria-label="Help: red_h_hi1">i</button></div><input type="number" id="red_h_hi1" step="1" min="0" max="30" /></div>
-      <div class="field"><div class="field-label-row"><label for="red_h_lo2">H lo2</label><button type="button" class="info-btn" data-help="red_h_lo2" aria-label="Help: red_h_lo2">i</button></div><input type="number" id="red_h_lo2" step="1" min="150" max="179" /></div>
-      <div class="field"><div class="field-label-row"><label for="red_h_hi2">H hi2</label><button type="button" class="info-btn" data-help="red_h_hi2" aria-label="Help: red_h_hi2">i</button></div><input type="number" id="red_h_hi2" step="1" min="150" max="179" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_h_lo">H low</label><button type="button" class="info-btn" data-help="red_h_lo" aria-label="Help: red_h_lo">i</button></div><input type="number" id="red_h_lo" step="1" min="0" max="179" /></div>
+      <div class="field"><div class="field-label-row"><label for="red_h_hi">H high</label><button type="button" class="info-btn" data-help="red_h_hi" aria-label="Help: red_h_hi">i</button></div><input type="number" id="red_h_hi" step="1" min="0" max="179" /></div>
       <div class="field"><div class="field-label-row"><label for="red_s_min">S min</label><button type="button" class="info-btn" data-help="red_s_min" aria-label="Help: red_s_min">i</button></div><input type="number" id="red_s_min" step="1" min="0" max="255" /></div>
       <div class="field"><div class="field-label-row"><label for="red_v_min">V min</label><button type="button" class="info-btn" data-help="red_v_min" aria-label="Help: red_v_min">i</button></div><input type="number" id="red_v_min" step="1" min="0" max="255" /></div>
     </div>
@@ -754,7 +752,7 @@
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
       "claw_open", "claw_closed", "pickup_hold_s",
-      "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
+      "red_h_lo", "red_h_hi",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
       "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
@@ -763,7 +761,7 @@
       "line_follow_mode",
       "curve_n_strips",
       "red_loss_debounce_frames", "red_min_area_px", "red_mask_min_blob_px", "find_line_min_blob_px",
-      "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
+      "red_h_lo", "red_h_hi",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
       "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
@@ -817,10 +815,8 @@
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
       pickup_hold_s:           [0,    5,      0.1   ],
-      red_h_lo1:               [0,    30,     1     ],
-      red_h_hi1:               [0,    30,     1     ],
-      red_h_lo2:               [150,  179,    1     ],
-      red_h_hi2:               [150,  179,    1     ],
+      red_h_lo:                [0,    179,    1     ],
+      red_h_hi:                [0,    179,    1     ],
       red_s_min:               [0,    255,    1     ],
       red_v_min:               [0,    255,    1     ],
       blue_h_lo:               [80,   140,    1     ],
@@ -957,37 +953,21 @@
       },
 
       // ── HSV colour detection ────────────────────────────────────────
-      red_h_lo1: {
-        title: "red_h_lo1 — Red hue band 1 lower bound",
-        what: "OpenCV hue is 0–179. Red wraps at 0, so band 1 covers hues near 0 (e.g. 0–10). This is the lower edge of that band.",
-        inc: "Includes slightly less of the near-zero reds in the mask.",
-        dec: "Captures hues closer to pure red / magenta at the zero end.",
-        whenInc: "Non-red objects near hue 0 bleed into the mask.",
-        whenDec: "True red tape near hue=0 is not being detected.",
+      red_h_lo: {
+        title: "red_h_lo — Red hue lower bound",
+        what: "OpenCV hue is 0–179. Lower edge of the red hue band.",
+        inc: "Narrows the band from the low end; excludes lower hues.",
+        dec: "Widens the band to include more lower hues.",
+        whenInc: "Non-red objects at low hues bleeding into the mask.",
+        whenDec: "Red tape at the low end of the hue range is being missed.",
       },
-      red_h_hi1: {
-        title: "red_h_hi1 — Red hue band 1 upper bound",
-        what: "Upper edge of the first red hue band (hues near 0). Typical range 5–15.",
-        inc: "Captures more orange-ish reds in band 1.",
-        dec: "Tighter band; excludes orange but may miss true red under varying lighting.",
+      red_h_hi: {
+        title: "red_h_hi — Red hue upper bound",
+        what: "Upper edge of the red hue band.",
+        inc: "Widens the band to include more higher hues (orange-ish reds).",
+        dec: "Narrows the band; excludes orange.",
         whenInc: "Red tape looks orange under warm light and is missed.",
         whenDec: "Orange objects falsely detected as red.",
-      },
-      red_h_lo2: {
-        title: "red_h_lo2 — Red hue band 2 lower bound",
-        what: "Lower edge of the second red hue band (hues near 179, the other side of red's wrap). Typical range 160–170.",
-        inc: "Narrower band near 179; excludes some magenta.",
-        dec: "Captures more magenta / deep pink reds.",
-        whenInc: "Magenta or purple objects triggering false positives.",
-        whenDec: "Deep red or crimson tape on the high-hue side is missed.",
-      },
-      red_h_hi2: {
-        title: "red_h_hi2 — Red hue band 2 upper bound",
-        what: "Upper edge of the second red hue band (must be ≤179). Set to 179 to include everything up to the hue wrap.",
-        inc: "No practical effect once at 179.",
-        dec: "Cuts off the highest hues; may miss some reds under cool lighting.",
-        whenInc: "True red is being missed at the high end of the hue scale.",
-        whenDec: "Very-high-hue non-red objects are triggering the detector.",
       },
       red_s_min: {
         title: "red_s_min — Red minimum saturation",

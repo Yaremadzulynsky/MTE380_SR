@@ -102,10 +102,8 @@ class Config:
     error_curvature_weight:   float = 0.2  # how much curvature (bend ahead) contributes to red_error
 
     # ── Line detection HSV ────────────────────────────────────────────────────
-    red_h_lo1:  int = 0
-    red_h_hi1:  int = 10
-    red_h_lo2:  int = 161
-    red_h_hi2:  int = 179
+    red_h_lo:   int = 0
+    red_h_hi:   int = 10
     red_s_min:  int = 155
     red_v_min:  int = 84
     blue_h_lo:  int = 95
@@ -169,7 +167,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "line_axle_extrap", "curve_n_strips", "error_heading_weight", "error_curvature_weight",
     ]),
     ("Line detection HSV", [
-        "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
+        "red_h_lo", "red_h_hi",
         "red_s_min", "red_v_min",
         "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
         "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
