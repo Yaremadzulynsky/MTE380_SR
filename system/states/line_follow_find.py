@@ -17,4 +17,6 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     curv_scale = _clamp(1.0 - abs(det.curvature) / sm.cfg.corner_curvature_thresh, 0.0, 1.0)
     adj_base   = sm.cfg.min_speed + (sm.cfg.base_speed - sm.cfg.min_speed) * curv_scale
     left, right = steer(sm, det.red_error, base_speed=adj_base)
+    if sm.cfg.reverse_line_follow:
+        left, right = -left, -right
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)

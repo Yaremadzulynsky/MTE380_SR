@@ -20,6 +20,7 @@ CLI (python -m cli.main serve --config /path/to/config.yaml).
 from __future__ import annotations
 
 import dataclasses
+import json
 import sys
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from flask import Flask, Response, jsonify, request, send_from_directory
+from flask_sock import Sock
 
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE.parent))
@@ -35,6 +37,7 @@ import config as _config_module
 from config import Config
 
 app = Flask(__name__)
+sock = Sock(app)
 
 # ── Mission runner (injected by cmd_serve) ────────────────────────────────────
 
@@ -140,6 +143,36 @@ def set_pid():
     if _runner is not None:
         _runner.reconfigure(cfg)
     return jsonify({"ok": True, "saved": dataclasses.asdict(cfg)})
+
+
+@sock.route("/ws/status")
+def ws_status(ws):
+    """Push status JSON at ~200 Hz over a persistent WebSocket connection."""
+    interval = 1.0 / 200.0
+    while True:
+        t0 = time.monotonic()
+        if _runner is None:
+            ws.send(json.dumps({"error": "No runner attached."}))
+        else:
+            snap = _runner.snapshot()
+            det  = snap.get("det")
+            ws.send(json.dumps({
+                "sm_state":     snap["sm_state"],
+                "running":      snap["running"],
+                "enc_l":        snap["enc_l"],
+                "enc_r":        snap["enc_r"],
+                "rpm_l":        snap["rpm_l"],
+                "rpm_r":        snap["rpm_r"],
+                "red_found":    det.red_found    if det else False,
+                "red_error":    det.red_error    if det else 0.0,
+                "blue_found":   det.blue_found   if det else False,
+                "green_found":  det.green_found  if det else False,
+                "lateral_turn": snap["lateral_turn"],
+                "heading_turn": snap["heading_turn"],
+                "cam_fps":      snap["cam_fps"],
+            }))
+        elapsed = time.monotonic() - t0
+        time.sleep(max(0.0, interval - elapsed))
 
 
 @app.get("/api/status")

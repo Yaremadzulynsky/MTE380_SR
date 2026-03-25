@@ -3,6 +3,7 @@
 # Create the venv with: python3 -m venv --system-site-packages .venv
 pyserial
 flask
+flask-sock
 simple-pid
 picamera2
 pyyaml

@@ -319,6 +319,10 @@
         <div class="field-label-row"><label for="line_follow_mode">mode (1 or 4)</label><button type="button" class="info-btn" data-help="line_follow_mode" aria-label="Help: line_follow_mode">i</button></div>
         <input type="number" id="line_follow_mode" step="1" min="1" max="4" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="reverse_line_follow">reverse</label><button type="button" class="info-btn" data-help="reverse_line_follow" aria-label="Help: reverse_line_follow">i</button></div>
+        <input type="checkbox" id="reverse_line_follow" />
+      </div>
     </div>
     <p class="hint">1 = find line (steer + slow on curvature, spin to recover when lost) &nbsp;|&nbsp; 4 = find heading (lateral PID + heading PID, FIND_LINE on loss)</p>
   </div>
@@ -736,7 +740,7 @@
   <script>
     // All keys match the JSON keys in config.yaml exactly.
     const KEYS = [
-      "line_follow_mode",
+      "line_follow_mode", "reverse_line_follow",
       "heading_kp", "heading_ki", "heading_kd",
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
@@ -764,7 +768,7 @@
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
       "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
     ]);
-    const BOOL_KEYS = new Set([]);
+    const BOOL_KEYS = new Set(["reverse_line_follow"]);
 
     // [min, max, step] for each slider — drives both the range input and clamps the number input
     const SLIDER_RANGES = {
@@ -1068,6 +1072,14 @@
         dec: "Switches to mode 1 (find_line).",
         whenInc: "Mode 1 cannot stay on the line around curves; try mode 4 for heading correction.",
         whenDec: "Mode 4 heading PID is causing oscillation; revert to mode 1 for baseline tuning.",
+      },
+      reverse_line_follow: {
+        title: "reverse_line_follow — drive backward along the line",
+        what: "When enabled, the robot drives backward while following the line. Motor outputs are negated. In mode 4 the heading error sign is also flipped so the rear aligns with the line tangent instead of the nose.",
+        inc: "N/A — this is a toggle.",
+        dec: "N/A — this is a toggle.",
+        whenInc: "Use when the robot needs to return along the same line in reverse.",
+        whenDec: "Disable for normal forward line following.",
       },
 
       // ── Line error perception ───────────────────────────────────────
@@ -1597,41 +1609,41 @@
       } catch (e) { /* ignore */ }
     }
 
-    // ── Status polling ───────────────────────────────────────────────────────
+    // ── Status WebSocket ─────────────────────────────────────────────────────
 
-    async function pollStatus() {
-      try {
-        const res = await fetch("/api/status");
-        if (!res.ok) return;
-        const s = await res.json();
-        const telem = document.getElementById("telemetry");
-        const btnStart = document.getElementById("btn-start");
-        const btnStop  = document.getElementById("btn-stop");
-        telem.textContent =
-          `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
-          `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
-          `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
-          `blue=${s.blue_found ? "Y" : "N"}  green=${s.green_found ? "Y" : "N"}  |  ` +
-          `lateral=${s.lateral_turn?.toFixed(3)}  heading=${s.heading_turn?.toFixed(3)}  |  ` +
-          `cam=${s.cam_fps?.toFixed(1)} fps`;
-        // Speed PID telemetry
-        const spidEl = document.getElementById("spid-telem");
-        if (spidEl) {
-          const tL = (_spidTarget.left  * MAX_RPM).toFixed(0);
-          const tR = (_spidTarget.right * MAX_RPM).toFixed(0);
-          const aL = s.rpm_l != null ? s.rpm_l.toFixed(1) : "—";
-          const aR = s.rpm_r != null ? s.rpm_r.toFixed(1) : "—";
-          spidEl.textContent = `target L=${tL} RPM  R=${tR} RPM  |  actual L=${aL} RPM  R=${aR} RPM`;
-        }
-        btnStart.disabled = s.running;
-        btnStop.disabled  = !s.running;
-        btnStart.style.opacity = s.running ? "0.45" : "1";
-        btnStop.style.opacity  = s.running ? "1"    : "0.45";
-      } catch (_) {}
+    function applyStatus(s) {
+      if (s.error) return;
+      const telem = document.getElementById("telemetry");
+      const btnStart = document.getElementById("btn-start");
+      const btnStop  = document.getElementById("btn-stop");
+      telem.textContent =
+        `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
+        `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
+        `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
+        `blue=${s.blue_found ? "Y" : "N"}  green=${s.green_found ? "Y" : "N"}  |  ` +
+        `lateral=${s.lateral_turn?.toFixed(3)}  heading=${s.heading_turn?.toFixed(3)}  |  ` +
+        `cam=${s.cam_fps?.toFixed(1)} fps`;
+      const spidEl = document.getElementById("spid-telem");
+      if (spidEl) {
+        const tL = (_spidTarget.left  * MAX_RPM).toFixed(0);
+        const tR = (_spidTarget.right * MAX_RPM).toFixed(0);
+        const aL = s.rpm_l != null ? s.rpm_l.toFixed(1) : "—";
+        const aR = s.rpm_r != null ? s.rpm_r.toFixed(1) : "—";
+        spidEl.textContent = `target L=${tL} RPM  R=${tR} RPM  |  actual L=${aL} RPM  R=${aR} RPM`;
+      }
+      btnStart.disabled = s.running;
+      btnStop.disabled  = !s.running;
+      btnStart.style.opacity = s.running ? "0.45" : "1";
+      btnStop.style.opacity  = s.running ? "1"    : "0.45";
     }
 
-    setInterval(pollStatus, 500);
-    pollStatus();
+    function connectStatusWS() {
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${proto}//${location.host}/ws/status`);
+      ws.onmessage = (e) => { try { applyStatus(JSON.parse(e.data)); } catch (_) {} };
+      ws.onclose   = ()  => setTimeout(connectStatusWS, 1000);
+    }
+    connectStatusWS();
 
     // ── Move-progress polling ─────────────────────────────────────────────────
 

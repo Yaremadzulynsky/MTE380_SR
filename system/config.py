@@ -28,7 +28,8 @@ _CONFIG_PATH = Path(__file__).parent / "config.yaml"
 @dataclass
 class Config:
     # ── Line follow mode ──────────────────────────────────────────────────────
-    line_follow_mode: int = 1        # 1=find_line  4=find_heading
+    line_follow_mode:     int  = 1       # 1=find_line  4=find_heading
+    reverse_line_follow:  bool = False   # drive backward while following the line
 
     # ── Steering PID ─────────────────────────────────────────────────────────
     steer_kp:        float = 0.65
@@ -128,7 +129,7 @@ class Config:
 
 _SECTIONS: list[tuple[str, list[str]]] = [
     ("Line follow mode", [
-        "line_follow_mode",
+        "line_follow_mode", "reverse_line_follow",
     ]),
     ("Steering PID", [
         "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
