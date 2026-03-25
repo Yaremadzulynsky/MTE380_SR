@@ -508,6 +508,14 @@ class Perception:
         err = _clamp((cx_roi - frame_w / 2.0) / (frame_w / 2.0), -1.0, 1.0)
         return True, err, tape_cx, tape_cy, tape_cx, tape_cy
 
+    @staticmethod
+    def _denoise_blob_mask(mask: np.ndarray) -> np.ndarray:
+        """Open (remove salt noise) then close (fill small holes) for blob targets."""
+        k3 = np.ones((3, 3), np.uint8)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  k3, iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k3, iterations=1)
+        return mask
+
     def _detect_blue(self, hsv: np.ndarray) -> tuple[bool, float | None]:
         """Returns (found, cx_norm) for the largest qualifying blue contour.
 
@@ -515,6 +523,7 @@ class Perception:
         cx_norm is None when no qualifying contour exists.
         """
         mask = cv2.inRange(hsv, self._BLUE_LO, self._BLUE_HI)
+        mask = self._denoise_blob_mask(mask)
         self._last_blue_mask = mask
         w = hsv.shape[1]
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -530,6 +539,7 @@ class Perception:
     def _detect_green(self, hsv: np.ndarray) -> bool:
         """Returns True when a green marker of sufficient area is visible."""
         mask = cv2.inRange(hsv, self._GREEN_LO, self._GREEN_HI)
+        mask = self._denoise_blob_mask(mask)
         self._last_green_mask = mask
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return any(cv2.contourArea(c) >= _GREEN_MIN_AREA for c in contours)
