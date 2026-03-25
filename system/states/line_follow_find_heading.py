@@ -47,4 +47,6 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     left  = _clamp(fwd + turn, -1.0, 1.0)
     right = _clamp(fwd - turn, -1.0, 1.0)
     left, right = scale_pair_to_max_speed(sm, left, right)
+
+    print(lateral_turn, heading_turn)
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)
