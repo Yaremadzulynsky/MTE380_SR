@@ -87,7 +87,8 @@ class Config:
     find_line_min_blob_px:   int   = 200   # minimum red blob area to consider line reacquired
 
     # ── Corner turn ───────────────────────────────────────────────────────────
-    corner_curvature_thresh: float = 0.3   # denominator for curvature-based speed scaling
+    corner_curvature_thresh: float = 0.3   # denominator for curvature-based speed scaling (mode 1)
+    heading_speed_thresh:    float = 0.4   # heading PID output magnitude at which speed reaches min_speed (mode 4)
 
     # ── Vision / perception ───────────────────────────────────────────────────
     red_loss_debounce_frames: int   = 4
@@ -159,7 +160,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "find_line_turn_speed", "find_line_min_blob_px",
     ]),
     ("Corner turn", [
-        "corner_curvature_thresh",
+        "corner_curvature_thresh", "heading_speed_thresh",
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px",

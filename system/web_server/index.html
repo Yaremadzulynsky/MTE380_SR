@@ -499,6 +499,10 @@
         <input type="number" id="corner_curvature_thresh" step="0.05" min="0" max="2" />
       </div>
       <div class="field">
+        <div class="field-label-row"><label for="heading_speed_thresh">heading speed thresh</label><button type="button" class="info-btn" data-help="heading_speed_thresh" aria-label="Help: heading_speed_thresh">i</button></div>
+        <input type="number" id="heading_speed_thresh" step="0.05" min="0.05" max="3" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="curve_n_strips">curve strips</label><button type="button" class="info-btn" data-help="curve_n_strips" aria-label="Help: curve_n_strips">i</button></div>
         <input type="number" id="curve_n_strips" step="1" min="2" max="20" />
       </div>
@@ -741,7 +745,7 @@
       "forward_drive_s", "forward_drive_speed", "forward_align_thresh",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed", "find_line_min_blob_px",
-      "corner_curvature_thresh", "curve_n_strips",
+      "corner_curvature_thresh", "heading_speed_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
@@ -792,6 +796,7 @@
       find_line_turn_speed:    [0,    1,      0.01  ],
       find_line_min_blob_px:   [0,    5000,   10    ],
       corner_curvature_thresh: [0,    2,      0.05  ],
+      heading_speed_thresh:    [0.05, 3,      0.05  ],
       curve_n_strips:          [2,    20,     1     ],
       wheel_diameter_m:        [0.01, 0.20,   0.001 ],
       wheelbase_m:             [0.05, 0.50,   0.001 ],
@@ -1141,6 +1146,14 @@
         dec: "Slows earlier on gentler curves; more conservative cornering.",
         whenInc: "Robot slows too much on mild bends where full speed is fine.",
         whenDec: "Robot enters sharp corners too fast and loses the line.",
+      },
+      heading_speed_thresh: {
+        title: "heading_speed_thresh — mode 4 heading speed scaling",
+        what: "Heading PID output magnitude at which forward speed reaches min_speed in mode 4. Speed scales linearly from base_speed at 0 PID output down to min_speed at this threshold. The robot must reduce its heading correction demand before accelerating.",
+        inc: "Tolerates a larger PID correction command before slowing; robot stays faster through moderate misalignments.",
+        dec: "Slows more aggressively whenever the heading PID is commanding significant turns.",
+        whenInc: "Robot slows too much on gentle curves where the PID output is already small.",
+        whenDec: "Robot enters corners too fast; heading PID can't correct before the line is lost.",
       },
       curve_n_strips: {
         title: "curve_n_strips",
