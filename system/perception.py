@@ -471,12 +471,11 @@ class Perception:
                   for i in range(len(t_s) - 1)
                   if (t_s[i+1] - t_s[i]) > 1e-9]
 
-        # Weight peaks at t=0.5 (frame centre) and falls off with σ=0.3.
+        # Use the slope of the segment whose midpoint is closest to t=0.5 (frame centre).
         if slopes:
             seg_mids = [(t_s[i] + t_s[i + 1]) / 2.0 for i in range(len(slopes))]
-            weights  = [np.exp(-((m - 0.5) ** 2) / (2 * 0.3 ** 2)) for m in seg_mids]
-            total_w  = sum(weights)
-            heading  = sum(w * s for w, s in zip(weights, slopes)) / total_w
+            center_idx = min(range(len(seg_mids)), key=lambda i: abs(seg_mids[i] - 0.5))
+            heading = slopes[center_idx]
         else:
             heading = float(b)
 
