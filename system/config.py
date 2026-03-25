@@ -122,6 +122,7 @@ class Config:
     camera_height:       int   = 480
     fps:                 float = 30.0
     roi_top_ratio:       float = 0.0
+    roi_top_px:          int   = 0    # pixels to crop from top of processed (320×240) frame
     camera_rotation_deg: float = 0.0  # extra CW rotation (degrees) applied after 180° flip
 
 
@@ -174,7 +175,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "green_h_lo", "green_h_hi", "green_s_min", "green_v_min",
     ]),
     ("Camera / runtime", [
-        "camera_width", "camera_height", "fps", "roi_top_ratio", "camera_rotation_deg",
+        "camera_width", "camera_height", "fps", "roi_top_ratio", "roi_top_px", "camera_rotation_deg",
     ]),
 ]
 

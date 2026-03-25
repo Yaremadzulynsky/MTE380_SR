@@ -83,6 +83,7 @@ class Perception:
         self.width  = c.camera_width
         self.height = c.camera_height
         self.roi_top_ratio = _clamp(c.roi_top_ratio, 0.0, 0.95)
+        self.roi_top_px = max(0, int(c.roi_top_px))
 
         self._update_hsv_ranges(c)
 
@@ -140,6 +141,7 @@ class Perception:
         self._red_min_area            = max(1, int(cfg.red_min_area_px))
         self._red_mask_min_blob_px    = max(0, int(cfg.red_mask_min_blob_px))
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
+        self.roi_top_px               = max(0, int(cfg.roi_top_px))
         self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
         self._error_heading_weight    = float(cfg.error_heading_weight)
         self._error_curvature_weight  = float(cfg.error_curvature_weight)
@@ -328,6 +330,8 @@ class Perception:
                 M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -self._camera_rotation_deg, 1.0)
                 frame = cv2.warpAffine(frame, M, (w, h))
             frame = cv2.resize(frame, (self._PROC_W, self._PROC_H), interpolation=cv2.INTER_LINEAR)
+            if self.roi_top_px > 0:
+                frame = frame[self.roi_top_px:, :]
             with self._capture_lock:
                 self._capture_buf = frame
             self._capture_event.set()
