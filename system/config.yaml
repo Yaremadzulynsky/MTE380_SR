@@ -46,7 +46,7 @@ red_error_ema_alpha: 0.35
 line_axle_extrap: 1.0
 
 # Camera / runtime
-camera_width: 640
-camera_height: 480
-fps: 30.0
+camera_width: 320
+camera_height: 240
+fps: 120
 roi_top_ratio: 0.0
