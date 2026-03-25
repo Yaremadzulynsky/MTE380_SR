@@ -483,6 +483,10 @@
         <div class="field-label-row"><label for="find_line_turn_speed">turn speed</label><button type="button" class="info-btn" data-help="find_line_turn_speed" aria-label="Help: find_line_turn_speed">i</button></div>
         <input type="number" id="find_line_turn_speed" step="0.01" min="0" max="1" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="find_line_min_blob_px">reacquire min blob (px²)</label><button type="button" class="info-btn" data-help="find_line_min_blob_px" aria-label="Help: find_line_min_blob_px">i</button></div>
+        <input type="number" id="find_line_min_blob_px" step="10" min="0" />
+      </div>
     </div>
   </div>
 
@@ -736,7 +740,7 @@
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
       "forward_drive_s", "forward_drive_speed", "forward_align_thresh",
       "green_delay_s", "dropoff_distance_m",
-      "find_line_turn_speed",
+      "find_line_turn_speed", "find_line_min_blob_px",
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",

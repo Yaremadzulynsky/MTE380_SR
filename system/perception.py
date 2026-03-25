@@ -55,6 +55,7 @@ class FrameDetection:
     # Horizontal red pixel balance: (right_px - left_px) / total_px  in [-1, 1]
     # +1 = all red on right half, -1 = all red on left half, 0 = balanced / not found
     red_horiz_balance: float = 0.0
+    red_blob_area: float = 0.0  # area of the largest red contour in pixels² (0 when not found)
 
 
 class Perception:
@@ -104,8 +105,9 @@ class Perception:
         self._last_track_x: float | None = None
         self._last_track_y: float | None = None
 
-        self._last_frame:       np.ndarray | None = None
-        self._last_red_mask:    np.ndarray | None = None
+        self._last_frame:         np.ndarray | None = None
+        self._last_red_mask:      np.ndarray | None = None
+        self._last_red_blob_area: float = 0.0
         self._last_green_mask:  np.ndarray | None = None
         self._last_blue_mask:   np.ndarray | None = None
         self.mask_channel: str = "red"   # "red" | "green" | "blue"
@@ -227,6 +229,7 @@ class Perception:
             curve_conf=curve_conf,
             curve_pts=curve_pts if curve_pts else None,
             red_horiz_balance=red_horiz_balance,
+            red_blob_area=self._last_red_blob_area,
         )
 
     def get_mask_frame(self) -> np.ndarray | None:
@@ -492,13 +495,16 @@ class Perception:
 
         mask = self._build_red_mask(hsv)
         self._last_red_mask = mask
+        self._last_red_blob_area = 0.0
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return nz
 
         largest = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(largest) < self._red_min_area:
+        area = cv2.contourArea(largest)
+        self._last_red_blob_area = float(area)
+        if area < self._red_min_area:
             return nz
 
         bx, by, bw, bh = cv2.boundingRect(largest)

@@ -83,7 +83,8 @@ class Config:
     pickup_hold_s: float = 0.8
 
     # ── Find line ─────────────────────────────────────────────────────────────
-    find_line_turn_speed: float = 0.20  # in-place spin voltage while searching
+    find_line_turn_speed:    float = 0.20  # in-place spin voltage while searching
+    find_line_min_blob_px:   int   = 200   # minimum red blob area to consider line reacquired
 
     # ── Corner turn ───────────────────────────────────────────────────────────
     corner_curvature_thresh: float = 0.3   # denominator for curvature-based speed scaling
@@ -155,7 +156,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "claw_open", "claw_closed", "pickup_hold_s",
     ]),
     ("Find line", [
-        "find_line_turn_speed",
+        "find_line_turn_speed", "find_line_min_blob_px",
     ]),
     ("Corner turn", [
         "corner_curvature_thresh",

@@ -14,8 +14,8 @@ from states import ControlOutput, State
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
-    # Line reacquired → back to LINE_FOLLOW
-    if det.red_found:
+    # Line reacquired with sufficient blob size → back to LINE_FOLLOW
+    if det.red_found and det.red_blob_area >= sm.cfg.find_line_min_blob_px:
         sm._enter(State.LINE_FOLLOW, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
