@@ -457,7 +457,12 @@ class Perception:
 
         a, b, c = np.polyfit(ts, xs, 2)
 
-        # Curvature as average of local slope changes between consecutive strip segments.
+        # Curvature = quadratic coefficient from the best-fit polynomial.
+        # This is stable because polyfit minimises error across all strips globally,
+        # rather than amplifying per-strip noise via finite differences.
+        curvature = float(a)
+
+        # Heading: Gaussian-weighted average of segment slopes.
         # Sort by t (near=0 to far=1) for consistent direction.
         paired = sorted(zip(ts, xs))
         t_s    = [p[0] for p in paired]
@@ -465,14 +470,7 @@ class Perception:
         slopes = [(x_s[i+1] - x_s[i]) / (t_s[i+1] - t_s[i])
                   for i in range(len(t_s) - 1)
                   if (t_s[i+1] - t_s[i]) > 1e-9]
-        curv_samples = [(slopes[i+1] - slopes[i]) / ((t_s[i+2] - t_s[i]) / 2)
-                        for i in range(len(slopes) - 1)
-                        if (t_s[i+2] - t_s[i]) > 1e-9]
-        # Divide by 2: each sample equals 2a for a pure quadratic, keeping the same
-        # scale as the polynomial convention (curvature = a, coefficient of t²).
-        curvature = float(np.mean(curv_samples)) / 2.0 if curv_samples else 0.0
 
-        # Heading: Gaussian-weighted average of all segment slopes.
         # Weight peaks at t=0.5 (frame centre) and falls off with σ=0.3.
         if slopes:
             seg_mids = [(t_s[i] + t_s[i + 1]) / 2.0 for i in range(len(slopes))]

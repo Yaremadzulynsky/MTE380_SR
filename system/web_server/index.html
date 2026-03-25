@@ -754,7 +754,7 @@
     const INT_KEYS = new Set([
       "line_follow_mode",
       "curve_n_strips",
-      "red_loss_debounce_frames", "red_min_area_px", "red_mask_min_blob_px",
+      "red_loss_debounce_frames", "red_min_area_px", "red_mask_min_blob_px", "find_line_min_blob_px",
       "red_h_lo1", "red_h_hi1", "red_h_lo2", "red_h_hi2",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
@@ -790,6 +790,7 @@
       green_delay_s:           [0,    30,     0.1   ],
       dropoff_distance_m:      [0,    5,      0.01  ],
       find_line_turn_speed:    [0,    1,      0.01  ],
+      find_line_min_blob_px:   [0,    5000,   10    ],
       corner_curvature_thresh: [0,    2,      0.05  ],
       curve_n_strips:          [2,    20,     1     ],
       wheel_diameter_m:        [0.01, 0.20,   0.001 ],
@@ -1122,6 +1123,14 @@
         dec: "Slower spin; more controlled but may not overcome static friction without the integral term.",
         whenInc: "Robot is slow to turn and consistently misses the line on the return swing.",
         whenDec: "Robot spins past the line every time; slow it down so it catches the edge.",
+      },
+      find_line_min_blob_px: {
+        title: "find_line_min_blob_px — reacquire blob threshold",
+        what: "Minimum red blob area (px²) required to exit FIND_LINE and return to LINE_FOLLOW. Must exceed red_min_area_px to have any effect. Prevents exiting on a tiny glint.",
+        inc: "Requires a larger, more confident blob before reacquiring; avoids false exits on reflections.",
+        dec: "Exits FIND_LINE sooner on a smaller blob; useful if the line is only partially visible at reacquisition.",
+        whenInc: "Robot briefly exits FIND_LINE on a small glint then immediately loses the line again.",
+        whenDec: "Robot stays in FIND_LINE too long even when the line is clearly visible.",
       },
 
       // ── Corner turn ─────────────────────────────────────────────────
