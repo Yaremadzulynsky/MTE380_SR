@@ -314,6 +314,10 @@ class Perception:
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
+    # Processing resolution — camera captures at full size, then downscaled before detection.
+    _PROC_W = 320
+    _PROC_H = 240
+
     def _capture_loop(self) -> None:
         """Background thread: capture frames continuously so the camera never waits on processing."""
         while not self._capture_stop.is_set():
@@ -323,6 +327,7 @@ class Perception:
                 h, w = frame.shape[:2]
                 M = cv2.getRotationMatrix2D((w / 2.0, h / 2.0), -self._camera_rotation_deg, 1.0)
                 frame = cv2.warpAffine(frame, M, (w, h))
+            frame = cv2.resize(frame, (self._PROC_W, self._PROC_H), interpolation=cv2.INTER_LINEAR)
             with self._capture_lock:
                 self._capture_buf = frame
             self._capture_event.set()
