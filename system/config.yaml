@@ -28,6 +28,10 @@ forward_drive_speed: 0.1
 forward_align_thresh: 0.3
 align_kp: 0.5
 
+# Turn 180
+turn180_speed: 0.4
+turn180_duration_s: 1.0
+
 # Drop-off
 green_delay_s: 1.0
 dropoff_distance_m: 0.3

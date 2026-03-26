@@ -574,6 +574,21 @@
     </div>
   </div>
 
+  <!-- Turn 180 -->
+  <div class="card">
+    <h2>Turn 180</h2>
+    <div class="fields">
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_speed">speed</label><button type="button" class="info-btn" data-help="turn180_speed" aria-label="Help: turn180_speed">i</button></div>
+        <input type="number" id="turn180_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_duration_s">duration (s)</label><button type="button" class="info-btn" data-help="turn180_duration_s" aria-label="Help: turn180_duration_s">i</button></div>
+        <input type="number" id="turn180_duration_s" step="0.05" min="0" />
+      </div>
+    </div>
+  </div>
+
   <!-- Position PID -->
   <div class="card">
     <h2>Position PID</h2>
@@ -772,6 +787,7 @@
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
+      "turn180_speed", "turn180_duration_s",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -835,6 +851,8 @@
       rot_tolerance:           [0.5,  45,     0.5   ],
       rot_motor_deadband:      [0,    0.5,    0.01  ],
       rot_max_speed:           [0,    1,      0.01  ],
+      turn180_speed:           [0,    1,      0.01  ],
+      turn180_duration_s:      [0,    5,      0.05  ],
       pos_kp:                  [0,    10,     0.01  ],
       pos_ki:                  [0,    1,      0.001 ],
       pos_kd:                  [0,    2,      0.001 ],
@@ -1282,6 +1300,24 @@
         dec: "Slower rotation; more accurate but takes longer.",
         whenInc: "Rotation is too slow or stalls at low PID gain.",
         whenDec: "Robot overshoots the target angle due to excessive speed.",
+      },
+
+      // ── Turn 180 ────────────────────────────────────────────────────
+      turn180_speed: {
+        title: "turn180_speed — Spin voltage",
+        what: "Motor voltage fraction during the 180° in-place turn. Left wheel drives forward at this voltage; right wheel drives backward at the same voltage.",
+        inc: "Spins faster; completes turns in less time but may overshoot if duration is too long.",
+        dec: "Slower, more controlled spin; easier to tune duration accurately.",
+        whenInc: "Turn is too slow or robot barely moves during the turn state.",
+        whenDec: "Robot spins too aggressively and momentum carries it past 180°.",
+      },
+      turn180_duration_s: {
+        title: "turn180_duration_s — Spin duration",
+        what: "How many seconds the robot spins before the TURN_180 state exits. Tune together with turn180_speed so the robot completes approximately 180°.",
+        inc: "Robot rotates further; increase if it stops short of 180°.",
+        dec: "Robot rotates less; decrease if it overshoots 180°.",
+        whenInc: "Robot exits the turn state well short of facing the return direction.",
+        whenDec: "Robot has rotated past 180° before the state exits.",
       },
 
       // ── Position PID ────────────────────────────────────────────────

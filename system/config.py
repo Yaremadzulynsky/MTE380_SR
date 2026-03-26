@@ -59,6 +59,10 @@ class Config:
     forward_align_thresh: float = 0.1   # curve_heading magnitude below which alignment is complete
     align_kp:           float = 0.6   # proportional gain for blue-centre steering while driving
 
+    # ── Turn 180 ──────────────────────────────────────────────────────────────
+    turn180_speed:      float = 0.4   # motor voltage fraction during the spin (left=+spd, right=-spd)
+    turn180_duration_s: float = 1.0   # seconds to spin before transitioning
+
     # ── Drop-off ──────────────────────────────────────────────────────────────
     green_delay_s:      float = 2.0   # seconds to keep line-following after green is seen
     dropoff_distance_m: float = 0.3   # metres to drive forward during drop-off
@@ -146,6 +150,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Drive-forward", [
         "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
+    ]),
+    ("Turn 180", [
+        "turn180_speed", "turn180_duration_s",
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",
