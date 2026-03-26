@@ -195,9 +195,11 @@ class Perception:
             curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
                 self._last_red_mask, w, roi_y
             )
-            # Use nearest strip centroid as lateral error base when available
+            # Use average x of the 3 nearest strip centroids as lateral error base
             if curve_pts:
-                red_error = _clamp((curve_pts[-1][0] - w / 2.0) / (w / 2.0), -1.0, 1.0)
+                near_pts = curve_pts[-3:]
+                avg_x = sum(p[0] for p in near_pts) / len(near_pts)
+                red_error = _clamp((avg_x - w / 2.0) / (w / 2.0), -1.0, 1.0)
             # Blend tangent (heading) and curvature into error for feedforward steering
             red_error = _clamp(
                 red_error
@@ -478,9 +480,10 @@ class Perception:
                   for i in range(len(t_s) - 1)
                   if (t_s[i+1] - t_s[i]) > 1e-9]
 
-        # Use the slope of the nearest segment (t closest to 0).
+        # Average heading over the first 3 nearest nodes (up to 2 slopes).
         if slopes:
-            heading = slopes[0]
+            near_slopes = slopes[:2]
+            heading = sum(near_slopes) / len(near_slopes)
         else:
             heading = float(b)
 
