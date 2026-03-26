@@ -1743,7 +1743,7 @@
         `state: ${s.sm_state}  |  running: ${s.running}  |  ` +
         `enc L=${s.enc_l}  R=${s.enc_r}  |  speed=${((s.rpm_l + s.rpm_r) / 2)?.toFixed(1)} RPM  |  ` +
         `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
-        `blue=${s.blue_found ? "Y" : "N"}  green=${s.green_found ? "Y" : "N"}  |  ` +
+        `blue=${s.blue_found ? "Y" : "N"}  r=${s.blue_circle_r != null ? s.blue_circle_r.toFixed(1) + "px" : "--"}  green=${s.green_found ? "Y" : "N"}  |  ` +
         `lateral=${s.lateral_turn?.toFixed(3)}  heading=${s.heading_turn?.toFixed(3)}  |  ` +
         `cam=${s.cam_fps?.toFixed(1)} fps`;
       const spidEl = document.getElementById("spid-telem");
