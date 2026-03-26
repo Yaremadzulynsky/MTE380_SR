@@ -5,7 +5,7 @@ import time
 from states import ControlOutput, State
 
 
-_WAIT_S = 2.0  # motors-off pause before spinning
+_WAIT_S = 1  # motors-off pause before spinning
 
 
 def step(sm) -> ControlOutput:
