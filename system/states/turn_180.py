@@ -6,7 +6,7 @@ from states import ControlOutput, State
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if getattr(sm, "_turn180_ctrl", None) is None:
-        sm._turn180_ctrl = RotationController(sm._brain, 180)
+        sm._turn180_ctrl = RotationController(sm._brain, -180)
 
     ctrl = sm._turn180_ctrl
     ctrl.step()
