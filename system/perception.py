@@ -478,11 +478,9 @@ class Perception:
                   for i in range(len(t_s) - 1)
                   if (t_s[i+1] - t_s[i]) > 1e-9]
 
-        # Use the slope of the segment whose midpoint is closest to t=0.5 (frame centre).
+        # Use the slope of the nearest segment (t closest to 0).
         if slopes:
-            seg_mids = [(t_s[i] + t_s[i + 1]) / 2.0 for i in range(len(slopes))]
-            center_idx = min(range(len(seg_mids)), key=lambda i: abs(seg_mids[i] - 0.5))
-            heading = slopes[center_idx]
+            heading = slopes[0]
         else:
             heading = float(b)
 
