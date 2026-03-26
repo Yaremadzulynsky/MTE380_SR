@@ -54,7 +54,8 @@ class PositionController:
         self.done            = False
 
         from control.rotation_controller import _DiscretePID
-        self._pid = _DiscretePID(c.pos_kp, c.pos_ki, c.pos_kd)
+        self._pid = _DiscretePID(c.pos_kp, c.pos_ki, c.pos_kd,
+                                 out_min=-c.pos_max_speed, out_max=c.pos_max_speed)
 
     def step(self, steer: float = 0.0) -> None:
         """Integrate displacement, run PID, send voltage to both wheels.
@@ -77,19 +78,23 @@ class PositionController:
 
         if abs(error) <= self._tol:
             self._pid.reset()
+            self._brain._speed_ctrl.reset()
             self.done = True
             return
 
         output = self._pid.update(error, 0.0)
         output = self._apply_deadband(output, self._motor_deadband)
         output = max(-self._max_speed, min(self._max_speed, output))
-        self._brain.send_voltage(output + steer, output - steer)
+        self._brain._speed_ctrl.set_target(output + steer, output - steer)
+        self._brain._speed_ctrl.step()
 
     def set_gains(self, cfg) -> None:
         """Update PID gains and deadband/max-speed limits from a new config."""
-        self._pid.kp = cfg.pos_kp
-        self._pid.ki = cfg.pos_ki
-        self._pid.kd = cfg.pos_kd
+        self._pid.kp      = cfg.pos_kp
+        self._pid.ki      = cfg.pos_ki
+        self._pid.kd      = cfg.pos_kd
+        self._pid.out_min = -cfg.pos_max_speed
+        self._pid.out_max =  cfg.pos_max_speed
         self._motor_deadband = cfg.pos_motor_deadband
         self._max_speed      = cfg.pos_max_speed
         self._pid.reset()
