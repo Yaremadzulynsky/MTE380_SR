@@ -82,7 +82,7 @@ class MissionStateMachine:
         if self.state == State.PICKUP:
             return _pickup.step(self)
         if self.state == State.TURN_180:
-            return _turn_180.step(self)
+            return _turn_180.step(self, det, left_ticks, right_ticks)
         if self.state == State.DROP_OFF:
             return _drop_off.step(self)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)

@@ -579,6 +579,10 @@
     <h2>Turn 180</h2>
     <div class="fields">
       <div class="field">
+        <div class="field-label-row"><label for="turn180_align_thresh">align thresh (rad)</label><button type="button" class="info-btn" data-help="turn180_align_thresh" aria-label="Help: turn180_align_thresh">i</button></div>
+        <input type="number" id="turn180_align_thresh" step="0.01" min="0" max="1.57" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="turn180_speed">speed</label><button type="button" class="info-btn" data-help="turn180_speed" aria-label="Help: turn180_speed">i</button></div>
         <input type="number" id="turn180_speed" step="0.01" min="0" max="1" />
       </div>
@@ -787,7 +791,7 @@
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
-      "turn180_speed", "turn180_duration_s",
+      "turn180_align_thresh", "turn180_speed", "turn180_duration_s",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -851,6 +855,7 @@
       rot_tolerance:           [0.5,  45,     0.5   ],
       rot_motor_deadband:      [0,    0.5,    0.01  ],
       rot_max_speed:           [0,    1,      0.01  ],
+      turn180_align_thresh:    [0,    1.57,   0.01  ],
       turn180_speed:           [0,    1,      0.01  ],
       turn180_duration_s:      [0,    5,      0.05  ],
       pos_kp:                  [0,    10,     0.01  ],
@@ -1303,6 +1308,14 @@
       },
 
       // ── Turn 180 ────────────────────────────────────────────────────
+      turn180_align_thresh: {
+        title: "turn180_align_thresh — Alignment threshold",
+        what: "Maximum curve_heading (radians) the robot must reach before stopping to spin. The robot line-follows until the heading error is below this value.",
+        inc: "Exits the alignment phase sooner; may start the turn while still slightly angled.",
+        dec: "Waits for tighter alignment; robot must be more closely pointed along the line.",
+        whenInc: "Robot takes too long aligning or never satisfies the threshold (line is curved).",
+        whenDec: "Robot exits alignment too early and the 180° spin starts from an offset angle.",
+      },
       turn180_speed: {
         title: "turn180_speed — Spin voltage",
         what: "Motor voltage fraction during the 180° in-place turn. Left wheel drives forward at this voltage; right wheel drives backward at the same voltage.",
