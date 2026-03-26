@@ -3,15 +3,15 @@ line_follow_mode: 4
 reverse_line_follow: false
 
 # Steering PID
-steer_kp: 0.08
+steer_kp: 0.08515
 steer_ki: 0.0
-steer_kd: 0.005
+steer_kd: 0.0221
 steer_out_limit: 1.0
 
 # Heading PID
-heading_kp: 0.11
+heading_kp: 0.08528
 heading_ki: 0.0
-heading_kd: 0.005
+heading_kd: 0.0061
 
 # Motor PID
 motor_kp: 0.008
@@ -19,27 +19,24 @@ motor_ki: 0.0008
 motor_kd: 0.0
 
 # Speed
-base_speed: 0.2
-min_speed: 0.0
-min_curve_speed: 0.0
+base_speed: 0.35
+min_speed: 0.1
+min_curve_speed: 0.15
 max_speed: 1.0
-
-# Approach blue
-approach_blue_speed: 0.12
-approach_blue_min_r_px: 90.0
 
 # Drive-forward
 pre_turn180_backup_m: 0.0
 forward_drive_m: 0.22
-forward_drive_speed: 0.1
-forward_align_thresh: 0.2
-align_kp: 0.3
+blue_approach_m: 0.325
+blue_approach_speed: 0.21
+blue_center_kp: 0.353
+blue_center_speed: 0.21
+blue_center_tolerance: 0.14
+reverse_find_speed: 0.25
+reverse_line_drive_s: 0.5
 
 # Turn 180
 turn180_degrees: -190.0
-turn180_align_thresh: 0.1
-turn180_speed: 0.25
-turn180_duration_s: 1.0
 
 # Drop-off
 green_delay_s: 2.0
@@ -64,14 +61,14 @@ pos_max_speed: 0.25
 # Claw / servo
 claw_open: 180.0
 claw_closed: 0.0
-pickup_hold_s: 0.8
+pickup_hold_s: 1.5
 
 # Find line
 find_line_turn_speed: 0.0
 find_line_min_blob_px: 20
 
 # Corner turn
-corner_curvature_thresh: 100.0
+corner_curvature_thresh: 0.95
 heading_speed_thresh: 0.4
 
 # Vision / perception
@@ -79,7 +76,6 @@ red_loss_debounce_frames: 2
 red_error_ema_alpha: 0.35
 red_min_area_px: 80
 red_mask_min_blob_px: 20
-red_circle_max_circularity: 0.7
 line_axle_extrap: 0.0
 curve_n_strips: 8
 error_heading_weight: 0.3
@@ -88,7 +84,7 @@ error_curvature_weight: 0.2
 # Line detection HSV
 red_h_lo: 134
 red_h_hi: 179
-red_s_min: 121
+red_s_min: 158
 red_v_min: 63
 blue_h_lo: 95
 blue_h_hi: 135

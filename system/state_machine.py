@@ -29,6 +29,8 @@ from states import ControlOutput, State
 import states.line_follow    as _line_follow
 import states.find_line      as _find_line
 import states.approach_blue  as _approach_blue
+import states.center_blue       as _center_blue
+import states.reverse_find_line as _reverse_find_line
 import states.backup         as _backup
 import states.drive_forward         as _drive_forward
 import states.reverse_drive_forward as _reverse_drive_forward
@@ -82,6 +84,10 @@ class MissionStateMachine:
             return _find_line.step(self, det, left_ticks, right_ticks)
         if self.state == State.APPROACH_BLUE:
             return _approach_blue.step(self, det, left_ticks, right_ticks)
+        if self.state == State.CENTER_BLUE:
+            return _center_blue.step(self, det, left_ticks, right_ticks)
+        if self.state == State.REVERSE_FIND_LINE:
+            return _reverse_find_line.step(self, det, left_ticks, right_ticks)
         if self.state == State.BACKUP:
             return _backup.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:

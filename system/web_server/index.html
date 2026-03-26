@@ -508,18 +508,50 @@
     </div>
   </div>
 
+  <!-- Blue centering + approach -->
+  <div class="card" data-sec="mission-seq">
+    <h2>Blue Circle — centre &amp; approach</h2>
+    <p class="hint">When blue is seen the robot stops and rotates in-place until the circle is centred, then drives blue_approach_m metres to the pickup point.</p>
+    <div class="fields">
+      <div class="field">
+        <div class="field-label-row"><label for="blue_approach_m">approach dist (m)</label></div>
+        <input type="number" id="blue_approach_m" step="0.01" min="0" max="2" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="blue_approach_speed">approach speed</label></div>
+        <input type="number" id="blue_approach_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="blue_center_kp">center Kp</label></div>
+        <input type="number" id="blue_center_kp" step="0.01" min="0" max="2" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="blue_center_speed">center speed</label></div>
+        <input type="number" id="blue_center_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="blue_center_tolerance">center tolerance</label></div>
+        <input type="number" id="blue_center_tolerance" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="reverse_find_speed">reverse find speed</label></div>
+        <input type="number" id="reverse_find_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="reverse_line_drive_s">reverse after line (s)</label></div>
+        <input type="number" id="reverse_line_drive_s" step="0.1" min="0" max="10" />
+      </div>
+    </div>
+  </div>
+
   <!-- Drive forward -->
   <div class="card" data-sec="mission-seq">
     <h2>Drive Forward — to pickup point</h2>
-    <p class="hint">Stops 1 s on entry, then drives forward_drive_m metres using the position controller.</p>
+    <p class="hint">Stops 1 s on entry, then drives blue_approach_m metres using the position controller.</p>
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="pre_turn180_backup_m">pre-turn backup (m)</label><button type="button" class="info-btn" data-help="pre_turn180_backup_m" aria-label="Help: pre_turn180_backup_m">i</button></div>
         <input type="number" id="pre_turn180_backup_m" step="0.01" min="0" max="2" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="forward_drive_m">drive dist (m)</label><button type="button" class="info-btn" data-help="forward_drive_m" aria-label="Help: forward_drive_m">i</button></div>
-        <input type="number" id="forward_drive_m" step="0.01" min="0" max="5" />
       </div>
     </div>
   </div>
@@ -827,6 +859,9 @@
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
       "pre_turn180_backup_m", "forward_drive_m",
+      "blue_approach_m", "blue_approach_speed",
+      "blue_center_kp", "blue_center_speed", "blue_center_tolerance",
+      "reverse_find_speed", "reverse_line_drive_s",
       "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed", "find_line_min_blob_px",
@@ -878,6 +913,13 @@
       error_curvature_weight:  [0,    1,      0.05  ],
       pre_turn180_backup_m:    [0,    2,      0.01  ],
       forward_drive_m:         [0,    5,      0.01  ],
+      blue_approach_m:         [0,    2,      0.01  ],
+      blue_approach_speed:     [0,    1,      0.01  ],
+      blue_center_kp:          [0,    2,      0.01  ],
+      blue_center_speed:       [0,    1,      0.01  ],
+      blue_center_tolerance:   [0,    1,      0.01  ],
+      reverse_find_speed:      [0,    1,      0.01  ],
+      reverse_line_drive_s:    [0,    10,     0.1   ],
       roi_top_px:              [0,    239,    1     ],
       roi_top_ratio:           [0,    0.95,   0.01  ],
       green_delay_s:           [0,    30,     0.1   ],

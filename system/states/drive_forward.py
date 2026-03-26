@@ -7,6 +7,8 @@ DRIVE_FORWARD — three phases:
 from __future__ import annotations
 import time
 
+import copy
+
 from control.position_controller import PositionController
 from states import ControlOutput, State, _clamp
 
@@ -29,7 +31,9 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     # ── Phase 2: align in place with line heading ─────────────────────────────
     if sm._fwd_phase == "align":
         sm._fwd_phase    = "drive"
-        sm._fwd_pos_ctrl = PositionController(sm._brain, -sm.cfg.forward_drive_m)
+        approach_cfg = copy.copy(sm.cfg)
+        approach_cfg.pos_max_speed = sm.cfg.blue_approach_speed
+        sm._fwd_pos_ctrl = PositionController(sm._brain, -sm.cfg.blue_approach_m, cfg=approach_cfg)
 
     # ── Phase 3: position-controlled drive ────────────────────────────────────
     ctrl = sm._fwd_pos_ctrl
