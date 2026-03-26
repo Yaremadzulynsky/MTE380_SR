@@ -336,8 +336,8 @@ class Perception:
     # ── Internals ─────────────────────────────────────────────────────────────
 
     # Processing resolution — camera captures at full size, then downscaled before detection.
-    _PROC_W = 320
-    _PROC_H = 240
+    _PROC_W = 220
+    _PROC_H = 140
 
     def _capture_loop(self) -> None:
         """Background thread: capture frames continuously so the camera never waits on processing."""
