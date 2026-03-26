@@ -31,6 +31,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
             sm._green_seen_t = None   # reset timer if green disappears
     else:
         if det.blue_found:
+            sm._turn180_next = State.DRIVE_FORWARD
             sm._enter(State.TURN_180, left_ticks, right_ticks)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
