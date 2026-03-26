@@ -31,4 +31,4 @@ def step(sm) -> ControlOutput:
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     spd = sm.cfg.turn180_speed
-    return ControlOutput(left=-spd, right=spd, claw=None, state=sm.state, direct_voltage=True)
+    return ControlOutput(left=-spd, right=spd, claw=None, state=sm.state)
