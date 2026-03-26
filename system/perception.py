@@ -41,7 +41,10 @@ class FrameDetection:
     red_error:   float      # [-1, 1], positive = line is right of centre
     blue_found:  bool       # blue target marker visible
     green_found: bool       # green stop marker visible
-    blue_cx_norm: float | None = None  # blue centroid x in [-1, 1], +ve = right; None if not found
+    blue_cx_norm:    float | None = None  # blue centroid x in [-1, 1], +ve = right; None if not found
+    blue_circle_cx:  float | None = None  # fitted circle centre x (full-frame pixels)
+    blue_circle_cy:  float | None = None  # fitted circle centre y (full-frame pixels)
+    blue_circle_r:   float | None = None  # fitted circle radius (pixels)
     # Full-frame pixels for overlays (None when red not found / not yet tracked)
     tape_cx_px: float | None = None   # horizontal centre of tape (mask centroid)
     tape_cy_px: float | None = None   # vertical centre of mask centroid
@@ -189,7 +192,7 @@ class Perception:
             track_x_px,
             track_y_px,
         ) = self._stabilize_red(raw_found, raw_err, tcx, tcy, trx, try_)
-        blue_found, blue_cx_norm = self._detect_blue(hsv)
+        blue_found, blue_cx_norm, blue_circle_cx, blue_circle_cy, blue_circle_r = self._detect_blue(hsv, roi_y)
         green_found = self._detect_green(hsv)
 
         if raw_found and self._last_red_line_mask is not None:
@@ -225,6 +228,9 @@ class Perception:
             red_error=red_error,
             blue_found=blue_found,
             blue_cx_norm=blue_cx_norm,
+            blue_circle_cx=blue_circle_cx,
+            blue_circle_cy=blue_circle_cy,
+            blue_circle_r=blue_circle_r,
             green_found=green_found,
             tape_cx_px=tape_cx_px,
             tape_cy_px=tape_cy_px,
@@ -301,6 +307,13 @@ class Perception:
                 cv2.line(out, a, b, (0, 165, 255), 2, cv2.LINE_AA)
             for pt in ipts:
                 cv2.circle(out, pt, 4, (0, 200, 255), -1, cv2.LINE_AA)
+
+        if det.blue_circle_cx is not None and det.blue_circle_r is not None:
+            bcx = int(round(det.blue_circle_cx))
+            bcy = int(round(det.blue_circle_cy))
+            br  = int(round(det.blue_circle_r))
+            cv2.circle(out, (bcx, bcy), br,  (255, 180, 0), 2, cv2.LINE_AA)
+            cv2.circle(out, (bcx, bcy), 4,   (255, 180, 0), -1, cv2.LINE_AA)
 
         if det.red_found and det.tape_cx_px is not None:
             tcx = int(round(det.tape_cx_px))
@@ -543,11 +556,35 @@ class Perception:
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k3, iterations=1)
         return mask
 
-    def _detect_blue(self, hsv: np.ndarray) -> tuple[bool, float | None]:
-        """Returns (found, cx_norm) for the largest qualifying blue contour.
+    @staticmethod
+    def _fit_circle(points: np.ndarray) -> tuple[float, float, float] | None:
+        """Algebraic least-squares circle fit to 2-D points (Kasa method).
 
-        cx_norm is the centroid x normalised to [-1, 1] (positive = right of centre).
-        cx_norm is None when no qualifying contour exists.
+        Returns (cx, cy, radius) in the same coordinate space as *points*, or
+        None when there are too few points or the fit is degenerate.
+        """
+        if len(points) < 5:
+            return None
+        x = points[:, 0].astype(float)
+        y = points[:, 1].astype(float)
+        A = np.column_stack([x, y, np.ones(len(x))])
+        b_vec = -(x ** 2 + y ** 2)
+        result, _, _, _ = np.linalg.lstsq(A, b_vec, rcond=None)
+        D, E, F = result
+        cx = -D / 2.0
+        cy = -E / 2.0
+        r2 = cx ** 2 + cy ** 2 - F
+        if r2 <= 0:
+            return None
+        return float(cx), float(cy), float(np.sqrt(r2))
+
+    def _detect_blue(
+        self, hsv: np.ndarray, roi_y: int
+    ) -> tuple[bool, float | None, float | None, float | None, float | None]:
+        """Returns (found, cx_norm, circle_cx, circle_cy, circle_r).
+
+        cx_norm: centroid x in [-1, 1] (positive = right of centre), None if not found.
+        circle_*: best-fit circle in full-frame pixel coords, None if fit failed.
         """
         mask = cv2.inRange(hsv, self._BLUE_LO, self._BLUE_HI)
         mask = self._denoise_blob_mask(mask)
@@ -556,12 +593,26 @@ class Perception:
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         valid = [c for c in contours if cv2.contourArea(c) >= _BLUE_MIN_AREA]
         if not valid:
-            return False, None
-        M = cv2.moments(max(valid, key=cv2.contourArea))
+            return False, None, None, None, None
+        best = max(valid, key=cv2.contourArea)
+        M = cv2.moments(best)
         if M["m00"] == 0:
-            return True, None
+            return True, None, None, None, None
         cx_norm = _clamp((M["m10"] / M["m00"] - w / 2.0) / (w / 2.0), -1.0, 1.0)
-        return True, cx_norm
+
+        # Fit a circle to the contour points (works on partial arcs).
+        pts = best.reshape(-1, 2).astype(float)
+        pts[:, 1] += roi_y   # convert to full-frame y
+        fit = self._fit_circle(pts)
+        if fit is not None:
+            fcx, fcy, fr = fit
+            # Sanity-check: reject implausible fits (radius unreasonably large or tiny)
+            if fr < 5 or fr > w * 3:
+                fit = None
+
+        if fit is not None:
+            return True, cx_norm, fit[0], fit[1], fit[2]
+        return True, cx_norm, None, None, None
 
     def _detect_green(self, hsv: np.ndarray) -> bool:
         """Returns True when a green marker of sufficient area is visible."""
