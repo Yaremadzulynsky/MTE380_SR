@@ -60,7 +60,7 @@ class SerialBridge:
     # ── Outgoing ──────────────────────────────────────────────────────────────
 
     def send_drive(self, left: float, right: float):
-        self._send(MSG_DRIVE, struct.pack('<ff', -left, -right))
+        self._send(MSG_DRIVE, struct.pack('<ff', left, right))
 
     def send_claw(self, angle: float):
         self._send(MSG_CLAW, struct.pack('<f', angle))

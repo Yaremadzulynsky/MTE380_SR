@@ -83,8 +83,8 @@ green_s_min: 150
 green_v_min: 60
 
 # Camera / runtime
-camera_width: 320
-camera_height: 240
+camera_width: 1420
+camera_height: 1232
 fps: 120
 roi_top_ratio: 0.0
 camera_rotation_deg: 0.0
