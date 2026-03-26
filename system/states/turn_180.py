@@ -23,7 +23,7 @@ def step(sm) -> ControlOutput:
 
     # Spin phase — PID rotation controller
     if sm._turn180_ctrl is None:
-        sm._turn180_ctrl = RotationController(sm._brain, 220)
+        sm._turn180_ctrl = RotationController(sm._brain, 160)
 
     ctrl = sm._turn180_ctrl
     ctrl.step()
