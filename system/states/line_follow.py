@@ -44,7 +44,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
 
         if det.blue_found:
             if sm.cfg.pre_turn180_backup_m > 0:
-                sm._pre_turn180_ctrl = PositionController(sm._brain, -sm.cfg.pre_turn180_backup_m)
+                sm._pre_turn180_ctrl = PositionController(sm._brain, sm.cfg.pre_turn180_backup_m)
                 return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
             sm._turn180_next = State.DRIVE_FORWARD
             sm._enter(State.TURN_180, left_ticks, right_ticks)
