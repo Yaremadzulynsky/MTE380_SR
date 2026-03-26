@@ -6,7 +6,7 @@ from states import ControlOutput, State
 
 
 def step(sm) -> ControlOutput:
-    ControlOutput(left=0, right=0)
+    return ControlOutput(left=0, right=0, direct_voltage=True)
     # Initialise timer on first tick after entering this state
     # if not hasattr(sm, "_turn180_t") or sm._turn180_t is None:
     #     sm._turn180_t = time.monotonic()
