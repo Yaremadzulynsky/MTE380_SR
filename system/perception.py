@@ -108,6 +108,7 @@ class Perception:
 
         self._last_frame:         np.ndarray | None = None
         self._last_red_mask:      np.ndarray | None = None
+        self._last_red_line_mask: np.ndarray | None = None  # largest blob only
         self._last_red_blob_area: float = 0.0
         self._last_green_mask:  np.ndarray | None = None
         self._last_blue_mask:   np.ndarray | None = None
@@ -191,9 +192,9 @@ class Perception:
         blue_found, blue_cx_norm = self._detect_blue(hsv)
         green_found = self._detect_green(hsv)
 
-        if raw_found and self._last_red_mask is not None:
+        if raw_found and self._last_red_line_mask is not None:
             curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
-                self._last_red_mask, w, roi_y
+                self._last_red_line_mask, w, roi_y
             )
             # Use average x of the 3 nearest strip centroids as lateral error base
             if curve_pts:
@@ -499,18 +500,25 @@ class Perception:
         nz = (False, 0.0, None, None, None, None)
 
         mask = self._build_red_mask(hsv)
-        self._last_red_mask = mask
+        self._last_red_mask = mask          # full mask — all blobs, used for visualization
         self._last_red_blob_area = 0.0
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
+            self._last_red_line_mask = None
             return nz
 
         largest = max(contours, key=cv2.contourArea)
         area = cv2.contourArea(largest)
         self._last_red_blob_area = float(area)
         if area < self._red_min_area:
+            self._last_red_line_mask = None
             return nz
+
+        # Mask containing only the largest blob — used for strip/curvature detection
+        line_mask = np.zeros_like(mask)
+        cv2.drawContours(line_mask, [largest], -1, 255, cv2.FILLED)
+        self._last_red_line_mask = line_mask
 
         bx, by, bw, bh = cv2.boundingRect(largest)
         moments = cv2.moments(largest)
