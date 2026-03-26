@@ -29,7 +29,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     # ── Phase 2: align in place with line heading ─────────────────────────────
     if sm._fwd_phase == "align":
         sm._fwd_phase    = "drive"
-        sm._fwd_pos_ctrl = PositionController(sm._brain, sm.cfg.forward_drive_m)
+        sm._fwd_pos_ctrl = PositionController(sm._brain, -sm.cfg.forward_drive_m)
 
     # ── Phase 3: position-controlled drive ────────────────────────────────────
     ctrl = sm._fwd_pos_ctrl
