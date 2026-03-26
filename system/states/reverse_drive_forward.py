@@ -12,7 +12,7 @@ from states import ControlOutput, State
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if getattr(sm, "_rev_fwd_ctrl", None) is None:
-        sm._rev_fwd_ctrl = PositionController(sm._brain, sm.cfg.forward_drive_m)
+        sm._rev_fwd_ctrl = PositionController(sm._brain, sm.cfg.forward_drive_m*2)
 
     sm._rev_fwd_ctrl.step()
 
