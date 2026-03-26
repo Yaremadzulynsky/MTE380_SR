@@ -359,6 +359,10 @@
         <input type="number" id="red_mask_min_blob_px" step="5" min="0" />
       </div>
       <div class="field">
+        <div class="field-label-row"><label for="red_circle_max_circularity">circle reject thresh</label><button type="button" class="info-btn" data-help="red_circle_max_circularity" aria-label="Help: red_circle_max_circularity">i</button></div>
+        <input type="number" id="red_circle_max_circularity" step="0.05" min="0" max="1" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="error_heading_weight">heading weight</label><button type="button" class="info-btn" data-help="error_heading_weight" aria-label="Help: error_heading_weight">i</button></div>
         <input type="number" id="error_heading_weight" step="0.05" min="0" max="1" />
       </div>
@@ -811,7 +815,7 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
-      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
+      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "red_circle_max_circularity", "error_heading_weight", "error_curvature_weight",
       "approach_blue_speed", "approach_blue_min_r_px",
       "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
       "roi_top_px", "roi_top_ratio",
@@ -860,7 +864,8 @@
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
       red_min_area_px:         [1,    5000,   10    ],
-      red_mask_min_blob_px:    [0,    500,    5     ],
+      red_mask_min_blob_px:           [0,    500,    5     ],
+      red_circle_max_circularity:     [0,    1,      0.05  ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
       approach_blue_speed:     [0,    1,      0.01  ],
@@ -1219,6 +1224,14 @@
         dec: "Detects smaller blobs; more sensitive but may lock onto glare or colour noise.",
         whenInc: "Robot chases small red reflections or noise specks on the floor.",
         whenDec: "Robot loses the line when it's thin or only partially in the ROI.",
+      },
+      red_circle_max_circularity: {
+        title: "red_circle_max_circularity — circle target rejection",
+        what: "Red contours with circularity (4π·area/perimeter²) above this threshold are rejected as the circle target and excluded from line detection. Circles ≈ 1.0; tape strips are typically < 0.4.",
+        inc: "Rejects more circular shapes; increase if the circle target is still leaking into line detection.",
+        dec: "Allows rounder blobs through; only decrease if the tape itself is being incorrectly rejected.",
+        whenInc: "Tape blobs that are slightly rounded (e.g. at corners) get filtered out.",
+        whenDec: "The red circle target is still being detected as the line.",
       },
       red_mask_min_blob_px: {
         title: "red_mask_min_blob_px — mask blob filter",

@@ -92,8 +92,9 @@ class Perception:
 
         self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
         self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
-        self._red_min_area            = max(1, int(c.red_min_area_px))
-        self._red_mask_min_blob_px    = max(0, int(c.red_mask_min_blob_px))
+        self._red_min_area                = max(1, int(c.red_min_area_px))
+        self._red_mask_min_blob_px        = max(0, int(c.red_mask_min_blob_px))
+        self._red_circle_max_circularity  = float(c.red_circle_max_circularity)
         self._curve_n_strips = max(2, int(c.curve_n_strips))
         self._error_heading_weight   = float(c.error_heading_weight)
         self._error_curvature_weight = float(c.error_curvature_weight)
@@ -142,8 +143,9 @@ class Perception:
         """Apply updated config values without reopening the camera."""
         self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
         self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
-        self._red_min_area            = max(1, int(cfg.red_min_area_px))
-        self._red_mask_min_blob_px    = max(0, int(cfg.red_mask_min_blob_px))
+        self._red_min_area                = max(1, int(cfg.red_min_area_px))
+        self._red_mask_min_blob_px        = max(0, int(cfg.red_mask_min_blob_px))
+        self._red_circle_max_circularity  = float(cfg.red_circle_max_circularity)
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
         self.roi_top_px               = max(0, int(cfg.roi_top_px))
         self._curve_n_strips          = max(2, int(cfg.curve_n_strips))
@@ -521,7 +523,19 @@ class Perception:
             self._last_red_line_mask = None
             return nz
 
-        largest = max(contours, key=cv2.contourArea)
+        # Filter out circular blobs (the red circle target) — tape is elongated.
+        # Circularity = 4π·area / perimeter²; circles ≈ 1.0, tape strips << 0.7.
+        def _circularity(c) -> float:
+            a = cv2.contourArea(c)
+            p = cv2.arcLength(c, True)
+            return (4 * np.pi * a / (p * p)) if p > 0 else 0.0
+
+        candidates = [c for c in contours if _circularity(c) < self._red_circle_max_circularity]
+        if not candidates:
+            self._last_red_line_mask = None
+            return nz
+
+        largest = max(candidates, key=cv2.contourArea)
         area = cv2.contourArea(largest)
         self._last_red_blob_area = float(area)
         if area < self._red_min_area:

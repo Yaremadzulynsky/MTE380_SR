@@ -70,6 +70,7 @@ find_line_turn_speed: 0.15
 corner_curvature_thresh: 0.3
 
 # Vision / perception
+red_circle_max_circularity: 0.7
 red_loss_debounce_frames: 2
 red_error_ema_alpha: 0.35
 red_min_area_px: 160

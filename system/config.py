@@ -106,9 +106,10 @@ class Config:
     heading_speed_thresh:    float = 0.4   # heading PID output magnitude at which speed reaches min_speed (mode 4)
 
     # ── Vision / perception ───────────────────────────────────────────────────
-    red_loss_debounce_frames: int   = 4
-    red_error_ema_alpha:      float = 0.35
-    red_min_area_px:          int   = 80   # minimum red blob area in pixels to count as line
+    red_loss_debounce_frames:    int   = 4
+    red_error_ema_alpha:         float = 0.35
+    red_min_area_px:             int   = 80   # minimum red blob area in pixels to count as line
+    red_circle_max_circularity:  float = 0.7  # blobs above this circularity are treated as the circle target, not tape
     red_mask_min_blob_px:     int   = 20   # connected components smaller than this are erased from the mask
     line_axle_extrap:         float = 0.0
     curve_n_strips:           int   = 5   # horizontal slices for curvature fit
@@ -184,6 +185,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px",
+        "red_circle_max_circularity",
         "line_axle_extrap", "curve_n_strips", "error_heading_weight", "error_curvature_weight",
     ]),
     ("Line detection HSV", [
