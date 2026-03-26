@@ -567,6 +567,10 @@
         <div class="field-label-row"><label for="rot_motor_deadband">motor deadband</label><button type="button" class="info-btn" data-help="rot_motor_deadband" aria-label="Help: rot_motor_deadband">i</button></div>
         <input type="number" id="rot_motor_deadband" step="0.01" min="0" max="1" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="rot_max_speed">max speed</label><button type="button" class="info-btn" data-help="rot_max_speed" aria-label="Help: rot_max_speed">i</button></div>
+        <input type="number" id="rot_max_speed" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -767,7 +771,7 @@
       "find_line_turn_speed", "find_line_min_blob_px",
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
-      "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
+      "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -830,6 +834,7 @@
       rot_kd:                  [0,    1,      0.001 ],
       rot_tolerance:           [0.5,  45,     0.5   ],
       rot_motor_deadband:      [0,    0.5,    0.01  ],
+      rot_max_speed:           [0,    1,      0.01  ],
       pos_kp:                  [0,    10,     0.01  ],
       pos_ki:                  [0,    1,      0.001 ],
       pos_kd:                  [0,    2,      0.001 ],
@@ -1269,6 +1274,14 @@
         dec: "Allows lower commands; finer slow-approach but may stall near zero.",
         whenInc: "Motors stall and the rotation freezes just short of the target angle.",
         whenDec: "Motors jitter or buzz constantly around the target because minimum command is too large.",
+      },
+      rot_max_speed: {
+        title: "rot_max_speed",
+        what: "Maximum speed fraction passed to the speed controller during rotation. Clamps the PID output to prevent spinning too fast.",
+        inc: "Allows faster rotation; completes turns quicker but harder to stop accurately.",
+        dec: "Slower rotation; more accurate but takes longer.",
+        whenInc: "Rotation is too slow or stalls at low PID gain.",
+        whenDec: "Robot overshoots the target angle due to excessive speed.",
       },
 
       // ── Position PID ────────────────────────────────────────────────

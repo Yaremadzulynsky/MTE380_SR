@@ -71,6 +71,7 @@ class Config:
     rot_kd:           float = 0.0    # rotation PID — derivative gain
     rot_tolerance:    float = 3.0    # done when within this many degrees of target
     rot_motor_deadband: float = 0.05 # minimum motor voltage (overcomes stiction)
+    rot_max_speed:    float = 0.6    # maximum speed fraction sent to speed controller
 
     # ── Controllers (position) ────────────────────────────────────────────────
     pos_kp:           float = 2.0    # position PID — proportional gain
@@ -151,7 +152,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",
-        "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
+        "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
         "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
     ]),
     ("Claw / servo", [

@@ -95,6 +95,7 @@ class RotationController:
         self._target         = math.radians(degrees) # positive = CW
         self._tol_rad        = math.radians(abs(tol_deg))
         self._motor_deadband = c.rot_motor_deadband
+        self._max_speed      = c.rot_max_speed
         self.done            = False
         self._pid = _DiscretePID(c.rot_kp, c.rot_ki, c.rot_kd)
 
@@ -122,6 +123,7 @@ class RotationController:
 
         output = self._pid.update(error, 0.0)
         output = self._apply_deadband(output, self._motor_deadband)
+        output = max(-self._max_speed, min(self._max_speed, output))
 
         # Positive = CW (left fwd, right rev); negative = CCW.
         self._brain._speed_ctrl.set_target(output, -output)
