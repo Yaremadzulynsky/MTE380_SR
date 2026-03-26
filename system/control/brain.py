@@ -202,6 +202,11 @@ class RobotBrain:
                 self._sm._steer_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
                 self._sm._heading_pid.tunings = (cfg.heading_kp, cfg.heading_ki, cfg.heading_kd)
                 self._sm._heading_pid.output_limits = (-cfg.steer_out_limit, cfg.steer_out_limit)
+                # Update any active position controllers
+                for attr in ("_fwd_pos_ctrl", "_rev_fwd_ctrl", "_backup_ctrl"):
+                    ctrl = getattr(self._sm, attr, None)
+                    if ctrl is not None:
+                        ctrl.set_gains(cfg)
 
     # ── Motion commands ───────────────────────────────────────────────────────
 

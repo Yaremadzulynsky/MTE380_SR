@@ -85,6 +85,15 @@ class PositionController:
         output = max(-self._max_speed, min(self._max_speed, output))
         self._brain.send_voltage(output + steer, output - steer)
 
+    def set_gains(self, cfg) -> None:
+        """Update PID gains and deadband/max-speed limits from a new config."""
+        self._pid.kp = cfg.pos_kp
+        self._pid.ki = cfg.pos_ki
+        self._pid.kd = cfg.pos_kd
+        self._motor_deadband = cfg.pos_motor_deadband
+        self._max_speed      = cfg.pos_max_speed
+        self._pid.reset()
+
     def progress(self) -> tuple[float, float]:
         """Returns (abs_metres_traveled, abs_metres_target)."""
         return abs(self._displacement), abs(self._target)
