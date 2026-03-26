@@ -32,7 +32,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     # In reverse the rear aligns with the tangent, so the error sign flips.
     rev = sm.cfg.reverse_line_follow
     heading_sign = 1.0 if rev else -1.0
-    heading_turn = sm._heading_pid(heading_sign * det.curve_heading)
+    heading_turn = sm._heading_pid(-det.curve_heading)
     heading_turn = _clamp(heading_turn, -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
 
     sm._heading_lateral_turn = lateral_turn
