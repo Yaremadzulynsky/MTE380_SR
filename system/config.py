@@ -48,9 +48,10 @@ class Config:
     motor_kd: float = 0.0
 
     # ── Speed ─────────────────────────────────────────────────────────────────
-    base_speed: float = 0.28
-    min_speed:  float = 0.16
-    max_speed:  float = 0.45
+    base_speed:      float = 0.28
+    min_speed:       float = 0.16
+    min_curve_speed: float = 0.12  # minimum speed when curvature is at corner_curvature_thresh
+    max_speed:       float = 0.45
 
     # ── Drive-forward ─────────────────────────────────────────────────────────
     forward_drive_s:      float = 2.0   # seconds to drive forward before PICKUP
@@ -140,7 +141,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "motor_kp", "motor_ki", "motor_kd",
     ]),
     ("Speed", [
-        "base_speed", "min_speed", "max_speed",
+        "base_speed", "min_speed", "min_curve_speed", "max_speed",
     ]),
     ("Drive-forward", [
         "forward_drive_s", "forward_drive_speed", "forward_align_thresh", "align_kp",

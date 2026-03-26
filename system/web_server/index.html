@@ -282,6 +282,15 @@
     </div>
   </div>
 
+  <!-- Camera settings -->
+  <div class="card">
+    <h2>Camera</h2>
+    <div class="fields">
+      <div class="field"><div class="field-label-row"><label for="roi_top_px">crop top px</label><button type="button" class="info-btn" data-help="roi_top_px" aria-label="Help: roi_top_px">i</button></div><input type="number" id="roi_top_px" step="1" min="0" max="239" /></div>
+      <div class="field"><div class="field-label-row"><label for="roi_top_ratio">roi top ratio</label><button type="button" class="info-btn" data-help="roi_top_ratio" aria-label="Help: roi_top_ratio">i</button></div><input type="number" id="roi_top_ratio" step="0.01" min="0" max="0.95" /></div>
+    </div>
+  </div>
+
   <!-- Line detection HSV (near camera for quick colour tuning) -->
   <div class="card">
     <h2>Line Detection — HSV</h2>
@@ -435,6 +444,10 @@
         <input type="number" id="min_speed" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
+        <div class="field-label-row"><label for="min_curve_speed">min curve</label><button type="button" class="info-btn" data-help="min_curve_speed" aria-label="Help: min_curve_speed">i</button></div>
+        <input type="number" id="min_curve_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="max_speed">max</label><button type="button" class="info-btn" data-help="max_speed" aria-label="Help: max_speed">i</button></div>
         <input type="number" id="max_speed" step="0.01" min="0" max="1" />
       </div>
@@ -457,6 +470,10 @@
       <div class="field">
         <div class="field-label-row"><label for="forward_align_thresh">align thresh</label><button type="button" class="info-btn" data-help="forward_align_thresh" aria-label="Help: forward_align_thresh">i</button></div>
         <input type="number" id="forward_align_thresh" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="align_kp">align kp</label><button type="button" class="info-btn" data-help="align_kp" aria-label="Help: align_kp">i</button></div>
+        <input type="number" id="align_kp" step="0.01" min="0" max="5" />
       </div>
     </div>
   </div>
@@ -742,12 +759,13 @@
       "heading_kp", "heading_ki", "heading_kd",
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
-      "base_speed", "min_speed", "max_speed",
+      "base_speed", "min_speed", "min_curve_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
-      "forward_drive_s", "forward_drive_speed", "forward_align_thresh",
+      "forward_drive_s", "forward_drive_speed", "forward_align_thresh", "align_kp",
+      "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed", "find_line_min_blob_px",
-      "corner_curvature_thresh", "heading_speed_thresh", "curve_n_strips",
+      "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
@@ -761,6 +779,7 @@
       "line_follow_mode",
       "curve_n_strips",
       "red_loss_debounce_frames", "red_min_area_px", "red_mask_min_blob_px", "find_line_min_blob_px",
+      "roi_top_px",
       "red_h_lo", "red_h_hi",
       "red_s_min", "red_v_min",
       "blue_h_lo", "blue_h_hi", "blue_s_min", "blue_v_min",
@@ -782,6 +801,7 @@
       motor_kd:                [0,    0.005,  0.0001],
       base_speed:              [0,    1,      0.01  ],
       min_speed:               [0,    1,      0.01  ],
+      min_curve_speed:         [0,    1,      0.01  ],
       max_speed:               [0,    1,      0.01  ],
       line_axle_extrap:        [0,    5,      0.1   ],
       red_loss_debounce_frames:[1,    30,     1     ],
@@ -793,6 +813,9 @@
       forward_drive_s:         [0,    30,     0.1   ],
       forward_drive_speed:     [0,    1,      0.01  ],
       forward_align_thresh:    [0,    1,      0.01  ],
+      align_kp:                [0,    5,      0.01  ],
+      roi_top_px:              [0,    239,    1     ],
+      roi_top_ratio:           [0,    0.95,   0.01  ],
       green_delay_s:           [0,    30,     0.1   ],
       dropoff_distance_m:      [0,    5,      0.01  ],
       find_line_turn_speed:    [0,    1,      0.01  ],
@@ -895,6 +918,14 @@
         whenInc: "Line follow is stable and you need shorter lap time; good lighting and reliable line.",
         whenDec: "Frequent loss of line, overshoot, or control feels on the edge; rough surface or tight course.",
       },
+      min_curve_speed: {
+        title: "min_curve_speed",
+        what: "Minimum forward speed when curvature is at or beyond corner_curvature_thresh. Speed interpolates linearly from base_speed (zero curvature) down to this value.",
+        inc: "Robot stays faster through curves.",
+        dec: "Robot slows more aggressively on tight bends.",
+        whenInc: "Robot slows too much on moderate curves and loses momentum.",
+        whenDec: "Robot enters corners too fast and loses the line.",
+      },
       min_speed: {
         title: "min_speed",
         what: "Lower clamp on commanded wheel speed (fraction) so wheels never go below this in normal operation.",
@@ -910,6 +941,30 @@
         dec: "Safer ceiling; reduces top speed for stability or battery/heat limits.",
         whenInc: "You raised base_speed or need more headroom; course is open and control is solid.",
         whenDec: "Overspeed on straights, instability, or hardware limits (current, vibration).",
+      },
+      align_kp: {
+        title: "align_kp",
+        what: "Proportional gain for blue-centre steering during the drive-forward alignment phase.",
+        inc: "Sharper correction toward the blue target centre.",
+        dec: "Gentler, smoother alignment.",
+        whenInc: "Robot drifts off-centre during alignment approach.",
+        whenDec: "Robot oscillates or overshoots the blue centre.",
+      },
+      roi_top_px: {
+        title: "roi_top_px",
+        what: "Pixels to crop from the top of the processed (320×240) frame before detection. Removes the ceiling or distant background from the view.",
+        inc: "Crops more of the top; hides distant distractions.",
+        dec: "Includes more of the upper frame.",
+        whenInc: "False detections from distant objects or overhead lighting.",
+        whenDec: "Line is cropped out before it enters the lower ROI.",
+      },
+      roi_top_ratio: {
+        title: "roi_top_ratio",
+        what: "Fraction of the frame height to skip from the top before detection (0 = full frame, 0.5 = bottom half only). Applied after roi_top_px.",
+        inc: "Detection only uses the lower portion of the frame.",
+        dec: "More of the frame is used for detection.",
+        whenInc: "False positives from the far end of the track or background clutter.",
+        whenDec: "Line at the edge of the frame is cut off.",
       },
       forward_drive_s: {
         title: "forward_drive_s",
