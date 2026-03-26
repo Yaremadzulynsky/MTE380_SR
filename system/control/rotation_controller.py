@@ -113,7 +113,7 @@ class RotationController:
         self._prev_left  = l
         self._prev_right = r
 
-        error = self._wrap(self._target - self._heading)
+        error = self._target - self._heading
 
         if abs(error) <= self._tol_rad:
             self._pid.reset()
