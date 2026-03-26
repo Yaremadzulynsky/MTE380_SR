@@ -54,7 +54,7 @@ class Config:
     max_speed:       float = 0.45
 
     # ── Drive-forward ─────────────────────────────────────────────────────────
-    forward_drive_s:      float = 2.0   # seconds to drive forward before PICKUP
+    forward_drive_m:      float = 0.4   # metres to drive forward before PICKUP
     forward_drive_speed:  float = 0.28  # speed fraction during drive-forward phase
     forward_align_thresh: float = 0.1   # curve_heading magnitude below which alignment is complete
     align_kp:           float = 0.6   # proportional gain for blue-centre steering while driving
@@ -144,7 +144,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "base_speed", "min_speed", "min_curve_speed", "max_speed",
     ]),
     ("Drive-forward", [
-        "forward_drive_s", "forward_drive_speed", "forward_align_thresh", "align_kp",
+        "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",

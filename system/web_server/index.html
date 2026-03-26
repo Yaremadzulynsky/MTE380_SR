@@ -457,11 +457,11 @@
   <!-- Drive forward -->
   <div class="card">
     <h2>Drive Forward — to pickup point</h2>
-    <p class="hint">Stops 5 s on entry, then drives forward for forward_drive_s using the speed PID, steering with the heading PID on the red line.</p>
+    <p class="hint">Stops 1 s on entry, then drives forward forward_drive_m metres using the position controller.</p>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="forward_drive_s">drive time (s)</label><button type="button" class="info-btn" data-help="forward_drive_s" aria-label="Help: forward_drive_s">i</button></div>
-        <input type="number" id="forward_drive_s" step="0.1" min="0" max="30" />
+        <div class="field-label-row"><label for="forward_drive_m">drive dist (m)</label><button type="button" class="info-btn" data-help="forward_drive_m" aria-label="Help: forward_drive_m">i</button></div>
+        <input type="number" id="forward_drive_m" step="0.01" min="0" max="5" />
       </div>
       <div class="field">
         <div class="field-label-row"><label for="forward_drive_speed">drive speed</label><button type="button" class="info-btn" data-help="forward_drive_speed" aria-label="Help: forward_drive_speed">i</button></div>
@@ -761,7 +761,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
-      "forward_drive_s", "forward_drive_speed", "forward_align_thresh", "align_kp",
+      "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
       "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed", "find_line_min_blob_px",
@@ -810,7 +810,7 @@
       red_mask_min_blob_px:    [0,    500,    5     ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
-      forward_drive_s:         [0,    30,     0.1   ],
+      forward_drive_m:         [0,    5,      0.01  ],
       forward_drive_speed:     [0,    1,      0.01  ],
       forward_align_thresh:    [0,    1,      0.01  ],
       align_kp:                [0,    5,      0.01  ],
@@ -966,9 +966,9 @@
         whenInc: "False positives from the far end of the track or background clutter.",
         whenDec: "Line at the edge of the frame is cut off.",
       },
-      forward_drive_s: {
-        title: "forward_drive_s",
-        what: "Time in seconds to drive forward at base_speed during the drive-to-pickup phase. The heading PID steers on the red line tangent while driving.",
+      forward_drive_m: {
+        title: "forward_drive_m",
+        what: "Distance in metres to drive forward using the position controller during the drive-to-pickup phase.",
         inc: "Drives further before transitioning to PICKUP.",
         dec: "Stops earlier.",
         whenInc: "Robot stops short of the pickup target.",
