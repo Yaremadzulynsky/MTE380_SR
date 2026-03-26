@@ -18,7 +18,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     # ── Exit condition ────────────────────────────────────────────────────────
     if det.blue_found and det.blue_circle_r is not None:
         if det.blue_circle_r >= sm.cfg.approach_blue_min_r_px:
-            sm._enter(State.BACKUP, left_ticks, right_ticks)
+            sm._enter(State.DRIVE_FORWARD, left_ticks, right_ticks)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     # ── Heading correction toward blue centroid ───────────────────────────────
