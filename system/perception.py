@@ -195,6 +195,9 @@ class Perception:
             curvature, curve_heading, curve_conf, curve_pts = self._detect_curvature(
                 self._last_red_mask, w, roi_y
             )
+            # Use nearest strip centroid as lateral error base when available
+            if curve_pts:
+                red_error = _clamp((curve_pts[-1][0] - w / 2.0) / (w / 2.0), -1.0, 1.0)
             # Blend tangent (heading) and curvature into error for feedforward steering
             red_error = _clamp(
                 red_error
