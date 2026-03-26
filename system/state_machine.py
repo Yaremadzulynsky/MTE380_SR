@@ -29,6 +29,7 @@ from states import ControlOutput, State
 import states.line_follow    as _line_follow
 import states.find_line      as _find_line
 import states.approach_blue  as _approach_blue
+import states.backup         as _backup
 import states.drive_forward  as _drive_forward
 import states.pickup         as _pickup
 import states.turn_180       as _turn_180
@@ -80,6 +81,8 @@ class MissionStateMachine:
             return _find_line.step(self, det, left_ticks, right_ticks)
         if self.state == State.APPROACH_BLUE:
             return _approach_blue.step(self, det, left_ticks, right_ticks)
+        if self.state == State.BACKUP:
+            return _backup.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return _drive_forward.step(self, det, left_ticks, right_ticks)
         if self.state == State.PICKUP:

@@ -9,6 +9,7 @@ class State(Enum):
     LINE_FOLLOW    = "LINE_FOLLOW"
     FIND_LINE      = "FIND_LINE"
     APPROACH_BLUE  = "APPROACH_BLUE"
+    BACKUP         = "BACKUP"
     DRIVE_FORWARD  = "DRIVE_FORWARD"
     PICKUP         = "PICKUP"
     TURN_180       = "TURN_180"
