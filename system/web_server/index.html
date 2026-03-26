@@ -454,6 +454,22 @@
     </div>
   </div>
 
+  <!-- Approach blue -->
+  <div class="card">
+    <h2>Approach Blue</h2>
+    <p class="hint">Drives toward the blue circle while centering on it. Exits to TURN_180 once the fitted circle radius reaches the threshold.</p>
+    <div class="fields">
+      <div class="field">
+        <div class="field-label-row"><label for="approach_blue_speed">speed</label><button type="button" class="info-btn" data-help="approach_blue_speed" aria-label="Help: approach_blue_speed">i</button></div>
+        <input type="number" id="approach_blue_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="approach_blue_min_r_px">min radius (px)</label><button type="button" class="info-btn" data-help="approach_blue_min_r_px" aria-label="Help: approach_blue_min_r_px">i</button></div>
+        <input type="number" id="approach_blue_min_r_px" step="1" min="1" />
+      </div>
+    </div>
+  </div>
+
   <!-- Drive forward -->
   <div class="card">
     <h2>Drive Forward — to pickup point</h2>
@@ -792,6 +808,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
+      "approach_blue_speed", "approach_blue_min_r_px",
       "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
       "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
@@ -842,6 +859,8 @@
       red_mask_min_blob_px:    [0,    500,    5     ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
+      approach_blue_speed:     [0,    1,      0.01  ],
+      approach_blue_min_r_px:  [5,    300,    1     ],
       pre_turn180_backup_m:    [0,    2,      0.01  ],
       forward_drive_m:         [0,    5,      0.01  ],
       forward_drive_speed:     [0,    1,      0.01  ],
@@ -1003,6 +1022,22 @@
         dec: "More of the frame is used for detection.",
         whenInc: "False positives from the far end of the track or background clutter.",
         whenDec: "Line at the edge of the frame is cut off.",
+      },
+      approach_blue_speed: {
+        title: "approach_blue_speed — Approach speed",
+        what: "Motor speed fraction while driving toward the blue circle. The heading PID steers to keep the circle centred.",
+        inc: "Approaches faster; less time to react and steer accurately.",
+        dec: "Slower approach; more time to align but takes longer overall.",
+        whenInc: "Robot overshoots and misses the blue target.",
+        whenDec: "Approach is too slow for competition time.",
+      },
+      approach_blue_min_r_px: {
+        title: "approach_blue_min_r_px — Stop radius",
+        what: "Fitted circle radius in pixels at which the robot stops approaching and transitions to TURN_180. Larger radius = robot is physically closer to the target.",
+        inc: "Robot stops further away from the target (smaller perceived circle).",
+        dec: "Robot drives closer before stopping.",
+        whenInc: "Robot overshoots and bumps the target before stopping.",
+        whenDec: "Robot stops too far away for the DRIVE_FORWARD phase to reach the object.",
       },
       pre_turn180_backup_m: {
         title: "pre_turn180_backup_m — Pre-turn backup distance",

@@ -53,6 +53,10 @@ class Config:
     min_curve_speed: float = 0.12  # minimum speed when curvature is at corner_curvature_thresh
     max_speed:       float = 0.45
 
+    # ── Approach blue ─────────────────────────────────────────────────────────
+    approach_blue_speed:    float = 0.3   # forward speed fraction while approaching
+    approach_blue_min_r_px: float = 90.0  # fitted circle radius (px) to exit the state
+
     # ── Drive-forward ─────────────────────────────────────────────────────────
     pre_turn180_backup_m: float = 0.0   # metres to reverse before TURN_180 (0 = disabled)
     forward_drive_m:      float = 0.4   # metres to drive forward before PICKUP
@@ -150,6 +154,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Speed", [
         "base_speed", "min_speed", "min_curve_speed", "max_speed",
+    ]),
+    ("Approach blue", [
+        "approach_blue_speed", "approach_blue_min_r_px",
     ]),
     ("Drive-forward", [
         "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",

@@ -22,6 +22,10 @@ base_speed: 0.3
 min_speed: 0.16
 max_speed: 0.6
 
+# Approach blue
+approach_blue_speed: 0.3
+approach_blue_min_r_px: 90.0
+
 # Drive-forward
 pre_turn180_backup_m: 0.0
 forward_drive_s: 0.1

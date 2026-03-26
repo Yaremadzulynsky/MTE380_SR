@@ -6,13 +6,14 @@ from enum import Enum
 
 
 class State(Enum):
-    LINE_FOLLOW   = "LINE_FOLLOW"
-    FIND_LINE     = "FIND_LINE"
-    DRIVE_FORWARD = "DRIVE_FORWARD"
-    PICKUP        = "PICKUP"
-    TURN_180      = "TURN_180"
-    DROP_OFF      = "DROP_OFF"
-    DONE          = "DONE"
+    LINE_FOLLOW    = "LINE_FOLLOW"
+    FIND_LINE      = "FIND_LINE"
+    APPROACH_BLUE  = "APPROACH_BLUE"
+    DRIVE_FORWARD  = "DRIVE_FORWARD"
+    PICKUP         = "PICKUP"
+    TURN_180       = "TURN_180"
+    DROP_OFF       = "DROP_OFF"
+    DONE           = "DONE"
 
 
 
