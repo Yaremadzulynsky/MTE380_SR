@@ -34,6 +34,7 @@ forward_align_thresh: 0.3
 align_kp: 0.5
 
 # Turn 180
+turn180_degrees: -180.0
 turn180_align_thresh: 0.1
 turn180_speed: 0.4
 turn180_duration_s: 1.0
