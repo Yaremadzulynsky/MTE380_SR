@@ -39,7 +39,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         del sm._fwd_phase
         del sm._fwd_stop_until
         del sm._fwd_pos_ctrl
-        sm._enter(State.PICKUP)
+        sm._enter(State.REVERSE_DRIVE_FORWARD)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)

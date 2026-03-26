@@ -30,8 +30,9 @@ import states.line_follow    as _line_follow
 import states.find_line      as _find_line
 import states.approach_blue  as _approach_blue
 import states.backup         as _backup
-import states.drive_forward  as _drive_forward
-import states.pickup         as _pickup
+import states.drive_forward         as _drive_forward
+import states.reverse_drive_forward as _reverse_drive_forward
+import states.pickup                as _pickup
 import states.turn_180       as _turn_180
 import states.drop_off       as _drop_off
 
@@ -85,6 +86,8 @@ class MissionStateMachine:
             return _backup.step(self, det, left_ticks, right_ticks)
         if self.state == State.DRIVE_FORWARD:
             return _drive_forward.step(self, det, left_ticks, right_ticks)
+        if self.state == State.REVERSE_DRIVE_FORWARD:
+            return _reverse_drive_forward.step(self, det, left_ticks, right_ticks)
         if self.state == State.PICKUP:
             return _pickup.step(self)
         if self.state == State.TURN_180:
