@@ -10,7 +10,7 @@ from __future__ import annotations
 from states import ControlOutput, State
 import states.line_follow_find_heading as _find_heading
 
-_FRAME_MID_Y = 120  # half of the 240 px processing height
+_FRAME_MID_Y = 70  # half of the 140 px processing height
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:

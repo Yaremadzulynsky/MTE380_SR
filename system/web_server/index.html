@@ -37,6 +37,7 @@
     .card {
       background: #1c1c1c;
       border: 1px solid #2a2a2a;
+      border-left: 3px solid #2a2a2a;
       border-radius: 8px;
       padding: 1rem 1.1rem 1.2rem;
       margin-bottom: 0.9rem;
@@ -49,6 +50,61 @@
       letter-spacing: 0.12em;
       color: #666;
       margin-bottom: 0.85rem;
+    }
+
+    /* Section colour accents — left border + h2 tint */
+    .card[data-sec="mission"]     { border-left-color: #22c55e; }
+    .card[data-sec="mission"]     h2 { color: #4ade80; }
+
+    .card[data-sec="perception"]  { border-left-color: #06b6d4; }
+    .card[data-sec="perception"]  h2 { color: #22d3ee; }
+
+    .card[data-sec="line"]        { border-left-color: #f97316; }
+    .card[data-sec="line"]        h2 { color: #fb923c; }
+
+    .card[data-sec="motor"]       { border-left-color: #eab308; }
+    .card[data-sec="motor"]       h2 { color: #facc15; }
+
+    .card[data-sec="mission-seq"] { border-left-color: #a855f7; }
+    .card[data-sec="mission-seq"] h2 { color: #c084fc; }
+
+    .card[data-sec="controllers"] { border-left-color: #3b82f6; }
+    .card[data-sec="controllers"] h2 { color: #60a5fa; }
+
+    .card[data-sec="testing"]     { border-left-color: #64748b; }
+    .card[data-sec="testing"]     h2 { color: #94a3b8; }
+
+    /* ── Camera side-by-side ─────────────────────────────────── */
+    .cam-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .cam-pane {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .cam-pane-label {
+      font-size: 0.7rem;
+      color: #666;
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .cam-pane img {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 11 / 7;
+      object-fit: cover;
+      border: 1px solid #2a2a2a;
+      background: #000;
     }
 
     /* ── Field grid ──────────────────────────────────────────── */
@@ -234,7 +290,7 @@
   <h1>MTE 380 Control</h1>
 
   <!-- Mission control + camera -->
-  <div class="card">
+  <div class="card" data-sec="mission">
     <h2>Mission</h2>
     <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:0.9rem;">
       <button id="btn-start" onclick="missionStart()">Start</button>
@@ -246,31 +302,29 @@
   </div>
 
   <!-- Camera streams -->
-  <div class="card">
+  <div class="card" data-sec="perception">
     <h2>Camera</h2>
-    <div style="display:flex; gap:1.25rem; flex-wrap:wrap; align-items:flex-start;">
-      <div>
-        <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Annotated</div>
-        <img id="cam-annotated" src="/stream/camera" alt="camera"
-             style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
+    <div class="cam-row">
+      <div class="cam-pane">
+        <div class="cam-pane-label">Annotated</div>
+        <img id="cam-annotated" src="/stream/camera" alt="camera" />
       </div>
-      <div>
-        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.35rem;">
-          <div style="font-size:0.7rem; color:#666; text-transform:uppercase; letter-spacing:0.08em;">Mask</div>
+      <div class="cam-pane">
+        <div class="cam-pane-label">
+          Mask
           <select id="mask-channel-select" onchange="setMaskChannel(this.value)" style="font-size:0.75rem;">
             <option value="red">Red</option>
             <option value="green">Green</option>
             <option value="blue">Blue</option>
           </select>
         </div>
-        <img id="cam-mask" src="/stream/mask" alt="mask"
-             style="display:block; width:640px; height:480px; object-fit:cover; border:1px solid #2a2a2a; background:#000;" />
+        <img id="cam-mask" src="/stream/mask" alt="mask" />
       </div>
     </div>
   </div>
 
   <!-- Telemetry graphs -->
-  <div class="card">
+  <div class="card" data-sec="mission">
     <h2>Telemetry</h2>
     <div style="margin-bottom:0.5rem;">
       <div style="font-size:0.7rem; color:#666; margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.08em;">Lateral error</div>
@@ -283,7 +337,7 @@
   </div>
 
   <!-- Camera settings -->
-  <div class="card">
+  <div class="card" data-sec="perception">
     <h2>Camera</h2>
     <div class="fields">
       <div class="field"><div class="field-label-row"><label for="roi_top_px">crop top px</label><button type="button" class="info-btn" data-help="roi_top_px" aria-label="Help: roi_top_px">i</button></div><input type="number" id="roi_top_px" step="1" min="0" max="239" /></div>
@@ -292,7 +346,7 @@
   </div>
 
   <!-- Line detection HSV (near camera for quick colour tuning) -->
-  <div class="card">
+  <div class="card" data-sec="perception">
     <h2>Line Detection — HSV</h2>
     <p class="hint">H in [0–179], S and V in [0–255].</p>
     <p class="hint" style="margin-top:0.25rem;">Red</p>
@@ -319,7 +373,7 @@
   </div>
 
   <!-- Line follow mode -->
-  <div class="card">
+  <div class="card" data-sec="line">
     <h2>Line Follow Mode</h2>
     <div class="fields">
       <div class="field">
@@ -335,7 +389,7 @@
   </div>
 
   <!-- Line error: perception -->
-  <div class="card">
+  <div class="card" data-sec="perception">
     <h2>Line error — perception</h2>
     <div class="fields">
       <div class="field">
@@ -359,10 +413,6 @@
         <input type="number" id="red_mask_min_blob_px" step="5" min="0" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="red_circle_max_circularity">circle reject thresh</label><button type="button" class="info-btn" data-help="red_circle_max_circularity" aria-label="Help: red_circle_max_circularity">i</button></div>
-        <input type="number" id="red_circle_max_circularity" step="0.05" min="0" max="1" />
-      </div>
-      <div class="field">
         <div class="field-label-row"><label for="error_heading_weight">heading weight</label><button type="button" class="info-btn" data-help="error_heading_weight" aria-label="Help: error_heading_weight">i</button></div>
         <input type="number" id="error_heading_weight" step="0.05" min="0" max="1" />
       </div>
@@ -374,7 +424,7 @@
   </div>
 
   <!-- Steering PID -->
-  <div class="card">
+  <div class="card" data-sec="line">
     <h2>Steering PID — line error → turn correction</h2>
     <div class="fields">
       <div class="field">
@@ -397,7 +447,7 @@
   </div>
 
   <!-- Heading PID -->
-  <div class="card">
+  <div class="card" data-sec="line">
     <h2>Heading PID — line tangent vs robot direction (mode 4)</h2>
     <p class="hint">Corrects the angle between the line's tangent and the robot's direction. Output is added to the lateral steering correction. Shares steer_out_limit as the output clamp.</p>
     <div class="fields">
@@ -417,7 +467,7 @@
   </div>
 
   <!-- Motor Speed PID -->
-  <div class="card">
+  <div class="card" data-sec="motor">
     <h2>Motor Speed PID — RPM feedback, one per wheel</h2>
     <div class="fields">
       <div class="field">
@@ -436,7 +486,7 @@
   </div>
 
   <!-- Speed settings -->
-  <div class="card">
+  <div class="card" data-sec="line">
     <h2>Speed — fraction of max RPM (320)</h2>
     <div class="fields">
       <div class="field">
@@ -458,26 +508,10 @@
     </div>
   </div>
 
-  <!-- Approach blue -->
-  <div class="card">
-    <h2>Approach Blue</h2>
-    <p class="hint">Drives toward the blue circle while centering on it. Exits to TURN_180 once the fitted circle radius reaches the threshold.</p>
-    <div class="fields">
-      <div class="field">
-        <div class="field-label-row"><label for="approach_blue_speed">speed</label><button type="button" class="info-btn" data-help="approach_blue_speed" aria-label="Help: approach_blue_speed">i</button></div>
-        <input type="number" id="approach_blue_speed" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="approach_blue_min_r_px">min radius (px)</label><button type="button" class="info-btn" data-help="approach_blue_min_r_px" aria-label="Help: approach_blue_min_r_px">i</button></div>
-        <input type="number" id="approach_blue_min_r_px" step="1" min="1" />
-      </div>
-    </div>
-  </div>
-
   <!-- Drive forward -->
-  <div class="card">
+  <div class="card" data-sec="mission-seq">
     <h2>Drive Forward — to pickup point</h2>
-    <p class="hint">Stops 1 s on entry, then drives forward forward_drive_m metres using the position controller.</p>
+    <p class="hint">Stops 1 s on entry, then drives forward_drive_m metres using the position controller.</p>
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="pre_turn180_backup_m">pre-turn backup (m)</label><button type="button" class="info-btn" data-help="pre_turn180_backup_m" aria-label="Help: pre_turn180_backup_m">i</button></div>
@@ -487,23 +521,11 @@
         <div class="field-label-row"><label for="forward_drive_m">drive dist (m)</label><button type="button" class="info-btn" data-help="forward_drive_m" aria-label="Help: forward_drive_m">i</button></div>
         <input type="number" id="forward_drive_m" step="0.01" min="0" max="5" />
       </div>
-      <div class="field">
-        <div class="field-label-row"><label for="forward_drive_speed">drive speed</label><button type="button" class="info-btn" data-help="forward_drive_speed" aria-label="Help: forward_drive_speed">i</button></div>
-        <input type="number" id="forward_drive_speed" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="forward_align_thresh">align thresh</label><button type="button" class="info-btn" data-help="forward_align_thresh" aria-label="Help: forward_align_thresh">i</button></div>
-        <input type="number" id="forward_align_thresh" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="align_kp">align kp</label><button type="button" class="info-btn" data-help="align_kp" aria-label="Help: align_kp">i</button></div>
-        <input type="number" id="align_kp" step="0.01" min="0" max="5" />
-      </div>
     </div>
   </div>
 
   <!-- Drop-off -->
-  <div class="card">
+  <div class="card" data-sec="mission-seq">
     <h2>Drop-off — return leg</h2>
     <p class="hint">After green is seen continuously for green_delay_s: turn 180°, drive dropoff_distance_m forward, open claw.</p>
     <div class="fields">
@@ -519,7 +541,7 @@
   </div>
 
   <!-- Find Line -->
-  <div class="card">
+  <div class="card" data-sec="line">
     <h2>Find Line — spin to reacquire lost line</h2>
     <div class="fields">
       <div class="field">
@@ -534,7 +556,7 @@
   </div>
 
   <!-- Corner Turn -->
-  <div class="card">
+  <div class="card" data-sec="line">
     <h2>Corner Turn — curvature threshold</h2>
     <div class="fields">
       <div class="field">
@@ -553,7 +575,7 @@
   </div>
 
   <!-- Wheel geometry -->
-  <div class="card">
+  <div class="card" data-sec="motor">
     <h2>Wheel geometry</h2>
     <div class="fields">
       <div class="field">
@@ -568,7 +590,7 @@
   </div>
 
   <!-- Rotation PID -->
-  <div class="card">
+  <div class="card" data-sec="controllers">
     <h2>Rotation PID</h2>
     <div class="fields">
       <div class="field">
@@ -599,30 +621,18 @@
   </div>
 
   <!-- Turn 180 -->
-  <div class="card">
+  <div class="card" data-sec="mission-seq">
     <h2>Turn 180</h2>
     <div class="fields">
       <div class="field">
         <div class="field-label-row"><label for="turn180_degrees">angle (degrees)</label><button type="button" class="info-btn" data-help="turn180_degrees" aria-label="Help: turn180_degrees">i</button></div>
         <input type="number" id="turn180_degrees" step="1" min="-360" max="360" />
       </div>
-      <div class="field">
-        <div class="field-label-row"><label for="turn180_align_thresh">align thresh (rad)</label><button type="button" class="info-btn" data-help="turn180_align_thresh" aria-label="Help: turn180_align_thresh">i</button></div>
-        <input type="number" id="turn180_align_thresh" step="0.01" min="0" max="1.57" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="turn180_speed">speed</label><button type="button" class="info-btn" data-help="turn180_speed" aria-label="Help: turn180_speed">i</button></div>
-        <input type="number" id="turn180_speed" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
-        <div class="field-label-row"><label for="turn180_duration_s">duration (s)</label><button type="button" class="info-btn" data-help="turn180_duration_s" aria-label="Help: turn180_duration_s">i</button></div>
-        <input type="number" id="turn180_duration_s" step="0.05" min="0" />
-      </div>
     </div>
   </div>
 
   <!-- Position PID -->
-  <div class="card">
+  <div class="card" data-sec="controllers">
     <h2>Position PID</h2>
     <div class="fields">
       <div class="field">
@@ -653,7 +663,7 @@
   </div>
 
   <!-- Claw -->
-  <div class="card">
+  <div class="card" data-sec="mission-seq">
     <h2>Claw / Servo</h2>
     <div class="fields">
       <div class="field">
@@ -682,7 +692,7 @@
   </div>
 
   <!-- Position test -->
-  <div class="card">
+  <div class="card" data-sec="testing">
     <h2>Position test — drive N metres</h2>
     <p class="hint">Stops the mission and drives forward (positive) or backward (negative) by the given distance in metres using the position PID.</p>
     <div class="fields" style="align-items:flex-end;">
@@ -715,7 +725,7 @@
   </div>
 
   <!-- Rotation test -->
-  <div class="card">
+  <div class="card" data-sec="testing">
     <h2>Rotation test — turn N degrees</h2>
     <p class="hint">Stops the mission and rotates in place. Positive = clockwise, negative = counter-clockwise. Speed is controlled by the rotation PID above.</p>
     <div class="fields" style="align-items:flex-end;">
@@ -748,7 +758,7 @@
   </div>
 
   <!-- Manual drive -->
-  <div class="card">
+  <div class="card" data-sec="testing">
     <h2>Manual drive — direct voltage</h2>
     <p class="hint">Send voltage directly to motors, bypassing the RPM PID. Range [-1, 1]. Stops when you click Stop.</p>
     <div class="fields" style="align-items:flex-end;">
@@ -771,7 +781,7 @@
   </div>
 
   <!-- Speed PID test -->
-  <div class="card">
+  <div class="card" data-sec="testing">
     <h2>Speed PID test</h2>
     <p class="hint">Drive both motors via the RPM speed controller. Enter speed as a fraction of max speed (−1 to 1). Target RPM = fraction × 320. Actual RPM from encoders is shown below.</p>
     <div class="fields" style="align-items:flex-end;">
@@ -815,16 +825,15 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
-      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "red_circle_max_circularity", "error_heading_weight", "error_curvature_weight",
-      "approach_blue_speed", "approach_blue_min_r_px",
-      "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
+      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
+      "pre_turn180_backup_m", "forward_drive_m",
       "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed", "find_line_min_blob_px",
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
-      "turn180_degrees", "turn180_align_thresh", "turn180_speed", "turn180_duration_s",
+      "turn180_degrees",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -864,17 +873,11 @@
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
       red_min_area_px:         [1,    5000,   10    ],
-      red_mask_min_blob_px:           [0,    500,    5     ],
-      red_circle_max_circularity:     [0,    1,      0.05  ],
+      red_mask_min_blob_px:    [0,    500,    5     ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
-      approach_blue_speed:     [0,    1,      0.01  ],
-      approach_blue_min_r_px:  [5,    300,    1     ],
       pre_turn180_backup_m:    [0,    2,      0.01  ],
       forward_drive_m:         [0,    5,      0.01  ],
-      forward_drive_speed:     [0,    1,      0.01  ],
-      forward_align_thresh:    [0,    1,      0.01  ],
-      align_kp:                [0,    5,      0.01  ],
       roi_top_px:              [0,    239,    1     ],
       roi_top_ratio:           [0,    0.95,   0.01  ],
       green_delay_s:           [0,    30,     0.1   ],
@@ -893,9 +896,6 @@
       rot_motor_deadband:      [0,    0.5,    0.01  ],
       rot_max_speed:           [0,    1,      0.01  ],
       turn180_degrees:         [-360, 360,    1     ],
-      turn180_align_thresh:    [0,    1.57,   0.01  ],
-      turn180_speed:           [0,    1,      0.01  ],
-      turn180_duration_s:      [0,    5,      0.05  ],
       pos_kp:                  [0,    1000,   0.1   ],
       pos_ki:                  [0,    1000,   0.1   ],
       pos_kd:                  [0,    1000,   0.1   ],
@@ -1009,14 +1009,6 @@
         whenInc: "You raised base_speed or need more headroom; course is open and control is solid.",
         whenDec: "Overspeed on straights, instability, or hardware limits (current, vibration).",
       },
-      align_kp: {
-        title: "align_kp",
-        what: "Proportional gain for blue-centre steering during the drive-forward alignment phase.",
-        inc: "Sharper correction toward the blue target centre.",
-        dec: "Gentler, smoother alignment.",
-        whenInc: "Robot drifts off-centre during alignment approach.",
-        whenDec: "Robot oscillates or overshoots the blue centre.",
-      },
       roi_top_px: {
         title: "roi_top_px",
         what: "Pixels to crop from the top of the processed (320×240) frame before detection. Removes the ceiling or distant background from the view.",
@@ -1032,22 +1024,6 @@
         dec: "More of the frame is used for detection.",
         whenInc: "False positives from the far end of the track or background clutter.",
         whenDec: "Line at the edge of the frame is cut off.",
-      },
-      approach_blue_speed: {
-        title: "approach_blue_speed — Approach speed",
-        what: "Motor speed fraction while driving toward the blue circle. The heading PID steers to keep the circle centred.",
-        inc: "Approaches faster; less time to react and steer accurately.",
-        dec: "Slower approach; more time to align but takes longer overall.",
-        whenInc: "Robot overshoots and misses the blue target.",
-        whenDec: "Approach is too slow for competition time.",
-      },
-      approach_blue_min_r_px: {
-        title: "approach_blue_min_r_px — Stop radius",
-        what: "Fitted circle radius in pixels at which the robot stops approaching and transitions to TURN_180. Larger radius = robot is physically closer to the target.",
-        inc: "Robot stops further away from the target (smaller perceived circle).",
-        dec: "Robot drives closer before stopping.",
-        whenInc: "Robot overshoots and bumps the target before stopping.",
-        whenDec: "Robot stops too far away for the DRIVE_FORWARD phase to reach the object.",
       },
       pre_turn180_backup_m: {
         title: "pre_turn180_backup_m — Pre-turn backup distance",
@@ -1225,14 +1201,6 @@
         whenInc: "Robot chases small red reflections or noise specks on the floor.",
         whenDec: "Robot loses the line when it's thin or only partially in the ROI.",
       },
-      red_circle_max_circularity: {
-        title: "red_circle_max_circularity — circle target rejection",
-        what: "Red contours with circularity (4π·area/perimeter²) above this threshold are rejected as the circle target and excluded from line detection. Circles ≈ 1.0; tape strips are typically < 0.4.",
-        inc: "Rejects more circular shapes; increase if the circle target is still leaking into line detection.",
-        dec: "Allows rounder blobs through; only decrease if the tape itself is being incorrectly rejected.",
-        whenInc: "Tape blobs that are slightly rounded (e.g. at corners) get filtered out.",
-        whenDec: "The red circle target is still being detected as the line.",
-      },
       red_mask_min_blob_px: {
         title: "red_mask_min_blob_px — mask blob filter",
         what: "Connected components in the red mask smaller than this area (px²) are erased before contour detection. 0 = disabled. Applied after open/close morphology.",
@@ -1386,30 +1354,6 @@
         dec: "Rotates further counter-clockwise (or less clockwise).",
         whenInc: "Robot consistently under-rotates and exits facing the wrong direction.",
         whenDec: "Robot consistently over-rotates past the intended heading.",
-      },
-      turn180_align_thresh: {
-        title: "turn180_align_thresh — Alignment threshold",
-        what: "Maximum curve_heading (radians) the robot must reach before stopping to spin. The robot line-follows until the heading error is below this value.",
-        inc: "Exits the alignment phase sooner; may start the turn while still slightly angled.",
-        dec: "Waits for tighter alignment; robot must be more closely pointed along the line.",
-        whenInc: "Robot takes too long aligning or never satisfies the threshold (line is curved).",
-        whenDec: "Robot exits alignment too early and the 180° spin starts from an offset angle.",
-      },
-      turn180_speed: {
-        title: "turn180_speed — Spin voltage",
-        what: "Motor voltage fraction during the 180° in-place turn. Left wheel drives forward at this voltage; right wheel drives backward at the same voltage.",
-        inc: "Spins faster; completes turns in less time but may overshoot if duration is too long.",
-        dec: "Slower, more controlled spin; easier to tune duration accurately.",
-        whenInc: "Turn is too slow or robot barely moves during the turn state.",
-        whenDec: "Robot spins too aggressively and momentum carries it past 180°.",
-      },
-      turn180_duration_s: {
-        title: "turn180_duration_s — Spin duration",
-        what: "How many seconds the robot spins before the TURN_180 state exits. Tune together with turn180_speed so the robot completes approximately 180°.",
-        inc: "Robot rotates further; increase if it stops short of 180°.",
-        dec: "Robot rotates less; decrease if it overshoots 180°.",
-        whenInc: "Robot exits the turn state well short of facing the return direction.",
-        whenDec: "Robot has rotated past 180° before the state exits.",
       },
 
       // ── Position PID ────────────────────────────────────────────────

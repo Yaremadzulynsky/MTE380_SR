@@ -53,22 +53,12 @@ class Config:
     min_curve_speed: float = 0.12  # minimum speed when curvature is at corner_curvature_thresh
     max_speed:       float = 0.45
 
-    # ── Approach blue ─────────────────────────────────────────────────────────
-    approach_blue_speed:    float = 0.3   # forward speed fraction while approaching
-    approach_blue_min_r_px: float = 90.0  # fitted circle radius (px) to exit the state
-
     # ── Drive-forward ─────────────────────────────────────────────────────────
     pre_turn180_backup_m: float = 0.0   # metres to reverse before TURN_180 (0 = disabled)
     forward_drive_m:      float = 0.4   # metres to drive forward before PICKUP
-    forward_drive_speed:  float = 0.28  # speed fraction during drive-forward phase
-    forward_align_thresh: float = 0.1   # curve_heading magnitude below which alignment is complete
-    align_kp:           float = 0.6   # proportional gain for blue-centre steering while driving
 
     # ── Turn 180 ──────────────────────────────────────────────────────────────
-    turn180_degrees:      float = -180.0  # degrees to rotate (positive = CW, negative = CCW)
-    turn180_align_thresh: float = 0.1    # curve_heading (rad) below which alignment is done
-    turn180_speed:        float = 0.4    # motor voltage fraction during the spin (left=+spd, right=-spd)
-    turn180_duration_s:   float = 1.0    # seconds to spin before transitioning
+    turn180_degrees: float = -180.0  # degrees to rotate (positive = CW, negative = CCW)
 
     # ── Drop-off ──────────────────────────────────────────────────────────────
     green_delay_s:      float = 2.0   # seconds to keep line-following after green is seen
@@ -109,7 +99,6 @@ class Config:
     red_loss_debounce_frames:    int   = 4
     red_error_ema_alpha:         float = 0.35
     red_min_area_px:             int   = 80   # minimum red blob area in pixels to count as line
-    red_circle_max_circularity:  float = 0.7  # blobs above this circularity are treated as the circle target, not tape
     red_mask_min_blob_px:     int   = 20   # connected components smaller than this are erased from the mask
     line_axle_extrap:         float = 0.0
     curve_n_strips:           int   = 5   # horizontal slices for curvature fit
@@ -157,14 +146,11 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Speed", [
         "base_speed", "min_speed", "min_curve_speed", "max_speed",
     ]),
-    ("Approach blue", [
-        "approach_blue_speed", "approach_blue_min_r_px",
-    ]),
     ("Drive-forward", [
-        "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
+        "pre_turn180_backup_m", "forward_drive_m",
     ]),
     ("Turn 180", [
-        "turn180_degrees", "turn180_align_thresh", "turn180_speed", "turn180_duration_s",
+        "turn180_degrees",
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",
@@ -185,7 +171,6 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Vision / perception", [
         "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px",
-        "red_circle_max_circularity",
         "line_axle_extrap", "curve_n_strips", "error_heading_weight", "error_curvature_weight",
     ]),
     ("Line detection HSV", [
