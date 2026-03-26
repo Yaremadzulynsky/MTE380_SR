@@ -460,6 +460,10 @@
     <p class="hint">Stops 1 s on entry, then drives forward forward_drive_m metres using the position controller.</p>
     <div class="fields">
       <div class="field">
+        <div class="field-label-row"><label for="pre_turn180_backup_m">pre-turn backup (m)</label><button type="button" class="info-btn" data-help="pre_turn180_backup_m" aria-label="Help: pre_turn180_backup_m">i</button></div>
+        <input type="number" id="pre_turn180_backup_m" step="0.01" min="0" max="2" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="forward_drive_m">drive dist (m)</label><button type="button" class="info-btn" data-help="forward_drive_m" aria-label="Help: forward_drive_m">i</button></div>
         <input type="number" id="forward_drive_m" step="0.01" min="0" max="5" />
       </div>
@@ -616,6 +620,10 @@
       <div class="field">
         <div class="field-label-row"><label for="pos_motor_deadband">motor deadband</label><button type="button" class="info-btn" data-help="pos_motor_deadband" aria-label="Help: pos_motor_deadband">i</button></div>
         <input type="number" id="pos_motor_deadband" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="pos_max_speed">max speed</label><button type="button" class="info-btn" data-help="pos_max_speed" aria-label="Help: pos_max_speed">i</button></div>
+        <input type="number" id="pos_max_speed" step="0.01" min="0" max="1" />
       </div>
     </div>
   </div>
@@ -784,7 +792,7 @@
       "motor_kp", "motor_ki", "motor_kd",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
-      "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
+      "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
       "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
       "find_line_turn_speed", "find_line_min_blob_px",
@@ -792,7 +800,7 @@
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
       "turn180_align_thresh", "turn180_speed", "turn180_duration_s",
-      "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
+      "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
       "red_s_min", "red_v_min",
@@ -834,6 +842,7 @@
       red_mask_min_blob_px:    [0,    500,    5     ],
       error_heading_weight:    [0,    1,      0.05  ],
       error_curvature_weight:  [0,    1,      0.05  ],
+      pre_turn180_backup_m:    [0,    2,      0.01  ],
       forward_drive_m:         [0,    5,      0.01  ],
       forward_drive_speed:     [0,    1,      0.01  ],
       forward_align_thresh:    [0,    1,      0.01  ],
@@ -863,6 +872,7 @@
       pos_kd:                  [0,    2,      0.001 ],
       pos_tolerance_m:         [0.001,0.10,   0.001 ],
       pos_motor_deadband:      [0,    0.5,    0.01  ],
+      pos_max_speed:           [0,    1,      0.01  ],
       claw_open:               [0,    180,    1     ],
       claw_closed:             [0,    180,    1     ],
       pickup_hold_s:           [0,    5,      0.1   ],
@@ -993,6 +1003,14 @@
         dec: "More of the frame is used for detection.",
         whenInc: "False positives from the far end of the track or background clutter.",
         whenDec: "Line at the edge of the frame is cut off.",
+      },
+      pre_turn180_backup_m: {
+        title: "pre_turn180_backup_m — Pre-turn backup distance",
+        what: "Metres to reverse using the position controller after blue is detected and before the TURN_180 state begins. Set to 0 to disable and transition immediately.",
+        inc: "Backs up further before turning; useful to clear the object before spinning.",
+        dec: "Less reverse travel; robot turns closer to where blue was detected.",
+        whenInc: "Robot clips the object during the 180° spin.",
+        whenDec: "Robot doesn't need to back up; reducing saves time.",
       },
       forward_drive_m: {
         title: "forward_drive_m",
@@ -1373,6 +1391,14 @@
         dec: "Finer control near zero speed; risk of stalling just short of the target.",
         whenInc: "Robot stalls and stops a fixed distance short of every target.",
         whenDec: "Dithering or buzzing around the target because the deadband floor is too high.",
+      },
+      pos_max_speed: {
+        title: "pos_max_speed — Position max speed",
+        what: "Clamps the position PID output to this motor voltage fraction. Limits how fast the robot drives during any position-controlled move.",
+        inc: "Allows faster position moves; may overshoot if PID gains are not high enough to brake in time.",
+        dec: "Slower, more controlled moves; easier to stop accurately at the target.",
+        whenInc: "Position moves are too slow even with high PID gains.",
+        whenDec: "Robot overshoots target distance due to too much speed near the end.",
       },
     };
 

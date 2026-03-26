@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import time
 
+from control.position_controller import PositionController
 from states import ControlOutput, State
 import states.line_follow_find         as _find
 import states.line_follow_find_heading as _find_heading
@@ -30,7 +31,21 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         else:
             sm._green_seen_t = None   # reset timer if green disappears
     else:
+        # Backup phase before TURN_180
+        if getattr(sm, "_pre_turn180_ctrl", None) is not None:
+            ctrl = sm._pre_turn180_ctrl
+            ctrl.step()
+            if ctrl.done:
+                sm._pre_turn180_ctrl = None
+                sm._turn180_next = State.DRIVE_FORWARD
+                sm._enter(State.TURN_180, left_ticks, right_ticks)
+                return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
+            return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
+
         if det.blue_found:
+            if sm.cfg.pre_turn180_backup_m > 0:
+                sm._pre_turn180_ctrl = PositionController(sm._brain, -sm.cfg.pre_turn180_backup_m)
+                return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
             sm._turn180_next = State.DRIVE_FORWARD
             sm._enter(State.TURN_180, left_ticks, right_ticks)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)

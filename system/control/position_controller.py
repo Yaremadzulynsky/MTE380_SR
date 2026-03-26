@@ -47,6 +47,7 @@ class PositionController:
         self._target         = float(meters)
         self._tol            = abs(tol)
         self._motor_deadband = c.pos_motor_deadband
+        self._max_speed      = c.pos_max_speed
         self._displacement   = 0.0   # metres travelled so far (signed)
         self._prev_left      = l
         self._prev_right     = r
@@ -81,6 +82,7 @@ class PositionController:
 
         output = self._pid.update(error, 0.0)
         output = self._apply_deadband(output, self._motor_deadband)
+        output = max(-self._max_speed, min(self._max_speed, output))
         self._brain.send_voltage(output + steer, output - steer)
 
     def progress(self) -> tuple[float, float]:

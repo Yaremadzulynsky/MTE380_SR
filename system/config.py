@@ -54,6 +54,7 @@ class Config:
     max_speed:       float = 0.45
 
     # ── Drive-forward ─────────────────────────────────────────────────────────
+    pre_turn180_backup_m: float = 0.0   # metres to reverse before TURN_180 (0 = disabled)
     forward_drive_m:      float = 0.4   # metres to drive forward before PICKUP
     forward_drive_speed:  float = 0.28  # speed fraction during drive-forward phase
     forward_align_thresh: float = 0.1   # curve_heading magnitude below which alignment is complete
@@ -84,6 +85,7 @@ class Config:
     pos_kd:           float = 0.1    # position PID — derivative gain
     pos_tolerance_m:  float = 0.01   # done when within this many metres of target
     pos_motor_deadband: float = 0.05 # minimum motor voltage (overcomes stiction)
+    pos_max_speed:    float = 0.6    # maximum motor voltage fraction
 
     # ── Claw / servo ──────────────────────────────────────────────────────────
     claw_open:     float = 0.0
@@ -150,7 +152,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "base_speed", "min_speed", "min_curve_speed", "max_speed",
     ]),
     ("Drive-forward", [
-        "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
+        "pre_turn180_backup_m", "forward_drive_m", "forward_drive_speed", "forward_align_thresh", "align_kp",
     ]),
     ("Turn 180", [
         "turn180_align_thresh", "turn180_speed", "turn180_duration_s",
@@ -161,7 +163,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",
         "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
-        "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband",
+        "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
     ]),
     ("Claw / servo", [
         "claw_open", "claw_closed", "pickup_hold_s",
