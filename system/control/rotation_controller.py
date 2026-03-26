@@ -101,7 +101,7 @@ class RotationController:
     # ── Control interface ─────────────────────────────────────────────────────
 
     def step(self) -> None:
-        """Integrate heading, run PID, send voltage to brain."""
+        """Integrate heading, run PID, drive via speed controller."""
         if self.done:
             return
 
@@ -116,6 +116,7 @@ class RotationController:
 
         if abs(error) <= self._tol_rad:
             self._pid.reset()
+            self._brain._speed_ctrl.reset()
             self.done = True
             return
 
@@ -123,7 +124,8 @@ class RotationController:
         output = self._apply_deadband(output, self._motor_deadband)
 
         # Positive = CW (left fwd, right rev); negative = CCW.
-        self._brain.send_voltage(output, -output)
+        self._brain._speed_ctrl.set_target(output, -output)
+        self._brain._speed_ctrl.step()
 
     def progress(self) -> tuple[float, float]:
         """Returns (abs_degrees_traveled, abs_degrees_target)."""
