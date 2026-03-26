@@ -31,7 +31,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
             sm._green_seen_t = None   # reset timer if green disappears
     else:
         if det.blue_found:
-            sm._enter(State.APPROACH_BLUE, left_ticks, right_ticks)
+            sm._enter(State.DRIVE_FORWARD, left_ticks, right_ticks)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     mode = sm.cfg.line_follow_mode

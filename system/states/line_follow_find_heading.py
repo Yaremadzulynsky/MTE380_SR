@@ -29,10 +29,10 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     lateral_turn = _clamp(lateral_turn, -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
 
     # Heading correction: heading PID on tangent misalignment.
-    # In reverse the rear aligns with the tangent, so the error sign flips.
+    # In reverse the rear leads, so both the drive direction and heading error sign flip.
     rev = sm.cfg.reverse_line_follow
     heading_sign = 1.0 if rev else -1.0
-    heading_turn = sm._heading_pid(-det.curve_heading)
+    heading_turn = sm._heading_pid(heading_sign * det.curve_heading)
     heading_turn = _clamp(heading_turn, -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
 
     sm._heading_lateral_turn = lateral_turn
