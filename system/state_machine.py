@@ -9,7 +9,7 @@ FIND_LINE     → LINE_FOLLOW when red line reacquired
 DRIVE_FORWARD → PICKUP when encoder distance reached
 PICKUP        → TURN_180 when hold timer expires
 TURN_180      → LINE_FOLLOW (is_returning=True)
-LINE_FOLLOW   → DROP_OFF when green seen for >= green_delay_s (is_returning=True)
+LINE_FOLLOW   → DROP_OFF when green seen (is_returning=True)
 DROP_OFF      → DONE
 DONE          : motors off
 
@@ -54,7 +54,6 @@ class MissionStateMachine:
         self._last_curvature    = 0.0
         self._find_line_turn_cw    = True   # updated by line_follow_find when red is seen
         self.is_returning          = False  # set True by turn_180 after 180° turn
-        self._green_seen_t         = None   # wall-clock time green was first seen (returning leg)
         self._heading_lateral_turn = 0.0   # last lateral PID output (mode 4)
         self._heading_heading_turn = 0.0   # last heading PID output (mode 4)
         self._consecutive_lost  = 0
@@ -99,7 +98,7 @@ class MissionStateMachine:
         if self.state == State.TURN_180:
             return _turn_180.step(self, det, left_ticks, right_ticks)
         if self.state == State.DROP_OFF:
-            return _drop_off.step(self)
+            return _drop_off.step(self, det, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=self.state)
 
     def _enter(self, new_state: State, left_ticks: int = 0, right_ticks: int = 0) -> None:
