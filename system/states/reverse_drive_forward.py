@@ -18,7 +18,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
 
     if sm._rev_fwd_ctrl.done:
         sm._rev_fwd_ctrl = None
-        sm._enter(State.PICKUP)
+        sm._enter(State.TURN_180)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
