@@ -1,8 +1,9 @@
 """
-DRIVE_FORWARD — three phases:
-  1. Stop for 1 s (settle after blue detection) — speed PID at 0 to actively brake.
-  2. Align in place using the heading PID until curve_heading < forward_align_thresh.
-  3. Drive forward forward_drive_m metres using PositionController.
+DRIVE_FORWARD — two phases:
+  1. Stop for 1 s (settle after CENTER_BLUE) — actively brake at speed 0.
+  2. Drive forward blue_approach_m metres using PositionController.
+     While driving, blue_cx_norm is fed as a steering correction so the robot
+     tracks the circle laterally (gain = blue_center_kp).
 """
 from __future__ import annotations
 import time
@@ -36,8 +37,15 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         sm._fwd_pos_ctrl = PositionController(sm._brain, -sm.cfg.blue_approach_m, cfg=approach_cfg)
 
     # ── Phase 3: position-controlled drive ────────────────────────────────────
+    # Lateral correction: steer toward the blue circle centroid while driving.
+    # blue_cx_norm > 0 → blue is right of centre → positive steer → turn right.
+    steer = 0.0
+    if det.blue_found and det.blue_cx_norm is not None:
+        steer = _clamp(sm.cfg.blue_center_kp * det.blue_cx_norm,
+                       -sm.cfg.blue_approach_speed, sm.cfg.blue_approach_speed)
+
     ctrl = sm._fwd_pos_ctrl
-    ctrl.step()
+    ctrl.step(steer=steer)
 
     if ctrl.done:
         del sm._fwd_phase
