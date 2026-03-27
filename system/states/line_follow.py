@@ -5,7 +5,6 @@ LINE_FOLLOW dispatcher — selects behaviour based on cfg.line_follow_mode:
 
 Transition logic:
   is_returning=False  blue_found    → CENTER_BLUE
-  is_returning=True   green_found   → DROP_OFF (immediately)
 """
 from __future__ import annotations
 
@@ -15,12 +14,7 @@ import states.line_follow_find_heading as _find_heading
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
-    if sm.is_returning:
-        if det.green_found:
-            sm._dropoff_phase = None   # ensure DROP_OFF initialises cleanly
-            sm._enter(State.DROP_OFF, left_ticks, right_ticks)
-            return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-    else:
+    if not sm.is_returning:
         if det.blue_found:
             sm._enter(State.CENTER_BLUE, left_ticks, right_ticks)
             return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
