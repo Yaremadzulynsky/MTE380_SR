@@ -76,8 +76,16 @@ class Config:
     turn180_degrees: float = -180.0  # degrees to rotate (positive = CW, negative = CCW)
 
     # ── Drop-off ──────────────────────────────────────────────────────────────
-    green_delay_s:      float = 2.0   # seconds to keep line-following after green is seen
-    dropoff_distance_m: float = 0.3   # metres to drive forward during drop-off
+    green_delay_s:           float = 2.0   # seconds to keep line-following after green is seen
+    dropoff_distance_m:      float = 0.3   # metres to drive while line-following during drop-off
+    dropoff_base_speed:      float = 0.8   # base_speed override during DROP_OFF state
+    dropoff_min_curve_speed: float = 0.8   # min_curve_speed override during DROP_OFF state
+    dropoff_steer_kp:        float = 0.65  # steer_kp override during DROP_OFF
+    dropoff_steer_ki:        float = 0.04  # steer_ki override during DROP_OFF
+    dropoff_steer_kd:        float = 0.10  # steer_kd override during DROP_OFF
+    dropoff_heading_kp:      float = 0.4   # heading_kp override during DROP_OFF
+    dropoff_heading_ki:      float = 0.0   # heading_ki override during DROP_OFF
+    dropoff_heading_kd:      float = 0.05  # heading_kd override during DROP_OFF
 
     # ── Controllers (rotation) ────────────────────────────────────────────────
     wheel_diameter_m: float = 0.065  # wheel outer diameter (metres)
@@ -173,6 +181,9 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",
+        "dropoff_base_speed", "dropoff_min_curve_speed",
+        "dropoff_steer_kp", "dropoff_steer_ki", "dropoff_steer_kd",
+        "dropoff_heading_kp", "dropoff_heading_ki", "dropoff_heading_kd",
     ]),
     ("Controllers", [
         "wheel_diameter_m", "wheelbase_m",

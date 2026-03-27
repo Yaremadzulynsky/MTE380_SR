@@ -597,6 +597,38 @@
         <div class="field-label-row"><label for="dropoff_distance_m">dropoff dist (m)</label></div>
         <input type="number" id="dropoff_distance_m" step="0.01" min="0" max="5" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_base_speed">dropoff base speed</label></div>
+        <input type="number" id="dropoff_base_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_min_curve_speed">dropoff min curve speed</label></div>
+        <input type="number" id="dropoff_min_curve_speed" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_steer_kp">dropoff steer Kp</label></div>
+        <input type="number" id="dropoff_steer_kp" step="0.01" min="0" max="5" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_steer_ki">dropoff steer Ki</label></div>
+        <input type="number" id="dropoff_steer_ki" step="0.001" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_steer_kd">dropoff steer Kd</label></div>
+        <input type="number" id="dropoff_steer_kd" step="0.001" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_heading_kp">dropoff heading Kp</label></div>
+        <input type="number" id="dropoff_heading_kp" step="0.01" min="0" max="5" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_heading_ki">dropoff heading Ki</label></div>
+        <input type="number" id="dropoff_heading_ki" step="0.001" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="dropoff_heading_kd">dropoff heading Kd</label></div>
+        <input type="number" id="dropoff_heading_kd" step="0.001" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -892,7 +924,9 @@
       "blue_center_y_kp", "blue_center_y_ki", "blue_center_y_kd", "blue_center_y_speed", "blue_center_y_tolerance",
       "reverse_find_speed", "reverse_line_drive_s",
       "roi_top_px", "roi_top_ratio",
-      "dropoff_distance_m",
+      "dropoff_distance_m", "dropoff_base_speed", "dropoff_min_curve_speed",
+      "dropoff_steer_kp", "dropoff_steer_ki", "dropoff_steer_kd",
+      "dropoff_heading_kp", "dropoff_heading_ki", "dropoff_heading_kd",
       "find_line_turn_speed", "find_line_min_blob_px",
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
@@ -960,6 +994,14 @@
       roi_top_px:              [0,    239,    1     ],
       roi_top_ratio:           [0,    0.95,   0.01  ],
       dropoff_distance_m:      [0,    5,      0.01  ],
+      dropoff_base_speed:      [0,    1,      0.01  ],
+      dropoff_min_curve_speed: [0,    1,      0.01  ],
+      dropoff_steer_kp:        [0,    5,      0.01  ],
+      dropoff_steer_ki:        [0,    1,      0.001 ],
+      dropoff_steer_kd:        [0,    1,      0.001 ],
+      dropoff_heading_kp:      [0,    5,      0.01  ],
+      dropoff_heading_ki:      [0,    1,      0.001 ],
+      dropoff_heading_kd:      [0,    1,      0.001 ],
       find_line_turn_speed:    [0,    1,      0.01  ],
       find_line_min_blob_px:   [0,    5000,   10    ],
       corner_curvature_thresh: [0,    2,      0.05  ],
