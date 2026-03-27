@@ -74,10 +74,10 @@ class Config:
 
     # ── Turn 180 ──────────────────────────────────────────────────────────────
     find_line_min_angle_deg:    float = 90.0   # minimum degrees to turn before checking for red line
-    turn180_lateral_tolerance:  float = 0.15   # |red_error| threshold to consider laterally aligned
     turn180_heading_kp:         float = 0.4    # heading_kp override during TURN_180 alignment
     turn180_heading_ki:         float = 0.0    # heading_ki override during TURN_180 alignment
     turn180_heading_kd:         float = 0.05   # heading_kd override during TURN_180 alignment
+    turn180_heading_tolerance:  float = 5.0    # |curve_heading| threshold (degrees) to exit TURN_180 alignment
 
     # ── Drop-off ──────────────────────────────────────────────────────────────
     green_delay_s:           float = 2.0   # seconds to keep line-following after green is seen
@@ -182,8 +182,8 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "reverse_find_speed", "reverse_line_drive_s",
     ]),
     ("Turn 180", [
-        "find_line_min_angle_deg", "turn180_lateral_tolerance",
-        "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd",
+        "find_line_min_angle_deg",
+        "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd", "turn180_heading_tolerance",
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",

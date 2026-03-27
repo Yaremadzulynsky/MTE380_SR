@@ -725,10 +725,6 @@
         <input type="number" id="find_line_min_angle_deg" step="5" min="0" max="360" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="turn180_lateral_tolerance">lateral align tolerance</label><button type="button" class="info-btn" data-help="turn180_lateral_tolerance" aria-label="Help: turn180_lateral_tolerance">i</button></div>
-        <input type="number" id="turn180_lateral_tolerance" step="0.01" min="0" max="1" />
-      </div>
-      <div class="field">
         <div class="field-label-row"><label for="turn180_heading_kp">align heading Kp</label><button type="button" class="info-btn" data-help="turn180_heading_kp" aria-label="Help: turn180_heading_kp">i</button></div>
         <input type="number" id="turn180_heading_kp" step="0.05" min="0" max="5" />
       </div>
@@ -739,6 +735,10 @@
       <div class="field">
         <div class="field-label-row"><label for="turn180_heading_kd">align heading Kd</label><button type="button" class="info-btn" data-help="turn180_heading_kd" aria-label="Help: turn180_heading_kd">i</button></div>
         <input type="number" id="turn180_heading_kd" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_heading_tolerance">align heading tolerance (°)</label><button type="button" class="info-btn" data-help="turn180_heading_tolerance" aria-label="Help: turn180_heading_tolerance">i</button></div>
+        <input type="number" id="turn180_heading_tolerance" step="1" min="0" max="45" />
       </div>
     </div>
   </div>
@@ -951,8 +951,8 @@
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
-      "find_line_min_angle_deg", "turn180_lateral_tolerance",
-      "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd",
+      "find_line_min_angle_deg",
+      "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd", "turn180_heading_tolerance",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -1038,10 +1038,10 @@
       rot_motor_deadband:      [0,    0.5,    0.01  ],
       rot_max_speed:           [0,    1,      0.01  ],
       find_line_min_angle_deg:    [0,    360,    5     ],
-      turn180_lateral_tolerance:  [0,    1,      0.01  ],
       turn180_heading_kp:         [0,    5,      0.05  ],
       turn180_heading_ki:         [0,    1,      0.01  ],
       turn180_heading_kd:         [0,    1,      0.01  ],
+      turn180_heading_tolerance:  [0,    45,     1     ],
       pos_kp:                  [0,    1000,   0.1   ],
       pos_ki:                  [0,    1000,   0.1   ],
       pos_kd:                  [0,    1000,   0.1   ],
@@ -1605,14 +1605,6 @@
         whenInc: "Robot stops too early by seeing the line it came from.",
         whenDec: "Robot spins past the return line without stopping.",
       },
-      turn180_lateral_tolerance: {
-        title: "turn180_lateral_tolerance — Lateral alignment threshold",
-        what: "|red_error| must fall below this value during TURN_180 alignment before the robot exits to LINE_FOLLOW. Robot drives forward at min_speed while steering with steer + heading PID.",
-        inc: "Exits alignment sooner — less precise centering on the line.",
-        dec: "Requires tighter centering before exiting — more precise but slower.",
-        whenInc: "Robot takes too long creeping forward before transitioning.",
-        whenDec: "Robot never satisfies the threshold and stays in alignment indefinitely.",
-      },
       turn180_heading_kp: {
         title: "turn180_heading_kp — Alignment heading Kp",
         what: "Proportional gain for the heading PID during TURN_180 alignment. Overrides heading_kp for this phase only; restored when the state exits.",
@@ -1636,6 +1628,14 @@
         dec: "Less damping — faster response but more oscillation.",
         whenInc: "Heading oscillates around the target during the alignment creep.",
         whenDec: "Robot overshoots and corrects slowly; heading settles sluggishly.",
+      },
+      turn180_heading_tolerance: {
+        title: "turn180_heading_tolerance — Alignment exit threshold (degrees)",
+        what: "|curve_heading| must fall below this many degrees for the robot to exit TURN_180 alignment and transition to LINE_FOLLOW.",
+        inc: "Exits with a coarser heading match — faster but less aligned with the line.",
+        dec: "Requires tighter heading match before exiting — more precise but slower.",
+        whenInc: "Robot spends too long micro-correcting before transitioning.",
+        whenDec: "Robot never satisfies the threshold and stays in alignment indefinitely.",
       },
 
       // ── Position PID ────────────────────────────────────────────────
