@@ -33,5 +33,4 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         sm.cfg.blue_center_kp * error + sm.cfg.blue_center_ki * sm._center_blue_integral,
         -spd, spd,
     )
-    return ControlOutput(left=turn, right=-turn, claw=None, state=sm.state,
-                         direct_voltage=True)
+    return ControlOutput(left=turn, right=-turn, claw=None, state=sm.state)
