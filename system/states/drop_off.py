@@ -38,13 +38,16 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     # Keep line-following for steering; suppress any state transitions the
     # sub-module tries to make (e.g. FIND_LINE on brief loss) so that our
     # encoder baseline (_enc0_*) is not reset by a spurious _enter call.
-    _saved_base = sm.cfg.base_speed
-    sm.cfg.base_speed = 0.6
+    _saved_base       = sm.cfg.base_speed
+    _saved_min_curve  = sm.cfg.min_curve_speed
+    sm.cfg.base_speed      = 0.6
+    sm.cfg.min_curve_speed = 0.4
     if sm.cfg.line_follow_mode == 4:
         out = _find_heading.step(sm, det, left_ticks, right_ticks)
     else:
         out = _find.step(sm, det, left_ticks, right_ticks)
-    sm.cfg.base_speed = _saved_base
+    sm.cfg.base_speed      = _saved_base
+    sm.cfg.min_curve_speed = _saved_min_curve
 
     if sm.state != State.DROP_OFF:
         sm.state = State.DROP_OFF   # revert without resetting encoder baseline
