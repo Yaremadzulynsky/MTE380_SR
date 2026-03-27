@@ -721,8 +721,8 @@
     <h2>Turn 180</h2>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="turn180_degrees">angle (degrees)</label><button type="button" class="info-btn" data-help="turn180_degrees" aria-label="Help: turn180_degrees">i</button></div>
-        <input type="number" id="turn180_degrees" step="1" min="-360" max="360" />
+        <div class="field-label-row"><label for="find_line_min_angle_deg">min angle before line search (°)</label><button type="button" class="info-btn" data-help="find_line_min_angle_deg" aria-label="Help: find_line_min_angle_deg">i</button></div>
+        <input type="number" id="find_line_min_angle_deg" step="5" min="0" max="360" />
       </div>
     </div>
   </div>
@@ -935,7 +935,7 @@
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
-      "turn180_degrees",
+      "find_line_min_angle_deg",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -1020,7 +1020,7 @@
       rot_tolerance:           [0.5,  45,     0.5   ],
       rot_motor_deadband:      [0,    0.5,    0.01  ],
       rot_max_speed:           [0,    1,      0.01  ],
-      turn180_degrees:         [-360, 360,    1     ],
+      find_line_min_angle_deg: [0,    360,    5     ],
       pos_kp:                  [0,    1000,   0.1   ],
       pos_ki:                  [0,    1000,   0.1   ],
       pos_kd:                  [0,    1000,   0.1   ],
@@ -1576,13 +1576,13 @@
       },
 
       // ── Turn 180 ────────────────────────────────────────────────────
-      turn180_degrees: {
-        title: "turn180_degrees — Rotation angle",
-        what: "Degrees to rotate during the TURN_180 state. Positive = clockwise, negative = counter-clockwise. Use -180 for a standard return turn.",
-        inc: "Rotates further clockwise (or less counter-clockwise).",
-        dec: "Rotates further counter-clockwise (or less clockwise).",
-        whenInc: "Robot consistently under-rotates and exits facing the wrong direction.",
-        whenDec: "Robot consistently over-rotates past the intended heading.",
+      find_line_min_angle_deg: {
+        title: "find_line_min_angle_deg — Minimum turn before line search",
+        what: "The robot ignores det.red_found until it has rotated at least this many degrees. Prevents it from locking onto the line it just reversed off before the turn has meaningfully started.",
+        inc: "Must turn more before the line-search activates — safer on tight loops.",
+        dec: "Starts looking for the line sooner — may re-acquire the departure line.",
+        whenInc: "Robot stops too early by seeing the line it came from.",
+        whenDec: "Robot spins past the return line without stopping.",
       },
 
       // ── Position PID ────────────────────────────────────────────────

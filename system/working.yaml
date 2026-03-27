@@ -1,0 +1,121 @@
+# Line follow mode
+line_follow_mode: 4
+reverse_line_follow: false
+
+# Steering PID
+steer_kp: 0.092
+steer_ki: 0.0
+steer_kd: 0.02
+steer_out_limit: 1.0
+
+# Heading PID
+heading_kp: 0.1
+heading_ki: 0.0
+heading_kd: 0.006
+
+# Motor PID
+motor_kp: 0.0082
+motor_ki: 0.0008
+motor_kd: 0.0
+motor_sync_k: 1.0
+
+# Speed
+base_speed: 0.3
+min_speed: 0.0
+min_curve_speed: 0.13
+max_speed: 1.0
+
+# Drive-forward
+pre_turn180_backup_m: 0.0
+forward_drive_m: 0.22
+blue_approach_m: 0.28
+blue_approach_speed: 0.15
+blue_center_kp: 0.11
+blue_center_ki: 0.025
+blue_center_kd: 0.021
+blue_center_speed: 0.15
+blue_center_tolerance: 0.035
+blue_center_y_kp: 0.2
+blue_center_y_ki: 0.023
+blue_center_y_kd: 0.03
+blue_center_y_speed: 0.25
+blue_center_y_tolerance: 0.13
+reverse_find_speed: 0.25
+reverse_line_drive_s: 0.5
+
+# Turn 180
+turn180_degrees: -190.0
+
+# Drop-off
+green_delay_s: 2.0
+dropoff_distance_m: 0.17
+dropoff_base_speed: 0.7
+dropoff_min_curve_speed: 0.7
+dropoff_steer_kp: 0.1
+dropoff_steer_ki: 0.0
+dropoff_steer_kd: 0.022
+dropoff_heading_kp: 0.15
+dropoff_heading_ki: 0.0
+dropoff_heading_kd: 0.006
+
+# Controllers
+wheel_diameter_m: 0.08
+wheelbase_m: 0.155
+rot_kp: 0.2
+rot_ki: 0.3
+rot_kd: 0.0
+rot_tolerance: 5.0
+rot_motor_deadband: 0.0
+rot_max_speed: 0.2
+pos_kp: 2.0
+pos_ki: 1.0
+pos_kd: 0.0
+pos_tolerance_m: 0.05
+pos_motor_deadband: 0.0
+pos_max_speed: 0.25
+
+# Claw / servo
+claw_open: 180.0
+claw_closed: 0.0
+pickup_hold_s: 0.5
+
+# Find line
+find_line_turn_speed: 0.0
+find_line_min_blob_px: 20
+
+# Corner turn
+corner_curvature_thresh: 0.95
+heading_speed_thresh: 0.4
+
+# Vision / perception
+red_loss_debounce_frames: 2
+red_error_ema_alpha: 0.35
+red_error_offset: 0.26
+red_min_area_px: 80
+red_mask_min_blob_px: 20
+line_axle_extrap: 0.0
+curve_n_strips: 8
+error_heading_weight: 0.3
+error_curvature_weight: 0.2
+
+# Line detection HSV
+red_h_lo: 134
+red_h_hi: 179
+red_s_min: 158
+red_v_min: 63
+blue_h_lo: 95
+blue_h_hi: 135
+blue_s_min: 120
+blue_v_min: 70
+green_h_lo: 45
+green_h_hi: 91
+green_s_min: 102
+green_v_min: 0
+
+# Camera / runtime
+camera_width: 1420
+camera_height: 1232
+fps: 30.0
+roi_top_ratio: 0.0
+roi_top_px: 0
+camera_rotation_deg: 0.0
