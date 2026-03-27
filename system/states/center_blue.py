@@ -63,6 +63,6 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
 
     # Combine: turn differentially, fwd equally to both wheels.
     spd   = max(sm.cfg.blue_center_speed, sm.cfg.blue_center_y_speed)
-    left  = _clamp(fwd + turn, -spd, spd)
-    right = _clamp(fwd - turn, -spd, spd)
+    left  = _clamp(-fwd + turn, -spd, spd)
+    right = _clamp(-fwd - turn, -spd, spd)
     return ControlOutput(left=left, right=right, claw=None, state=sm.state)
