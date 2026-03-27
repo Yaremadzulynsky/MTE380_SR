@@ -39,6 +39,7 @@ class SpeedController:
         self._target_left  = 0.0
         self._target_right = 0.0
         self._sync_k       = c.motor_sync_k
+        self._sync_ref: tuple[int, int] | None = None   # encoder baseline for displacement sync
 
         # Cached for telemetry
         self._last_rpm_tgt_l = 0.0
@@ -50,8 +51,12 @@ class SpeedController:
 
     def set_target(self, left: float, right: float) -> None:
         """Set speed fraction targets [-1, 1]."""
-        self._target_left  = _clamp(left,  -1.0, 1.0)
-        self._target_right = _clamp(right, -1.0, 1.0)
+        left  = _clamp(left,  -1.0, 1.0)
+        right = _clamp(right, -1.0, 1.0)
+        if left != self._target_left or right != self._target_right:
+            self._sync_ref = None   # reset displacement baseline on any target change
+        self._target_left  = left
+        self._target_right = right
 
     def step(self) -> None:
         """Read RPM from brain, run PIDs, send voltage."""
@@ -60,19 +65,34 @@ class SpeedController:
 
         rpm_l, rpm_r = self._brain.measured_rpm
 
-        # Wheel sync: when driving straight, blend each wheel's setpoint toward
-        # the slower wheel's actual RPM so the faster motor waits for the slower.
+        # Wheel sync: when driving straight, compare cumulative encoder displacement
+        # of each wheel since the last target change and pull the leading wheel back.
         #   sync_k = 0  → fully independent (original behaviour)
-        #   sync_k = 1  → faster wheel is given exactly the slower wheel's RPM
-        # Only active when both targets match (straight drive); differential
+        #   sync_k = 1  → full displacement-proportional correction
+        # Displacement-based (not speed-based) so it never deadlocks at startup —
+        # at t=0 both displacements are 0 so the correction is 0.
+        # Only active when both targets match (< 5 % difference); differential
         # steering targets automatically disable it so turns are unaffected.
-        if self._sync_k > 0 and abs(self._target_left - self._target_right) < 0.05:
-            sign  = 1.0 if rpm_tgt_l >= 0 else -1.0
-            pace  = min(abs(rpm_l), abs(rpm_r))          # slower wheel's actual speed
-            pace  = min(pace, abs(rpm_tgt_l))            # never exceed what was requested
-            synced = pace * sign
-            rpm_tgt_l = (1.0 - self._sync_k) * rpm_tgt_l + self._sync_k * synced
-            rpm_tgt_r = (1.0 - self._sync_k) * rpm_tgt_r + self._sync_k * synced
+        if self._sync_k > 0 and abs(self._target_left - self._target_right) < 0.05 and rpm_tgt_l != 0:
+            l_ticks, r_ticks = self._brain.encoder_ticks
+
+            if self._sync_ref is None:
+                self._sync_ref = (l_ticks, r_ticks)
+
+            # Signed displacement in the direction of travel (positive = forward)
+            sign   = 1.0 if rpm_tgt_l > 0 else -1.0
+            disp_l = sign * (l_ticks - self._sync_ref[0])
+            disp_r = sign * (r_ticks - self._sync_ref[1])
+            avg    = (disp_l + disp_r) / 2.0
+
+            if avg > 10:    # wait for a few ticks before applying correction
+                # lead_frac > 0 → left is further ahead; clamp so correction ≤ 50 % of target
+                lead_frac  = max(-0.5, min(0.5, (disp_l - disp_r) / avg))
+                correction = self._sync_k * lead_frac * abs(rpm_tgt_l)
+                rpm_tgt_l -= sign * correction
+                rpm_tgt_r += sign * correction
+        else:
+            self._sync_ref = None   # reset baseline when sync not applicable
 
         self._pid_left.setpoint  = rpm_tgt_l
         self._pid_right.setpoint = rpm_tgt_r
@@ -104,9 +124,10 @@ class SpeedController:
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def reset(self) -> None:
-        """Clear integrators."""
+        """Clear integrators and sync baseline."""
         self._pid_left.reset()
         self._pid_right.reset()
+        self._sync_ref = None
 
     def set_gains(self, cfg: _config_module.Config) -> None:
         """Update PID gains, sync term, and reset integrators."""
