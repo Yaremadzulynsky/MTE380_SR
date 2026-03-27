@@ -73,7 +73,8 @@ class Config:
     reverse_line_drive_s:  float = 0.5   # seconds to keep reversing after line is found before TURN_180
 
     # ── Turn 180 ──────────────────────────────────────────────────────────────
-    find_line_min_angle_deg: float = 90.0    # minimum degrees to turn before checking for red line
+    find_line_min_angle_deg:    float = 90.0   # minimum degrees to turn before checking for red line
+    turn180_lateral_tolerance:  float = 0.15   # |red_error| threshold to consider laterally aligned
 
     # ── Drop-off ──────────────────────────────────────────────────────────────
     green_delay_s:           float = 2.0   # seconds to keep line-following after green is seen
@@ -178,7 +179,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "reverse_find_speed", "reverse_line_drive_s",
     ]),
     ("Turn 180", [
-        "find_line_min_angle_deg",
+        "find_line_min_angle_deg", "turn180_lateral_tolerance",
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",

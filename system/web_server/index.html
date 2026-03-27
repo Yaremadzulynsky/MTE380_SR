@@ -724,6 +724,10 @@
         <div class="field-label-row"><label for="find_line_min_angle_deg">min angle before line search (°)</label><button type="button" class="info-btn" data-help="find_line_min_angle_deg" aria-label="Help: find_line_min_angle_deg">i</button></div>
         <input type="number" id="find_line_min_angle_deg" step="5" min="0" max="360" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_lateral_tolerance">lateral align tolerance</label><button type="button" class="info-btn" data-help="turn180_lateral_tolerance" aria-label="Help: turn180_lateral_tolerance">i</button></div>
+        <input type="number" id="turn180_lateral_tolerance" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -935,7 +939,7 @@
       "corner_curvature_thresh", "curve_n_strips",
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
-      "find_line_min_angle_deg",
+      "find_line_min_angle_deg", "turn180_lateral_tolerance",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -1020,7 +1024,8 @@
       rot_tolerance:           [0.5,  45,     0.5   ],
       rot_motor_deadband:      [0,    0.5,    0.01  ],
       rot_max_speed:           [0,    1,      0.01  ],
-      find_line_min_angle_deg: [0,    360,    5     ],
+      find_line_min_angle_deg:    [0,    360,    5     ],
+      turn180_lateral_tolerance:  [0,    1,      0.01  ],
       pos_kp:                  [0,    1000,   0.1   ],
       pos_ki:                  [0,    1000,   0.1   ],
       pos_kd:                  [0,    1000,   0.1   ],
@@ -1583,6 +1588,14 @@
         dec: "Starts looking for the line sooner — may re-acquire the departure line.",
         whenInc: "Robot stops too early by seeing the line it came from.",
         whenDec: "Robot spins past the return line without stopping.",
+      },
+      turn180_lateral_tolerance: {
+        title: "turn180_lateral_tolerance — Lateral alignment threshold",
+        what: "|red_error| must fall below this value during the lateral alignment phase (phase 3) of TURN_180 before the robot exits to LINE_FOLLOW. Robot drives forward slowly at min_speed while steering with steer PID.",
+        inc: "Exits lateral alignment sooner — less precise centering on the line.",
+        dec: "Requires tighter centering before exiting — more precise but slower.",
+        whenInc: "Robot takes too long creeping forward before transitioning.",
+        whenDec: "Robot overshoots the line during lateral correction before it can stop.",
       },
 
       // ── Position PID ────────────────────────────────────────────────
