@@ -14,18 +14,24 @@ from states import ControlOutput, State, _clamp
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     if not det.blue_found or det.blue_cx_norm is None:
-        # Blue temporarily lost — hold still
+        # Blue temporarily lost — hold still, preserve integral
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
 
     error = det.blue_cx_norm  # positive = blue is right of centre
 
     if abs(error) <= sm.cfg.blue_center_tolerance:
+        sm._center_blue_integral = 0.0
         sm._enter(State.DRIVE_FORWARD, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
+
+    sm._center_blue_integral = getattr(sm, "_center_blue_integral", 0.0) + error
 
     # Turn in-place toward the blue circle.
     # error > 0 → blue is right → spin CW: left fwd, right back.
     spd  = sm.cfg.blue_center_speed
-    turn = _clamp(sm.cfg.blue_center_kp * error, -spd, spd)
+    turn = _clamp(
+        sm.cfg.blue_center_kp * error + sm.cfg.blue_center_ki * sm._center_blue_integral,
+        -spd, spd,
+    )
     return ControlOutput(left=turn, right=-turn, claw=None, state=sm.state,
                          direct_voltage=True)

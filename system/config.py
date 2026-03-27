@@ -59,6 +59,7 @@ class Config:
     blue_approach_m:       float = 0.22  # metres to drive to pickup point after centering on blue
     blue_approach_speed:   float = 0.25  # max motor voltage fraction during approach drive
     blue_center_kp:        float = 0.3   # proportional gain for in-place centering on blue circle
+    blue_center_ki:        float = 0.0   # integral gain for in-place centering on blue circle
     blue_center_speed:     float = 0.3   # max motor voltage during centering rotation
     blue_center_tolerance: float = 0.05  # |cx_norm| <= this to consider blue centred
     reverse_find_speed:    float = 0.25  # motor voltage while reversing to find the line after pickup
@@ -156,7 +157,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ("Drive-forward", [
         "pre_turn180_backup_m", "forward_drive_m",
         "blue_approach_m", "blue_approach_speed",
-        "blue_center_kp", "blue_center_speed", "blue_center_tolerance",
+        "blue_center_kp", "blue_center_ki", "blue_center_speed", "blue_center_tolerance",
         "reverse_find_speed", "reverse_line_drive_s",
     ]),
     ("Turn 180", [

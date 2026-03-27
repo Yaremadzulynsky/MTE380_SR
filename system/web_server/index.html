@@ -526,6 +526,10 @@
         <input type="number" id="blue_center_kp" step="0.01" min="0" max="2" />
       </div>
       <div class="field">
+        <div class="field-label-row"><label for="blue_center_ki">center Ki</label></div>
+        <input type="number" id="blue_center_ki" step="0.001" min="0" max="1" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="blue_center_speed">center speed</label></div>
         <input type="number" id="blue_center_speed" step="0.01" min="0" max="1" />
       </div>
@@ -860,7 +864,7 @@
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
       "pre_turn180_backup_m", "forward_drive_m",
       "blue_approach_m", "blue_approach_speed",
-      "blue_center_kp", "blue_center_speed", "blue_center_tolerance",
+      "blue_center_kp", "blue_center_ki", "blue_center_speed", "blue_center_tolerance",
       "reverse_find_speed", "reverse_line_drive_s",
       "roi_top_px", "roi_top_ratio",
       "green_delay_s", "dropoff_distance_m",
@@ -916,6 +920,7 @@
       blue_approach_m:         [0,    2,      0.01  ],
       blue_approach_speed:     [0,    1,      0.01  ],
       blue_center_kp:          [0,    2,      0.01  ],
+      blue_center_ki:          [0,    1,      0.001 ],
       blue_center_speed:       [0,    1,      0.01  ],
       blue_center_tolerance:   [0,    1,      0.01  ],
       reverse_find_speed:      [0,    1,      0.01  ],
