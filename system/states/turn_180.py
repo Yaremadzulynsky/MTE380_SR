@@ -57,7 +57,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
             return _enter_next(sm, left_ticks, right_ticks)
 
         spd  = sm.cfg.min_speed
-        turn = _clamp(sm._steer_pid(det.red_error), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
+        turn = _clamp(sm._steer_pid(-det.red_error), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
         left  = _clamp(spd + turn, -1.0, 1.0)
         right = _clamp(spd - turn, -1.0, 1.0)
         sm._brain._speed_ctrl.set_target(left, right)
