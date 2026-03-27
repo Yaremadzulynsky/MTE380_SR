@@ -13,18 +13,18 @@ from states import ControlOutput, State
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     spd = -abs(sm.cfg.reverse_find_speed)
 
-    # Phase 2: line found, now driving for the extra timed duration
-    if getattr(sm, "_rfl_found_t", None) is not None:
-        if time.monotonic() - sm._rfl_found_t >= sm.cfg.reverse_line_drive_s:
-            sm._rfl_found_t = None
-            sm._enter(State.TURN_180, left_ticks, right_ticks)
-            return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
-        return ControlOutput(left=spd, right=spd, claw=None, state=sm.state,
+    # Phase 1: reverse until the red line is detected
+    if getattr(sm, "_rfl_found_t", None) is None:
+        if det.red_found:
+            sm._rfl_found_t = time.monotonic()
+        return ControlOutput(left=-spd, right=-spd, claw=None, state=sm.state,
                              direct_voltage=True)
 
-    # Phase 1: searching for the line
-    if det.red_found:
-        sm._rfl_found_t = time.monotonic()
+    # Phase 2: line found — continue reversing for reverse_line_drive_s then → TURN_180
+    if time.monotonic() - sm._rfl_found_t < sm.cfg.reverse_line_drive_s:
+        return ControlOutput(left=-spd, right=-spd, claw=None, state=sm.state,
+                             direct_voltage=True)
 
-    return ControlOutput(left=spd, right=spd, claw=None, state=sm.state,
-                         direct_voltage=True)
+    sm._rfl_found_t = None
+    sm._enter(State.TURN_180, left_ticks, right_ticks)
+    return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
