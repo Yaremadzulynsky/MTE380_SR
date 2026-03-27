@@ -515,54 +515,54 @@
   <!-- Blue centering + approach -->
   <div class="card" data-sec="mission-seq">
     <h2>Blue Circle — centre &amp; approach</h2>
-    <p class="hint">When blue is seen the robot stops and rotates in-place until the circle is centred, then drives blue_approach_m metres to the pickup point.</p>
+    <p class="hint">When blue is seen the robot runs two simultaneous PIDs: X rotates in-place to centre the circle horizontally (blue_cx_norm), Y drives forward/backward to centre it vertically (blue_cy_norm). Once both axes are within tolerance it transitions to DRIVE_FORWARD.</p>
     <div class="fields">
       <div class="field">
-        <div class="field-label-row"><label for="blue_approach_m">approach dist (m)</label></div>
+        <div class="field-label-row"><label for="blue_approach_m">approach dist (m)</label><button type="button" class="info-btn" data-help="blue_approach_m" aria-label="Help: blue_approach_m">i</button></div>
         <input type="number" id="blue_approach_m" step="0.01" min="0" max="2" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_approach_speed">approach speed</label></div>
+        <div class="field-label-row"><label for="blue_approach_speed">approach speed</label><button type="button" class="info-btn" data-help="blue_approach_speed" aria-label="Help: blue_approach_speed">i</button></div>
         <input type="number" id="blue_approach_speed" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_kp">center Kp</label></div>
+        <div class="field-label-row"><label for="blue_center_kp">center X Kp</label><button type="button" class="info-btn" data-help="blue_center_kp" aria-label="Help: blue_center_kp">i</button></div>
         <input type="number" id="blue_center_kp" step="0.01" min="0" max="2" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_ki">center Ki</label></div>
+        <div class="field-label-row"><label for="blue_center_ki">center X Ki</label><button type="button" class="info-btn" data-help="blue_center_ki" aria-label="Help: blue_center_ki">i</button></div>
         <input type="number" id="blue_center_ki" step="0.001" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_kd">center Kd</label></div>
+        <div class="field-label-row"><label for="blue_center_kd">center X Kd</label><button type="button" class="info-btn" data-help="blue_center_kd" aria-label="Help: blue_center_kd">i</button></div>
         <input type="number" id="blue_center_kd" step="0.001" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_speed">center speed</label></div>
+        <div class="field-label-row"><label for="blue_center_speed">center X speed</label><button type="button" class="info-btn" data-help="blue_center_speed" aria-label="Help: blue_center_speed">i</button></div>
         <input type="number" id="blue_center_speed" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_tolerance">center X tolerance</label></div>
+        <div class="field-label-row"><label for="blue_center_tolerance">center X tolerance</label><button type="button" class="info-btn" data-help="blue_center_tolerance" aria-label="Help: blue_center_tolerance">i</button></div>
         <input type="number" id="blue_center_tolerance" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_y_kp">center Y Kp</label></div>
+        <div class="field-label-row"><label for="blue_center_y_kp">center Y Kp</label><button type="button" class="info-btn" data-help="blue_center_y_kp" aria-label="Help: blue_center_y_kp">i</button></div>
         <input type="number" id="blue_center_y_kp" step="0.01" min="0" max="2" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_y_ki">center Y Ki</label></div>
+        <div class="field-label-row"><label for="blue_center_y_ki">center Y Ki</label><button type="button" class="info-btn" data-help="blue_center_y_ki" aria-label="Help: blue_center_y_ki">i</button></div>
         <input type="number" id="blue_center_y_ki" step="0.001" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_y_kd">center Y Kd</label></div>
+        <div class="field-label-row"><label for="blue_center_y_kd">center Y Kd</label><button type="button" class="info-btn" data-help="blue_center_y_kd" aria-label="Help: blue_center_y_kd">i</button></div>
         <input type="number" id="blue_center_y_kd" step="0.001" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_y_speed">center Y speed</label></div>
+        <div class="field-label-row"><label for="blue_center_y_speed">center Y speed</label><button type="button" class="info-btn" data-help="blue_center_y_speed" aria-label="Help: blue_center_y_speed">i</button></div>
         <input type="number" id="blue_center_y_speed" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
-        <div class="field-label-row"><label for="blue_center_y_tolerance">center Y tolerance</label></div>
+        <div class="field-label-row"><label for="blue_center_y_tolerance">center Y tolerance</label><button type="button" class="info-btn" data-help="blue_center_y_tolerance" aria-label="Help: blue_center_y_tolerance">i</button></div>
         <input type="number" id="blue_center_y_tolerance" step="0.01" min="0" max="1" />
       </div>
       <div class="field">
@@ -1118,6 +1118,102 @@
         dec: "Stops earlier.",
         whenInc: "Robot stops short of the pickup target.",
         whenDec: "Overshoots the pickup point.",
+      },
+      blue_approach_m: {
+        title: "blue_approach_m — approach distance",
+        what: "Metres to drive toward the pickup point after CENTER_BLUE completes, using the position controller.",
+        inc: "Stops further from where the circle was when centering finished.",
+        dec: "Approaches closer; may overshoot the object.",
+        whenInc: "Robot stops short of the pickup target.",
+        whenDec: "Robot drives past the object.",
+      },
+      blue_approach_speed: {
+        title: "blue_approach_speed — approach max speed",
+        what: "Maximum motor voltage fraction used by the position controller during the approach drive to the pickup point.",
+        inc: "Faster approach; more overshoot risk.",
+        dec: "Slower, smoother stop; more positioning accuracy.",
+        whenInc: "Robot consistently overshoots or bumps the object.",
+        whenDec: "Approach is too slow; wastes mission time.",
+      },
+      blue_center_kp: {
+        title: "blue_center_kp — X-axis (rotational) proportional gain",
+        what: "Proportional gain for the in-place rotation PID that centres blue_cx_norm to zero. Higher = faster heading correction.",
+        inc: "Faster rotation toward centre; may overshoot and oscillate.",
+        dec: "Slower correction; may not fully centre before tolerance is reached.",
+        whenInc: "Robot oscillates left/right without settling.",
+        whenDec: "Robot stops slightly off-centre; heading tolerance not tight enough.",
+      },
+      blue_center_ki: {
+        title: "blue_center_ki — X-axis integral gain",
+        what: "Integral gain for the rotational centering PID. Removes steady-state offset if Kp alone leaves the circle slightly off-centre.",
+        inc: "More aggressive offset removal; risk of windup and oscillation.",
+        dec: "Less integral action; small residual offset may remain.",
+        whenInc: "Oscillation or slow rotation that keeps going past centre.",
+        whenDec: "Circle is consistently a few percent off-centre at exit.",
+      },
+      blue_center_kd: {
+        title: "blue_center_kd — X-axis derivative gain",
+        what: "Derivative gain for the rotational centering PID. Damps oscillation by reacting to the rate of change of cx_norm.",
+        inc: "More damping; slows response but reduces overshoot.",
+        dec: "Less damping; faster but may ring.",
+        whenInc: "Sluggish, overdamped response that takes too long to settle.",
+        whenDec: "Oscillation around the horizontal centre.",
+      },
+      blue_center_speed: {
+        title: "blue_center_speed — X-axis (rotational) max speed",
+        what: "Maximum motor voltage for the rotational centering PID output. Acts as an output clamp.",
+        inc: "Allows faster rotation; risk of overshoot.",
+        dec: "Gentler rotation; more precise but slower.",
+        whenInc: "Robot overshoots and oscillates.",
+        whenDec: "Centering takes too long.",
+      },
+      blue_center_tolerance: {
+        title: "blue_center_tolerance — X-axis done threshold",
+        what: "|blue_cx_norm| must be ≤ this value before the X axis is considered centred. Tighter = more precise heading alignment but longer centering time.",
+        inc: "Looser threshold; exits centering faster but less aligned.",
+        dec: "Tighter threshold; more accurate but slower.",
+        whenInc: "Robot approaches at a significant angle to the circle.",
+        whenDec: "Centering never converges; robot spins indefinitely.",
+      },
+      blue_center_y_kp: {
+        title: "blue_center_y_kp — Y-axis (forward/back) proportional gain",
+        what: "Proportional gain for the forward/backward PID that centres blue_cy_norm to zero. cy_norm < 0 = circle high in frame = robot too far → drive forward. cy_norm > 0 = too close → back up.",
+        inc: "Faster approach/retreat; may overshoot.",
+        dec: "Slower correction; robot may stop too far or too close.",
+        whenInc: "Robot oscillates forward/backward without settling.",
+        whenDec: "Robot stops well short of the target distance.",
+      },
+      blue_center_y_ki: {
+        title: "blue_center_y_ki — Y-axis integral gain",
+        what: "Integral gain for the forward/backward centering PID. Corrects a steady-state distance offset.",
+        inc: "More aggressive offset removal; risk of overshoot or windup.",
+        dec: "Less correction; residual distance offset may remain.",
+        whenInc: "Robot keeps driving past the target y position.",
+        whenDec: "Circle consistently stops above or below frame centre.",
+      },
+      blue_center_y_kd: {
+        title: "blue_center_y_kd — Y-axis derivative gain",
+        what: "Derivative gain for the forward/backward centering PID. Damps oscillation along the approach axis.",
+        inc: "More damping of approach motion.",
+        dec: "Less damping; may overshoot distance target.",
+        whenInc: "Sluggish approach that creeps to target.",
+        whenDec: "Robot drives past the target and oscillates fore/aft.",
+      },
+      blue_center_y_speed: {
+        title: "blue_center_y_speed — Y-axis max speed",
+        what: "Maximum motor voltage for the forward/backward centering PID output.",
+        inc: "Faster approach; more overshoot risk.",
+        dec: "Slower, more precise stopping distance.",
+        whenInc: "Robot overshoots the target distance.",
+        whenDec: "Approach takes too long; wastes time.",
+      },
+      blue_center_y_tolerance: {
+        title: "blue_center_y_tolerance — Y-axis done threshold",
+        what: "|blue_cy_norm| must be ≤ this value before the Y axis is considered centred. Larger = exits sooner but farther from ideal distance.",
+        inc: "Looser; exits earlier with more distance error.",
+        dec: "Tighter; more precise distance but slower to converge.",
+        whenInc: "Robot stops too far from or too close to the circle.",
+        whenDec: "Y axis never converges; robot drives forward/backward indefinitely.",
       },
       claw_open: {
         title: "claw_open",
@@ -1828,6 +1924,7 @@
         `red=${s.red_found ? "Y" : "N"}  err=${s.red_error?.toFixed(3)}  ` +
         `blue=${s.blue_found ? "Y" : "N"}  cx=${s.blue_cx_norm != null ? s.blue_cx_norm.toFixed(3) : "--"}  cy=${s.blue_cy_norm != null ? s.blue_cy_norm.toFixed(3) : "--"}  r=${s.blue_circle_r != null ? s.blue_circle_r.toFixed(1) + "px" : "--"}  green=${s.green_found ? "Y" : "N"}  |  ` +
         `lateral=${s.lateral_turn?.toFixed(3)}  heading=${s.heading_turn?.toFixed(3)}  |  ` +
+        (s.dropoff_disp != null ? `dropoff=${s.dropoff_disp.toFixed(3)}m  |  ` : ``) +
         `cam=${s.cam_fps?.toFixed(1)} fps`;
       const spidEl = document.getElementById("spid-telem");
       if (spidEl) {

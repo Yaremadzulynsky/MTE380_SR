@@ -392,6 +392,7 @@ class RobotBrain:
             running  = self._mode == "mission"
             lateral_turn = self._sm._heading_lateral_turn if self._sm else 0.0
             heading_turn = self._sm._heading_heading_turn if self._sm else 0.0
+            dropoff_disp = getattr(self._sm, "_dropoff_displacement", None) if self._sm and sm_state == "DROP_OFF" else None
         enc_l, enc_r = self.encoder_ticks
         rpm_l, rpm_r = self.measured_rpm
         return {
@@ -402,9 +403,10 @@ class RobotBrain:
             "det":         det,
             "output":      output,
             "motor_telem": self._speed_ctrl.telemetry_line(),
-            "lateral_turn": lateral_turn,
-            "heading_turn": heading_turn,
-            "cam_fps":     round(self._cam_fps, 1),
+            "lateral_turn":  lateral_turn,
+            "heading_turn":  heading_turn,
+            "dropoff_disp":  round(dropoff_disp, 3) if dropoff_disp is not None else None,
+            "cam_fps":       round(self._cam_fps, 1),
         }
 
     # ── Main loop ─────────────────────────────────────────────────────────────
@@ -559,11 +561,16 @@ class RobotBrain:
         if output is not None and (self._frame_n % self._telem_every == 0):
             enc_l, enc_r = self.encoder_ticks
             claw_s = f"{output.claw:.0f}°" if output.claw is not None else "--"
+            if self._sm and output.state.value == "DROP_OFF":
+                disp = getattr(self._sm, "_dropoff_displacement", 0.0)
+                dropoff_s = f"  dropoff={disp:.3f}m/{self._sm.cfg.dropoff_distance_m:.3f}m"
+            else:
+                dropoff_s = ""
             print(
                 f"{t_run:8.3f}s  {output.state.value:12s}  "
                 f"red={'Y' if det.red_found else 'N'} err={det.red_error:+.3f}  "
                 f"blue={'Y' if det.blue_found else 'N'} green={'Y' if det.green_found else 'N'}  "
-                f"claw={claw_s}  enc_L={enc_l:6d} enc_R={enc_r:6d}  "
+                f"claw={claw_s}  enc_L={enc_l:6d} enc_R={enc_r:6d}{dropoff_s}  "
                 f"{self._speed_ctrl.telemetry_line()}",
                 flush=True,
             )

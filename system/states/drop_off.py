@@ -26,6 +26,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     dl = (left_ticks  - sm._enc0_left)  * wheel_circ / TICKS_PER_REV
     dr = (right_ticks - sm._enc0_right) * wheel_circ / TICKS_PER_REV
     displacement = (dl + dr) / 2.0
+    sm._dropoff_displacement = displacement
 
     if displacement >= sm.cfg.dropoff_distance_m:
         sm.is_returning = False

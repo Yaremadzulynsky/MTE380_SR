@@ -170,9 +170,10 @@ def ws_status(ws):
                 "blue_cy_norm":   det.blue_cy_norm   if det else None,
                 "blue_circle_r":  det.blue_circle_r  if det else None,
                 "green_found":    det.green_found    if det else False,
-                "lateral_turn": snap["lateral_turn"],
-                "heading_turn": snap["heading_turn"],
-                "cam_fps":      snap["cam_fps"],
+                "lateral_turn":  snap["lateral_turn"],
+                "heading_turn":  snap["heading_turn"],
+                "dropoff_disp":  snap["dropoff_disp"],
+                "cam_fps":       snap["cam_fps"],
             }))
         elapsed = time.monotonic() - t0
         time.sleep(max(0.0, interval - elapsed))
