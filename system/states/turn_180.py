@@ -46,6 +46,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         if not det.red_found:
             print("[turn_180] line lost during alignment — exiting", flush=True)
             sm._turn180_phase = "spinning"
+            sm._heading_pid.tunings = sm._turn180_saved_heading_tunings
             return _enter_next(sm, left_ticks, right_ticks)
 
         tol_rad = math.radians(sm.cfg.rot_tolerance)
@@ -53,6 +54,7 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
                 and abs(det.curve_heading) < tol_rad):
             print(f"[turn_180] aligned (err={det.red_error:+.3f} hdg={math.degrees(det.curve_heading):.1f}°) — exiting", flush=True)
             sm._turn180_phase = "spinning"
+            sm._heading_pid.tunings = sm._turn180_saved_heading_tunings
             return _enter_next(sm, left_ticks, right_ticks)
 
         spd          = sm.cfg.min_speed
@@ -81,6 +83,8 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         sm._brain._speed_ctrl.reset()
         sm._steer_pid.reset()
         sm._heading_pid.reset()
+        sm._turn180_saved_heading_tunings = sm._heading_pid.tunings
+        sm._heading_pid.tunings = (sm.cfg.turn180_heading_kp, sm.cfg.turn180_heading_ki, sm.cfg.turn180_heading_kd)
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
 
     return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)

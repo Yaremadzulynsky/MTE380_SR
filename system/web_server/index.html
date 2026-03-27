@@ -728,6 +728,18 @@
         <div class="field-label-row"><label for="turn180_lateral_tolerance">lateral align tolerance</label><button type="button" class="info-btn" data-help="turn180_lateral_tolerance" aria-label="Help: turn180_lateral_tolerance">i</button></div>
         <input type="number" id="turn180_lateral_tolerance" step="0.01" min="0" max="1" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_heading_kp">align heading Kp</label><button type="button" class="info-btn" data-help="turn180_heading_kp" aria-label="Help: turn180_heading_kp">i</button></div>
+        <input type="number" id="turn180_heading_kp" step="0.05" min="0" max="5" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_heading_ki">align heading Ki</label><button type="button" class="info-btn" data-help="turn180_heading_ki" aria-label="Help: turn180_heading_ki">i</button></div>
+        <input type="number" id="turn180_heading_ki" step="0.01" min="0" max="1" />
+      </div>
+      <div class="field">
+        <div class="field-label-row"><label for="turn180_heading_kd">align heading Kd</label><button type="button" class="info-btn" data-help="turn180_heading_kd" aria-label="Help: turn180_heading_kd">i</button></div>
+        <input type="number" id="turn180_heading_kd" step="0.01" min="0" max="1" />
+      </div>
     </div>
   </div>
 
@@ -940,6 +952,7 @@
       "wheel_diameter_m", "wheelbase_m",
       "rot_kp", "rot_ki", "rot_kd", "rot_tolerance", "rot_motor_deadband", "rot_max_speed",
       "find_line_min_angle_deg", "turn180_lateral_tolerance",
+      "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd",
       "pos_kp", "pos_ki", "pos_kd", "pos_tolerance_m", "pos_motor_deadband", "pos_max_speed",
       "claw_open", "claw_closed", "pickup_hold_s",
       "red_h_lo", "red_h_hi",
@@ -1026,6 +1039,9 @@
       rot_max_speed:           [0,    1,      0.01  ],
       find_line_min_angle_deg:    [0,    360,    5     ],
       turn180_lateral_tolerance:  [0,    1,      0.01  ],
+      turn180_heading_kp:         [0,    5,      0.05  ],
+      turn180_heading_ki:         [0,    1,      0.01  ],
+      turn180_heading_kd:         [0,    1,      0.01  ],
       pos_kp:                  [0,    1000,   0.1   ],
       pos_ki:                  [0,    1000,   0.1   ],
       pos_kd:                  [0,    1000,   0.1   ],
@@ -1591,11 +1607,35 @@
       },
       turn180_lateral_tolerance: {
         title: "turn180_lateral_tolerance — Lateral alignment threshold",
-        what: "|red_error| must fall below this value during the lateral alignment phase (phase 3) of TURN_180 before the robot exits to LINE_FOLLOW. Robot drives forward slowly at min_speed while steering with steer PID.",
-        inc: "Exits lateral alignment sooner — less precise centering on the line.",
+        what: "|red_error| must fall below this value during TURN_180 alignment before the robot exits to LINE_FOLLOW. Robot drives forward at min_speed while steering with steer + heading PID.",
+        inc: "Exits alignment sooner — less precise centering on the line.",
         dec: "Requires tighter centering before exiting — more precise but slower.",
         whenInc: "Robot takes too long creeping forward before transitioning.",
-        whenDec: "Robot overshoots the line during lateral correction before it can stop.",
+        whenDec: "Robot never satisfies the threshold and stays in alignment indefinitely.",
+      },
+      turn180_heading_kp: {
+        title: "turn180_heading_kp — Alignment heading Kp",
+        what: "Proportional gain for the heading PID during TURN_180 alignment. Overrides heading_kp for this phase only; restored when the state exits.",
+        inc: "Stronger heading correction — snaps to line tangent faster but may oscillate.",
+        dec: "Gentler heading correction — smoother but slower to align.",
+        whenInc: "Robot drives forward without correcting heading angle adequately.",
+        whenDec: "Robot oscillates left/right during the alignment creep.",
+      },
+      turn180_heading_ki: {
+        title: "turn180_heading_ki — Alignment heading Ki",
+        what: "Integral gain for the heading PID during TURN_180 alignment.",
+        inc: "Eliminates steady-state heading offset at the cost of potential windup.",
+        dec: "Reduces windup risk; heading may settle with a small residual offset.",
+        whenInc: "Robot consistently exits with a small angular offset that Kp alone cannot remove.",
+        whenDec: "Heading overshoots or oscillates due to integrator windup.",
+      },
+      turn180_heading_kd: {
+        title: "turn180_heading_kd — Alignment heading Kd",
+        what: "Derivative gain for the heading PID during TURN_180 alignment.",
+        inc: "More damping — reduces overshoot on heading correction.",
+        dec: "Less damping — faster response but more oscillation.",
+        whenInc: "Heading oscillates around the target during the alignment creep.",
+        whenDec: "Robot overshoots and corrects slowly; heading settles sluggishly.",
       },
 
       // ── Position PID ────────────────────────────────────────────────
