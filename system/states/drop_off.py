@@ -4,7 +4,8 @@ DROP_OFF state — keep line-following while counting encoder distance.
 As soon as green is detected (transition from LINE_FOLLOW), the robot
 continues line-following using the normal steering logic.  Encoder
 displacement is measured from the moment DROP_OFF was entered.  Once
-dropoff_distance_m is reached, the claw opens and the mission ends.
+dropoff_distance_m is reached, the claw opens and line-following resumes
+normally (transitions back to LINE_FOLLOW with is_returning=False).
 
 If the line is briefly lost, the steering output from the sub-module is
 still used but any state transition it attempts is suppressed so the
@@ -21,13 +22,14 @@ import states.line_follow_find_heading as _find_heading
 
 
 def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
-    wheel_circ  = math.pi * sm.cfg.wheel_diameter_m
+    wheel_circ   = math.pi * sm.cfg.wheel_diameter_m
     dl = (left_ticks  - sm._enc0_left)  * wheel_circ / TICKS_PER_REV
     dr = (right_ticks - sm._enc0_right) * wheel_circ / TICKS_PER_REV
     displacement = (dl + dr) / 2.0
 
     if displacement >= sm.cfg.dropoff_distance_m:
-        sm._enter(State.DONE)
+        sm.is_returning = False
+        sm._enter(State.LINE_FOLLOW, left_ticks, right_ticks)
         return ControlOutput(left=0.0, right=0.0, claw=sm.cfg.claw_open, state=sm.state)
 
     # Keep line-following for steering; suppress any state transitions the
