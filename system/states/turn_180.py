@@ -44,13 +44,20 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
         if not det.red_found:
             print("[turn_180] line lost during alignment — exiting", flush=True)
             sm._turn180_phase = "spinning"
+            sm._turn180_stable_frames = 0
             sm._heading_pid.tunings = sm._turn180_saved_heading_tunings
             return _enter_next(sm, left_ticks, right_ticks)
 
         tol_rad = math.radians(sm.cfg.turn180_heading_tolerance)
         if abs(det.curve_heading) < tol_rad:
-            print(f"[turn_180] heading aligned ({math.degrees(det.curve_heading):.1f}°) — exiting", flush=True)
+            sm._turn180_stable_frames = getattr(sm, "_turn180_stable_frames", 0) + 1
+        else:
+            sm._turn180_stable_frames = 0
+
+        if sm._turn180_stable_frames >= 20:
+            print(f"[turn_180] heading aligned ({math.degrees(det.curve_heading):.1f}°, 20 frames) — exiting", flush=True)
             sm._turn180_phase = "spinning"
+            sm._turn180_stable_frames = 0
             sm._heading_pid.tunings = sm._turn180_saved_heading_tunings
             return _enter_next(sm, left_ticks, right_ticks)
 
@@ -69,8 +76,9 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     degrees_turned, _ = ctrl.progress()
     if degrees_turned >= sm.cfg.find_line_min_angle_deg and det.red_found:
         print(f"[turn_180] red line found at {degrees_turned:.1f}° — aligning", flush=True)
-        sm._turn180_ctrl  = None
-        sm._turn180_phase = "aligning"
+        sm._turn180_ctrl          = None
+        sm._turn180_phase         = "aligning"
+        sm._turn180_stable_frames = 0
         sm._brain.send_voltage(0.0, 0.0)   # hard-stop before handing off to heading PID
         sm._brain._speed_ctrl.reset()
         sm._heading_pid.reset()
