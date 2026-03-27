@@ -92,7 +92,8 @@ class Perception:
         self._update_hsv_ranges(c)
 
         self.red_loss_debounce_frames = max(1, int(c.red_loss_debounce_frames))
-        self.red_error_ema_alpha = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
+        self.red_error_ema_alpha  = _clamp(float(c.red_error_ema_alpha), 0.0, 1.0)
+        self._red_error_offset    = float(c.red_error_offset)
         self._red_min_area         = max(1, int(c.red_min_area_px))
         self._red_mask_min_blob_px = max(0, int(c.red_mask_min_blob_px))
         self._curve_n_strips = max(2, int(c.curve_n_strips))
@@ -143,6 +144,7 @@ class Perception:
         """Apply updated config values without reopening the camera."""
         self.red_loss_debounce_frames = max(1, int(cfg.red_loss_debounce_frames))
         self.red_error_ema_alpha      = _clamp(float(cfg.red_error_ema_alpha), 0.0, 1.0)
+        self._red_error_offset        = float(cfg.red_error_offset)
         self._red_min_area         = max(1, int(cfg.red_min_area_px))
         self._red_mask_min_blob_px = max(0, int(cfg.red_mask_min_blob_px))
         self.roi_top_ratio            = _clamp(cfg.roi_top_ratio, 0.0, 0.95)
@@ -209,7 +211,8 @@ class Perception:
             red_error = _clamp(
                 red_error
                 + self._error_heading_weight   * curve_heading
-                + self._error_curvature_weight * curvature,
+                + self._error_curvature_weight * curvature
+                + self._red_error_offset,
                 -1.0, 1.0,
             )
             # Horizontal red pixel balance: (right - left) / total  in [-1, 1]

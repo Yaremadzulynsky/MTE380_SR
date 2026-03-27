@@ -405,6 +405,10 @@
         <input type="number" id="red_error_ema_alpha" step="0.05" min="0" max="1" />
       </div>
       <div class="field">
+        <div class="field-label-row"><label for="red_error_offset">red error offset</label><button type="button" class="info-btn" data-help="red_error_offset" aria-label="Help: red_error_offset">i</button></div>
+        <input type="number" id="red_error_offset" step="0.01" min="-1" max="1" />
+      </div>
+      <div class="field">
         <div class="field-label-row"><label for="red_min_area_px">min blob (px²)</label><button type="button" class="info-btn" data-help="red_min_area_px" aria-label="Help: red_min_area_px">i</button></div>
         <input type="number" id="red_min_area_px" step="10" min="1" />
       </div>
@@ -917,7 +921,7 @@
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
       "motor_kp", "motor_ki", "motor_kd", "motor_sync_k",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
-      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
+      "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_error_offset", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
       "pre_turn180_backup_m", "forward_drive_m",
       "blue_approach_m", "blue_approach_speed",
       "blue_center_kp", "blue_center_ki", "blue_center_kd", "blue_center_speed", "blue_center_tolerance",
@@ -971,6 +975,7 @@
       line_axle_extrap:        [0,    5,      0.1   ],
       red_loss_debounce_frames:[1,    30,     1     ],
       red_error_ema_alpha:     [0,    1,      0.05  ],
+      red_error_offset:        [-1,   1,      0.01  ],
       red_min_area_px:         [1,    5000,   10    ],
       red_mask_min_blob_px:    [0,    500,    5     ],
       error_heading_weight:    [0,    1,      0.05  ],
@@ -1432,6 +1437,14 @@
         dec: "Less smoothing; more responsive but noisier error signal into the steering PID.",
         whenInc: "Steering oscillates with high-frequency noise even with kd tuned.",
         whenDec: "Steering reacts sluggishly to fast line changes; lag visible on sharp curves.",
+      },
+      red_error_offset: {
+        title: "red_error_offset — Lateral error bias",
+        what: "A constant offset added to red_error after all smoothing and feed-forward. Positive shifts the robot right (treats the line as being to the right), negative shifts it left.",
+        inc: "Robot steers more to the right on straights.",
+        dec: "Robot steers more to the left on straights.",
+        whenInc: "Robot consistently tracks to the left of the line on straights; increase to re-centre.",
+        whenDec: "Robot consistently tracks to the right of the line on straights; decrease to re-centre.",
       },
       error_heading_weight: {
         title: "error_heading_weight",
