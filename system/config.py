@@ -77,7 +77,7 @@ class Config:
     turn180_heading_kp:         float = 0.4    # heading_kp override during TURN_180 alignment
     turn180_heading_ki:         float = 0.0    # heading_ki override during TURN_180 alignment
     turn180_heading_kd:         float = 0.05   # heading_kd override during TURN_180 alignment
-    turn180_heading_tolerance:  float = 5.0    # |curve_heading| threshold (degrees) to exit TURN_180 alignment
+    turn180_lateral_tolerance:  float = 0.15   # |red_error| threshold to exit TURN_180 alignment (must hold 20 frames)
 
     # ── Drop-off ──────────────────────────────────────────────────────────────
     green_delay_s:           float = 2.0   # seconds to keep line-following after green is seen
@@ -183,7 +183,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
     ]),
     ("Turn 180", [
         "find_line_min_angle_deg",
-        "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd", "turn180_heading_tolerance",
+        "turn180_heading_kp", "turn180_heading_ki", "turn180_heading_kd", "turn180_lateral_tolerance",
     ]),
     ("Drop-off", [
         "green_delay_s", "dropoff_distance_m",

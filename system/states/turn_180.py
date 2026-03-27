@@ -9,10 +9,10 @@ Two phases:
      Once past that guard and det.red_found is True, motors are hard-stopped
      and the state moves to heading alignment.
 
-  2. aligning — in-place differential drive using heading PID on -curve_heading.
-     Exits to LINE_FOLLOW (is_returning=True) when |curve_heading| < rot_tolerance
-     (converted to radians).  If the line is lost during alignment the state
-     exits immediately.
+  2. aligning — in-place differential drive using heading PID fed -red_error.
+     Exits to LINE_FOLLOW (is_returning=True) when |red_error| <=
+     turn180_lateral_tolerance holds for 20 consecutive frames.  If the line
+     is lost during alignment the state exits immediately.
 """
 from __future__ import annotations
 
@@ -48,20 +48,19 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
             sm._heading_pid.tunings = sm._turn180_saved_heading_tunings
             return _enter_next(sm, left_ticks, right_ticks)
 
-        tol_rad = math.radians(sm.cfg.turn180_heading_tolerance)
-        if abs(det.curve_heading) < tol_rad:
+        if abs(det.red_error) <= sm.cfg.turn180_lateral_tolerance:
             sm._turn180_stable_frames = getattr(sm, "_turn180_stable_frames", 0) + 1
         else:
             sm._turn180_stable_frames = 0
 
         if sm._turn180_stable_frames >= 20:
-            print(f"[turn_180] heading aligned ({math.degrees(det.curve_heading):.1f}°, 20 frames) — exiting", flush=True)
+            print(f"[turn_180] lateral aligned (red_error={det.red_error:+.3f}, 20 frames) — exiting", flush=True)
             sm._turn180_phase = "spinning"
             sm._turn180_stable_frames = 0
             sm._heading_pid.tunings = sm._turn180_saved_heading_tunings
             return _enter_next(sm, left_ticks, right_ticks)
 
-        turn = _clamp(sm._heading_pid(-det.curve_heading), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
+        turn = _clamp(sm._heading_pid(-det.red_error), -sm.cfg.steer_out_limit, sm.cfg.steer_out_limit)
         sm._brain._speed_ctrl.set_target(turn, -turn)
         sm._brain._speed_ctrl.step()
         return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state, skip=True)
