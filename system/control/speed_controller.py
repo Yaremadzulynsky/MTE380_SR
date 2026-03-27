@@ -60,20 +60,25 @@ class SpeedController:
 
         rpm_l, rpm_r = self._brain.measured_rpm
 
+        # Wheel sync: when driving straight, blend each wheel's setpoint toward
+        # the slower wheel's actual RPM so the faster motor waits for the slower.
+        #   sync_k = 0  → fully independent (original behaviour)
+        #   sync_k = 1  → faster wheel is given exactly the slower wheel's RPM
+        # Only active when both targets match (straight drive); differential
+        # steering targets automatically disable it so turns are unaffected.
+        if self._sync_k > 0 and abs(self._target_left - self._target_right) < 0.05:
+            sign  = 1.0 if rpm_tgt_l >= 0 else -1.0
+            pace  = min(abs(rpm_l), abs(rpm_r))          # slower wheel's actual speed
+            pace  = min(pace, abs(rpm_tgt_l))            # never exceed what was requested
+            synced = pace * sign
+            rpm_tgt_l = (1.0 - self._sync_k) * rpm_tgt_l + self._sync_k * synced
+            rpm_tgt_r = (1.0 - self._sync_k) * rpm_tgt_r + self._sync_k * synced
+
         self._pid_left.setpoint  = rpm_tgt_l
         self._pid_right.setpoint = rpm_tgt_r
 
         voltage_l = self._pid_left(rpm_l)
         voltage_r = self._pid_right(rpm_r)
-
-        # Cross-coupling sync: when both wheels target the same speed, nudge
-        # the faster wheel down and the slower wheel up to eliminate divergence.
-        # Only active when targets are matched (straight drive); gates off
-        # automatically during differential steering so turns are unaffected.
-        if self._sync_k > 0 and abs(self._target_left - self._target_right) < 0.05:
-            correction = self._sync_k * (rpm_l - rpm_r)
-            voltage_l  = _clamp(voltage_l - correction, -1.0, 1.0)
-            voltage_r  = _clamp(voltage_r + correction, -1.0, 1.0)
 
         self._last_rpm_tgt_l = rpm_tgt_l
         self._last_rpm_tgt_r = rpm_tgt_r
