@@ -42,6 +42,7 @@ class FrameDetection:
     blue_found:  bool       # blue target marker visible
     green_found: bool       # green stop marker visible
     blue_cx_norm:    float | None = None  # blue centroid x in [-1, 1], +ve = right; None if not found
+    blue_cy_norm:    float | None = None  # blue centroid y in [-1, 1], +ve = below centre; None if not found
     blue_circle_cx:  float | None = None  # fitted circle centre x (full-frame pixels)
     blue_circle_cy:  float | None = None  # fitted circle centre y (full-frame pixels)
     blue_circle_r:   float | None = None  # fitted circle radius (pixels)
@@ -192,7 +193,7 @@ class Perception:
             track_x_px,
             track_y_px,
         ) = self._stabilize_red(raw_found, raw_err, tcx, tcy, trx, try_)
-        blue_found, blue_cx_norm, blue_circle_cx, blue_circle_cy, blue_circle_r = self._detect_blue(hsv, roi_y)
+        blue_found, blue_cx_norm, blue_cy_norm, blue_circle_cx, blue_circle_cy, blue_circle_r = self._detect_blue(hsv, roi_y)
         green_found = self._detect_green(hsv)
 
         if raw_found and self._last_red_line_mask is not None:
@@ -228,6 +229,7 @@ class Perception:
             red_error=red_error,
             blue_found=blue_found,
             blue_cx_norm=blue_cx_norm,
+            blue_cy_norm=blue_cy_norm,
             blue_circle_cx=blue_circle_cx,
             blue_circle_cy=blue_circle_cy,
             blue_circle_r=blue_circle_r,
@@ -580,10 +582,11 @@ class Perception:
 
     def _detect_blue(
         self, hsv: np.ndarray, roi_y: int
-    ) -> tuple[bool, float | None, float | None, float | None, float | None]:
-        """Returns (found, cx_norm, circle_cx, circle_cy, circle_r).
+    ) -> tuple[bool, float | None, float | None, float | None, float | None, float | None]:
+        """Returns (found, cx_norm, cy_norm, circle_cx, circle_cy, circle_r).
 
         cx_norm: centroid x in [-1, 1] (positive = right of centre), None if not found.
+        cy_norm: centroid y in [-1, 1] (positive = below centre of ROI), None if not found.
         circle_*: best-fit circle in full-frame pixel coords, None if fit failed.
         """
         mask = cv2.inRange(hsv, self._BLUE_LO, self._BLUE_HI)
@@ -593,12 +596,14 @@ class Perception:
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         valid = [c for c in contours if cv2.contourArea(c) >= _BLUE_MIN_AREA]
         if not valid:
-            return False, None, None, None, None
+            return False, None, None, None, None, None
         best = max(valid, key=cv2.contourArea)
         M = cv2.moments(best)
         if M["m00"] == 0:
-            return True, None, None, None, None
-        cx_norm = _clamp((M["m10"] / M["m00"] - w / 2.0) / (w / 2.0), -1.0, 1.0)
+            return True, None, None, None, None, None
+        roi_h   = hsv.shape[0]
+        cx_norm = _clamp((M["m10"] / M["m00"] - w     / 2.0) / (w     / 2.0), -1.0, 1.0)
+        cy_norm = _clamp((M["m01"] / M["m00"] - roi_h / 2.0) / (roi_h / 2.0), -1.0, 1.0)
 
         # Fit a circle to the contour points (works on partial arcs).
         pts = best.reshape(-1, 2).astype(float)
@@ -611,8 +616,8 @@ class Perception:
                 fit = None
 
         if fit is not None:
-            return True, cx_norm, fit[0], fit[1], fit[2]
-        return True, cx_norm, None, None, None
+            return True, cx_norm, cy_norm, fit[0], fit[1], fit[2]
+        return True, cx_norm, cy_norm, None, None, None
 
     def _detect_green(self, hsv: np.ndarray) -> bool:
         """Returns True when a green marker of sufficient area is visible."""

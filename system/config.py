@@ -63,7 +63,12 @@ class Config:
     blue_center_ki:        float = 0.0   # integral gain for in-place centering on blue circle
     blue_center_kd:        float = 0.0   # derivative gain for in-place centering on blue circle
     blue_center_speed:     float = 0.3   # max motor voltage during centering rotation
-    blue_center_tolerance: float = 0.05  # |cx_norm| <= this to consider blue centred
+    blue_center_tolerance: float = 0.05  # |cx_norm| <= this to consider blue centred (x axis)
+    blue_center_y_kp:      float = 0.3   # proportional gain for forward/back centering on blue circle
+    blue_center_y_ki:      float = 0.0   # integral gain for forward/back centering
+    blue_center_y_kd:      float = 0.0   # derivative gain for forward/back centering
+    blue_center_y_speed:   float = 0.25  # max motor voltage during forward/back centering
+    blue_center_y_tolerance: float = 0.1 # |cy_norm| <= this to consider blue centred (y axis)
     reverse_find_speed:    float = 0.25  # motor voltage while reversing to find the line after pickup
     reverse_line_drive_s:  float = 0.5   # seconds to keep reversing after line is found before TURN_180
 
@@ -160,6 +165,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "pre_turn180_backup_m", "forward_drive_m",
         "blue_approach_m", "blue_approach_speed",
         "blue_center_kp", "blue_center_ki", "blue_center_kd", "blue_center_speed", "blue_center_tolerance",
+        "blue_center_y_kp", "blue_center_y_ki", "blue_center_y_kd", "blue_center_y_speed", "blue_center_y_tolerance",
         "reverse_find_speed", "reverse_line_drive_s",
     ]),
     ("Turn 180", [
