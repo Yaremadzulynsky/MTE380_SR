@@ -28,11 +28,12 @@ def step(sm, det, left_ticks: int, right_ticks: int) -> ControlOutput:
     displacement = (dl + dr) / 2.0
     sm._dropoff_displacement = displacement
 
-    if displacement >= sm.cfg.dropoff_distance_m:
+    if abs(displacement) >= sm.cfg.dropoff_distance_m:
+        print(f"[drop_off] distance reached ({displacement:.3f}m) — opening claw to {sm.cfg.claw_open}°", flush=True)
         sm._brain.send_claw(sm.cfg.claw_open)
         sm.is_returning = False
         sm._enter(State.LINE_FOLLOW, left_ticks, right_ticks)
-        return ControlOutput(left=0.0, right=0.0, claw=None, state=sm.state)
+        return ControlOutput(left=0.0, right=0.0, claw=sm.cfg.claw_open, state=sm.state)
 
     # Keep line-following for steering; suppress any state transitions the
     # sub-module tries to make (e.g. FIND_LINE on brief loss) so that our
