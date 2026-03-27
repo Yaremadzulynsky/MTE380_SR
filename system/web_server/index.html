@@ -482,6 +482,10 @@
         <div class="field-label-row"><label for="motor_kd">kd</label><button type="button" class="info-btn" data-help="motor_kd" aria-label="Help: motor_kd">i</button></div>
         <input type="number" id="motor_kd" step="0.0001" />
       </div>
+      <div class="field">
+        <div class="field-label-row"><label for="motor_sync_k">sync k</label></div>
+        <input type="number" id="motor_sync_k" step="0.0001" min="0" />
+      </div>
     </div>
   </div>
 
@@ -855,7 +859,7 @@
       "line_follow_mode", "reverse_line_follow",
       "heading_kp", "heading_ki", "heading_kd",
       "steer_kp", "steer_ki", "steer_kd", "steer_out_limit",
-      "motor_kp", "motor_ki", "motor_kd",
+      "motor_kp", "motor_ki", "motor_kd", "motor_sync_k",
       "base_speed", "min_speed", "min_curve_speed", "max_speed",
       "line_axle_extrap", "red_loss_debounce_frames", "red_error_ema_alpha", "red_min_area_px", "red_mask_min_blob_px", "error_heading_weight", "error_curvature_weight",
       "pre_turn180_backup_m", "forward_drive_m",
@@ -900,6 +904,7 @@
       motor_kp:                [0,    0.02,   0.0001],
       motor_ki:                [0,    0.005,  0.0001],
       motor_kd:                [0,    0.005,  0.0001],
+      motor_sync_k:            [0,    0.01,   0.0001],
       base_speed:              [0,    1,      0.01  ],
       min_speed:               [0,    1,      0.01  ],
       min_curve_speed:         [0,    1,      0.01  ],

@@ -38,6 +38,7 @@ class SpeedController:
 
         self._target_left  = 0.0
         self._target_right = 0.0
+        self._sync_k       = c.motor_sync_k
 
         # Cached for telemetry
         self._last_rpm_tgt_l = 0.0
@@ -64,6 +65,15 @@ class SpeedController:
 
         voltage_l = self._pid_left(rpm_l)
         voltage_r = self._pid_right(rpm_r)
+
+        # Cross-coupling sync: when both wheels target the same speed, nudge
+        # the faster wheel down and the slower wheel up to eliminate divergence.
+        # Only active when targets are matched (straight drive); gates off
+        # automatically during differential steering so turns are unaffected.
+        if self._sync_k > 0 and abs(self._target_left - self._target_right) < 0.05:
+            correction = self._sync_k * (rpm_l - rpm_r)
+            voltage_l  = _clamp(voltage_l - correction, -1.0, 1.0)
+            voltage_r  = _clamp(voltage_r + correction, -1.0, 1.0)
 
         self._last_rpm_tgt_l = rpm_tgt_l
         self._last_rpm_tgt_r = rpm_tgt_r
@@ -94,10 +104,11 @@ class SpeedController:
         self._pid_right.reset()
 
     def set_gains(self, cfg: _config_module.Config) -> None:
-        """Update PID gains and reset integrators."""
+        """Update PID gains, sync term, and reset integrators."""
         t = (cfg.motor_kp, cfg.motor_ki, cfg.motor_kd)
         self._pid_left.tunings  = t
         self._pid_right.tunings = t
+        self._sync_k = cfg.motor_sync_k
         self.reset()
 
     # ── Telemetry ─────────────────────────────────────────────────────────────

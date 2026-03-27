@@ -43,9 +43,10 @@ class Config:
     heading_kd: float = 0.05
 
     # ── Motor PID ─────────────────────────────────────────────────────────────
-    motor_kp: float = 0.003125
-    motor_ki: float = 0.0005
-    motor_kd: float = 0.0
+    motor_kp:     float = 0.003125
+    motor_ki:     float = 0.0005
+    motor_kd:     float = 0.0
+    motor_sync_k: float = 0.0  # wheel sync gain: corrects RPM difference when driving straight
 
     # ── Speed ─────────────────────────────────────────────────────────────────
     base_speed:      float = 0.28
@@ -149,7 +150,7 @@ _SECTIONS: list[tuple[str, list[str]]] = [
         "heading_kp", "heading_ki", "heading_kd",
     ]),
     ("Motor PID", [
-        "motor_kp", "motor_ki", "motor_kd",
+        "motor_kp", "motor_ki", "motor_kd", "motor_sync_k",
     ]),
     ("Speed", [
         "base_speed", "min_speed", "min_curve_speed", "max_speed",
