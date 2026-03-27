@@ -18,8 +18,9 @@ _SPIN_TARGET_DEG = -720.0   # large CCW target so the controller never self-term
 
 
 def _finish(sm, left_ticks: int, right_ticks: int) -> ControlOutput:
-    """Stop speed controller, clear controller, enter next state."""
+    """Hard-stop motors, clear controller, enter next state."""
     sm._turn180_ctrl = None
+    sm._brain.send_voltage(0.0, 0.0)   # immediate zero — bypasses RPM PID
     sm._brain._speed_ctrl.reset()
     next_state = getattr(sm, "_turn180_next", None)
     if next_state == State.DRIVE_FORWARD:
